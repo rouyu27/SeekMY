@@ -1,0 +1,176 @@
+import { useState, useMemo } from "react";
+import {
+  Search, X, Sparkles, MessageCircle, ArrowRight, ChevronRight,
+} from "lucide-react";
+import type { Location, Page } from "../lib/types";
+import { C, F } from "../lib/tokens";
+import {
+  ALL_STATES, PENINSULAR, EAST, FED, HIDDEN_GEMS,
+  ACTIVITY_FILTERS, LOCATIONS,
+} from "../data/catalog";
+import { StateFlagCard } from "../components/StateFlagCard";
+import { LocationCard } from "../components/LocationCard";
+import { Pill, SectionHead } from "../components/Atoms";
+
+export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookmarks, onBookmark }:{
+  setPage:(p:Page)=>void; setSelectedLocation:(l:Location)=>void;
+  setSelectedState:(c:string)=>void; bookmarks:number[]; onBookmark:(id:number)=>void;
+}) {
+  const [query,setQuery]         = useState("");
+  const [activeAct,setActiveAct] = useState("all");
+  const [gemIndex,setGemIndex]   = useState(0);
+
+  const searchResults = useMemo(()=>{
+    if (!query) return null;
+    const q = query.toLowerCase();
+    return {
+      locs:LOCATIONS.filter(l=>l.name.toLowerCase().includes(q)||l.state.toLowerCase().includes(q)||l.activity.toLowerCase().includes(q)),
+      states:ALL_STATES.filter(s=>s.name.toLowerCase().includes(q)||s.code.toLowerCase().includes(q)),
+    };
+  },[query]);
+
+  const gem = HIDDEN_GEMS[gemIndex] ?? HIDDEN_GEMS[0];
+
+  function goState(code:string){setSelectedState(code);setPage("explore");}
+
+  function openGem() {
+    const loc = LOCATIONS.find(l => l.id === (gem as { locationId?: number }).locationId);
+    if (loc) {
+      setSelectedLocation(loc);
+      setPage("location");
+    }
+  }
+
+  return (
+    <div className="pt-14 min-h-screen" style={{backgroundColor:C.cream}}>
+      <section className="relative overflow-hidden" style={{background:`linear-gradient(135deg, ${C.jungle} 0%, #12342a 50%, #0a2318 100%)`,minHeight:310}}>
+        {[...Array(20)].map((_,i)=>(
+          <div key={i} className="absolute rounded-full opacity-10 bg-white" style={{width:4+(i%3)*5,height:4+(i%3)*5,left:`${(i*13+4)%100}%`,top:`${(i*19+7)%100}%`}}/>
+        ))}
+        <div className="relative max-w-4xl mx-auto px-6 py-14 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6 text-[11px] font-bold tracking-wide" style={{backgroundColor:"rgba(255,255,255,0.10)",color:"rgba(255,255,255,0.85)",border:"1px solid rgba(255,255,255,0.18)",fontFamily:F.body}}>
+            🇲🇾 Visit Malaysia 2026 · VM2026
+          </div>
+          <h1 className="text-[2.8rem] md:text-5xl font-normal leading-[1.1] text-white mb-2" style={{fontFamily:F.display}}>Discover Malaysia's</h1>
+          <h1 className="text-[2.8rem] md:text-5xl font-normal leading-[1.1] mb-6" style={{fontFamily:F.display,color:C.amber}}>Outdoor Adventures</h1>
+          <p className="text-sm leading-relaxed mb-8 max-w-sm mx-auto" style={{color:"rgba(255,255,255,0.62)",fontFamily:F.body}}>
+            Explore hiking trails, dive sites, cycling routes and more across all 16 states and territories.
+          </p>
+          <div className="max-w-lg mx-auto mb-8">
+            <div className="flex items-center bg-white rounded-full" style={{boxShadow:"0 4px 24px rgba(0,0,0,0.24)",height:46}}>
+              <div className="flex items-center gap-2.5 px-5 flex-1">
+                <Search size={15} style={{color:C.textMuted,flexShrink:0}}/>
+                <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search states, activities, locations…" className="flex-1 outline-none text-sm bg-transparent" style={{color:C.text,fontFamily:F.body}}/>
+                {query && <button onClick={()=>setQuery("")}><X size={13} style={{color:C.textMuted}}/></button>}
+              </div>
+              <button className="m-1 px-5 h-9 rounded-full text-sm font-bold text-white active:scale-95 transition-all" style={{backgroundColor:C.jungle,fontFamily:F.body}}>Search</button>
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-14">
+            {[{val:"16",label:"States"},{val:"9+",label:"Activities"},{val:"30+",label:"Locations"}].map(({val,label})=>(
+              <div key={label}>
+                <p className="text-2xl font-bold text-white" style={{fontFamily:F.display}}>{val}</p>
+                <p className="text-[11px] font-semibold" style={{color:"rgba(255,255,255,0.50)",fontFamily:F.body}}>{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="bg-white border-b sticky top-14 z-30" style={{borderColor:C.border}}>
+        <div className="flex gap-2 px-5 py-2.5 overflow-x-auto" style={{scrollbarWidth:"none"}}>
+          {ACTIVITY_FILTERS.map(({id,label,icon})=>(
+            <button key={id} onClick={()=>setActiveAct(id)} className="flex items-center gap-1.5 px-4 h-9 rounded-full text-[12px] font-bold whitespace-nowrap flex-shrink-0 transition-all active:scale-95"
+              style={{backgroundColor:activeAct===id?C.jungle:C.muted,color:activeAct===id?"#fff":C.textSub,fontFamily:F.body}}>
+              {icon} {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {searchResults && (
+        <div className="max-w-5xl mx-auto px-5 py-8">
+          {searchResults.states.length>0 && (
+            <><p className="text-xs font-bold uppercase tracking-wide mb-3" style={{color:C.textMuted,fontFamily:F.body}}>States</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-7">{searchResults.states.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region={s.region} onClick={()=>goState(s.code)}/>)}</div></>
+          )}
+          {searchResults.locs.length>0 && (
+            <><p className="text-xs font-bold uppercase tracking-wide mb-3" style={{color:C.textMuted,fontFamily:F.body}}>Locations ({searchResults.locs.length})</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{searchResults.locs.map(loc=><LocationCard key={loc.id} loc={loc} bookmarked={bookmarks.includes(loc.id)} onBookmark={()=>onBookmark(loc.id)} onView={()=>{setSelectedLocation(loc);setPage("location");}}/>)}</div></>
+          )}
+          {!searchResults.locs.length && !searchResults.states.length && (
+            <p className="text-center py-14 text-sm" style={{color:C.textMuted,fontFamily:F.body}}>
+              {/hiking|diving|cycling|camping|swimming|climbing|jogging|running|trail/i.test(query)
+                ? `No matching activity type found for "${query}". Try another keyword.`
+                : `Location not found for "${query}". Try another keyword.`}
+            </p>
+          )}
+        </div>
+      )}
+
+      {!searchResults && (
+        <div className="max-w-5xl mx-auto px-5 py-10 space-y-12">
+          {/* Hidden Gem */}
+          <div>
+            <div className="flex items-center gap-2.5 mb-5"><Sparkles size={18} style={{color:C.amber}}/><h2 className="text-2xl font-normal" style={{fontFamily:F.display,color:C.text}}>Hidden Gem Spotlight</h2></div>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={openGem}
+              onKeyDown={(e)=>{ if(e.key==="Enter") openGem(); }}
+              className="rounded-[22px] overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 duration-200"
+              style={{background:gem.grad,boxShadow:`0 4px 20px rgba(27,67,50,0.18)`}}
+            >
+              <div className="p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{backgroundColor:"rgba(255,255,255,0.20)"}}><Sparkles size={22} className="text-white"/></div>
+                    <div>
+                      <h3 className="text-lg font-normal text-white mb-0.5" style={{fontFamily:F.display}}>{gem.name}</h3>
+                      <p className="text-xs mb-3" style={{color:"rgba(255,255,255,0.72)",fontFamily:F.body}}>📍 {gem.state}</p>
+                      <p className="text-sm leading-relaxed" style={{color:"rgba(255,255,255,0.78)",fontFamily:F.body,maxWidth:400}}>{gem.desc}</p>
+                      <p className="text-xs mt-3 font-bold" style={{color:"rgba(255,255,255,0.9)",fontFamily:F.body}}>Tap to view details →</p>
+                    </div>
+                  </div>
+                  <span className="flex-shrink-0 text-[11px] font-bold px-3 py-1 rounded-full" style={{backgroundColor:"rgba(255,255,255,0.20)",color:"#fff",border:"1px solid rgba(255,255,255,0.32)",fontFamily:F.body}}>✦ Hidden Gem</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 px-6 pb-5" onClick={e=>e.stopPropagation()}>
+                {HIDDEN_GEMS.map((_,i)=>(
+                  <button key={i} onClick={e=>{e.stopPropagation();setGemIndex(i);}} className="rounded-full transition-all duration-200" style={{width:gemIndex===i?20:6,height:6,backgroundColor:gemIndex===i?"rgba(255,255,255,0.92)":"rgba(255,255,255,0.36)"}}/>
+                ))}
+              </div>
+            </div>
+          </div>
+          {/* State sections */}
+          <div><SectionHead title="Peninsular Malaysia"/><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{PENINSULAR.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="Peninsular Malaysia" onClick={()=>goState(s.code)}/>)}</div></div>
+          <div><SectionHead title="East Malaysia"/><div className="grid grid-cols-2 gap-4">{EAST.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="East Malaysia" onClick={()=>goState(s.code)} large/>)}</div></div>
+          <div><SectionHead title="Federal Territories"/><div className="grid grid-cols-3 gap-3">{FED.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="Federal Territory" onClick={()=>goState(s.code)}/>)}</div></div>
+          {/* Featured locations */}
+          <div>
+            <div className="flex items-end justify-between mb-5">
+              <SectionHead title="Featured Locations"/>
+              <button onClick={()=>setPage("explore")} className="flex items-center gap-1 text-sm font-bold mb-5" style={{color:C.forest,fontFamily:F.body}}>View all <ChevronRight size={14}/></button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {LOCATIONS.filter(l => activeAct==="all" || l.activity===activeAct).slice(0,3).map(loc=><LocationCard key={loc.id} loc={loc} bookmarked={bookmarks.includes(loc.id)} onBookmark={()=>onBookmark(loc.id)} onView={()=>{setSelectedLocation(loc);setPage("location");}}/>)}
+            </div>
+          </div>
+          {/* AI CTA */}
+          <div className="rounded-[22px] overflow-hidden" style={{background:`linear-gradient(135deg, ${C.jungle} 0%, #0a2318 100%)`}}>
+            <div className="p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              <div className="flex-1">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-3 text-[11px] font-bold" style={{backgroundColor:"rgba(255,255,255,0.10)",color:"rgba(255,255,255,0.82)",fontFamily:F.body}}>
+                  <MessageCircle size={11}/> AI Outdoor Assistant
+                </div>
+                <h3 className="text-2xl font-normal text-white mb-2" style={{fontFamily:F.display}}>Ask anything about Malaysia's outdoors</h3>
+                <p className="text-sm" style={{color:"rgba(255,255,255,0.58)",fontFamily:F.body}}>Gear tips, trail conditions, beginner guides — instant answers.</p>
+              </div>
+              <Pill variant="amber" onClick={()=>setPage("ai")}>Open AI Guide <ArrowRight size={14}/></Pill>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

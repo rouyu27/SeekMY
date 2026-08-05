@@ -1,0 +1,51 @@
+import { useState } from "react";
+import { Trophy } from "lucide-react";
+import { C, F } from "../lib/tokens";
+import { BADGES_DATA, LEADERBOARD_DATA } from "../data/catalog";
+import { SectionHead } from "../components/Atoms";
+
+export function LeaderboardPage() {
+  const [period,setPeriod] = useState<"weekly"|"monthly">("weekly");
+  const [sortBy,setSortBy] = useState<"km"|"checkins"|"states">("km");
+  const sorted = [...LEADERBOARD_DATA].sort((a,b)=>b[sortBy]-a[sortBy]).map((u,i)=>({...u,rank:i+1,medal:i===0?"🥇":i===1?"🥈":i===2?"🥉":""}));
+
+  return (
+    <div className="pt-14 min-h-screen" style={{backgroundColor:C.cream}}>
+      <div className="max-w-2xl mx-auto px-5 py-8">
+        <div className="flex items-center gap-3 mb-6"><Trophy size={24} style={{color:C.amber}}/><h1 className="text-3xl font-normal" style={{color:C.jungle,fontFamily:F.display}}>Leaderboard</h1></div>
+        <div className="flex rounded-full overflow-hidden mb-5 w-fit p-0.5" style={{backgroundColor:C.muted}}>
+          {(["weekly","monthly"] as const).map(p=><button key={p} onClick={()=>setPeriod(p)} className="px-5 h-9 text-sm font-bold capitalize transition-all rounded-full" style={{backgroundColor:period===p?C.jungle:"transparent",color:period===p?"#fff":C.textMuted,fontFamily:F.body}}>{p}</button>)}
+        </div>
+        <div className="flex gap-2 mb-5">
+          {[{key:"km" as const,label:"Distance"},{key:"checkins" as const,label:"Check-ins"},{key:"states" as const,label:"States"}].map(({key,label})=>(
+            <button key={key} onClick={()=>setSortBy(key)} className="px-3 h-8 rounded-full text-[12px] font-bold" style={{backgroundColor:sortBy===key?C.jungle:"#fff",color:sortBy===key?"#fff":C.textSub,border:sortBy===key?"none":`1px solid ${C.border}`,fontFamily:F.body}}>{label}</button>
+          ))}
+        </div>
+        <div className="bg-white rounded-[18px] overflow-hidden mb-8" style={{boxShadow:`0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)`}}>
+          {sorted.map((u,i)=>(
+            <div key={u.name} className="flex items-center gap-4 px-5 py-4" style={{borderBottom:i<sorted.length-1?`1px solid ${C.border}`:"none",backgroundColor:i===0?"#fffbef":"transparent"}}>
+              <span className="text-xl w-7 text-center">{u.medal||<span className="text-sm font-bold" style={{color:C.textMuted}}>{u.rank}</span>}</span>
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0" style={{backgroundColor:i===0?C.amber:i===1?"#9ca3af":i===2?"#a16207":C.muted,color:i<3?C.jungle:C.forest}}>{u.name.split(" ").map(n=>n[0]).join("").slice(0,2)}</div>
+              <div className="flex-1"><p className="text-sm font-bold" style={{fontFamily:F.body,color:C.text}}>{u.name}</p><p className="text-[11px]" style={{color:C.textMuted,fontFamily:F.body}}>{u.states} states · {u.checkins} check-ins</p></div>
+              <p className="text-sm font-bold" style={{color:C.jungle,fontFamily:F.body}}>{u[sortBy]}{sortBy==="km"?" km":""}</p>
+            </div>
+          ))}
+        </div>
+        <h2 className="text-2xl font-normal mb-5" style={{color:C.jungle,fontFamily:F.display}}>Achievements</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {BADGES_DATA.map(b=>(
+            <div key={b.name} className="bg-white rounded-[18px] p-4 flex gap-3 items-start" style={{boxShadow:`0 1px 3px rgba(27,67,50,0.08), 0 4px 12px rgba(27,67,50,0.05)`,opacity:b.earned?1:0.55}}>
+              <span className="text-2xl">{b.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5"><p className="text-sm font-bold" style={{fontFamily:F.body,color:C.text}}>{b.name}</p>{b.earned&&<span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{backgroundColor:C.muted,color:C.forest}}>EARNED</span>}</div>
+                <p className="text-[11px]" style={{color:C.textMuted,fontFamily:F.body}}>{b.desc}</p>
+                {!b.earned&&<div className="mt-2 rounded-full h-1.5" style={{backgroundColor:C.muted}}><div className="h-1.5 rounded-full" style={{width:`${(b.progress/b.requirement)*100}%`,backgroundColor:C.jungle}}/></div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
