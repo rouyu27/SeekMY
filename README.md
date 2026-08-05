@@ -1,14 +1,11 @@
-# SeekMY
-SeekMY is a Progressive Web Application (PWA) designed to help users discover outdoor activities across all 13 Malaysian states and federal territories, supporting the Visit Malaysia 2026 campaign.
 
-Key Features:
+  # YS - SeekMY
 
-🗺️ Activity Discovery: Filter by activity type (Hiking, Diving, Cycling, etc.), state, difficulty, and accessibility.
+  This is a code bundle for YS - SeekMY. The original project is available at https://www.figma.com/design/MmG2o7bfWvLMUD3OHp3xww/YS---SeekMY.
 
-🤖 AI Assistant: A conversational chatbot for personalized outdoor advice, gear recommendations, and safety tips.
+  ## Running the code
 
-📊 Activity Tracker: Log your adventures to earn badges, track stats, and compete on community leaderboards.
+  Run `npm i` to install the dependencies.
 
-🏘️ Local Contributor Portal: A verified portal for local guides and outdoor service providers.
-
-Tech Stack: React.js, Node.js, Express.js, Firebase (Firestore, Auth, Hosting, Storage), Google Maps API, OpenWeatherMap API, Claude AI API.
+  Run `npm run dev` to start the development server.
+  
