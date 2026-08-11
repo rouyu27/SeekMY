@@ -74,7 +74,7 @@ const auth = {
   redirectToLogin() { window.location.href = "/login"; },
 };
 
-export const base44 = {
+export const firebaseClient = {
   entities: Object.fromEntries(["Location", "Review", "Bookmark", "ActivityLog", "Badge", "Contributor", "User"].map((name) => [name, entity(name)])), auth,
   functions: { async invoke(name, payload = {}) {
     if (name === "getWeather") {
@@ -92,4 +92,7 @@ export const base44 = {
   storage: { async uploadActivityPhoto(file) { const user = currentUser(); if (!user) throw new Error("Please log in before uploading a photo."); const fileRef = ref(firebase().storage, `activity-photos/${user.uid}/${Date.now()}-${file.name}`); await uploadBytes(fileRef, file); return getDownloadURL(fileRef); } },
   connectors: { async connectAppUser() { throw new Error("Google Calendar integration requires a server-side OAuth flow."); } },
 };
+
+// Temporary compatibility alias while the remaining modules migrate imports.
+export const base44 = firebaseClient;
 
