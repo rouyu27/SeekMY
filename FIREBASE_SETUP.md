@@ -5,6 +5,7 @@
 3. Create a **Cloud Firestore** database and a **Storage** bucket. Use the rules below before testing with real users.
 4. Create an OpenWeatherMap API key, add it as `VITE_OPENWEATHER_API_KEY`, and restrict it to your development/deployed site in the OpenWeatherMap dashboard.
 5. Restart `npm run dev` after changing `.env.local`.
+6. Sign in as the primary administrator, open `/admin`, and select **Import Starter Locations**. This explicit action writes missing curated records to Firestore; the app never seeds them automatically.
 
 ## Firestore rules
 
@@ -25,7 +26,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && userId == request.auth.uid && (request.resource.data.role == 'user' || (primaryAdmin() && request.resource.data.role == 'admin'));
       allow update: if admin() || (userId == request.auth.uid && request.resource.data.role == resource.data.role);
-      allow delete: if admin();
+      allow delete: if admin() || userId == request.auth.uid;
     }
     match /Location/{id} { allow read: if true; allow write: if admin(); }
     match /Review/{id}, /Bookmark/{id}, /ActivityLog/{id}, /Badge/{id}, /Contributor/{id} {
