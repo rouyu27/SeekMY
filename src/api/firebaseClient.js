@@ -4,7 +4,19 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 import { getFirestore, collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, where, orderBy, limit as take, serverTimestamp } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-const primaryAdminEmail = "shanyuew416@gmail.com";
+const adminEmails = [
+  "shanyuew416@gmail.com",
+  "claryncreammy05@gmail.com",
+  "lowjunfeng5@gmail.com",
+  "lim100663@gmail.com",
+  "limrouyu9@gmail.com",
+  "choongsk36@gmail.com",
+];
+
+function isAdminEmail(email) {
+  return adminEmails.includes(email?.trim().toLowerCase());
+}
+
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -35,15 +47,50 @@ async function profile(user) {
   const { db } = firebase();
   const reference = doc(db, "User", user.uid);
   const existing = await getDoc(reference);
+
+  const email = user.email?.trim().toLowerCase() || "";
+  const role = isAdminEmail(email) ? "admin" : "user";
+  const now = new Date().toISOString();
+
   if (!existing.exists()) {
-    const role = user.email?.toLowerCase() === primaryAdminEmail ? "admin" : "user";
-    await setDoc(reference, { email: user.email, full_name: user.displayName || user.email?.split("@")[0] || "Explorer", role, created_date: new Date().toISOString() });
+    await setDoc(reference, {
+      email,
+      full_name:
+        user.displayName?.trim() ||
+        email.split("@")[0] ||
+        "Explorer",
+      role,
+      created_date: now,
+      updated_date: now,
+    });
+  } else {
+    const currentData = existing.data();
+
+    if (
+      currentData.email !== email ||
+      currentData.role !== role
+    ) {
+      await updateDoc(reference, {
+        email,
+        role,
+        updated_date: now,
+      });
+    }
   }
+
   return clean(await getDoc(reference));
 }
 function waitForUser() {
   const { auth } = firebase();
-  return new Promise((resolve) => { const unsubscribe = onAuthStateChanged(auth, (user) => { unsubscribe(); resolve(user); }); });
+
+  return new Promise((resolve) => {
+    let unsubscribe = () => {};
+
+    unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
 }
 function entity(name) {
   return {
@@ -57,21 +104,301 @@ function entity(name) {
 }
 
 const auth = {
-  async me() { const user = (await waitForUser()) || currentUser(); if (!user) throw Object.assign(new Error("Unauthorized"), { status: 401 }); return profile(user); },
-  async isAuthenticated() { return Boolean((await waitForUser()) || currentUser()); },
-  async loginViaEmailPassword(email, password) { const result = await signInWithEmailAndPassword(firebase().auth, email, password); return profile(result.user); },
-  async register({ email, password, full_name }) { const result = await createUserWithEmailAndPassword(firebase().auth, email, password); if (full_name) await updateProfile(result.user, { displayName: full_name }); await profile(result.user); await sendEmailVerification(result.user); return { success: true, message: "Verification email sent" }; },
-  async verifyOtp() { const user = currentUser(); if (!user) throw new Error("Please log in again after verifying your email."); await user.reload(); if (!user.emailVerified) throw new Error("Your email is not verified yet. Open the verification link, then try again."); return { user: await profile(user) }; },
-  async resendOtp() { const user = currentUser(); if (!user) throw new Error("Please log in again to resend verification."); await sendEmailVerification(user); return { success: true }; },
-  setToken() {},
-  async loginWithProvider() { const result = await signInWithPopup(firebase().auth, new GoogleAuthProvider()); await profile(result.user); window.location.href = "/"; },
-  async resetPasswordRequest(email) { await sendPasswordResetEmail(firebase().auth, email, { url: `${window.location.origin}/login` }); return { success: true }; },
-  async resetPassword({ resetToken, newPassword }) { await confirmPasswordReset(firebase().auth, resetToken, newPassword); return { success: true }; },
-  async updateProfile({ full_name }) { const user = currentUser(); if (!user) throw new Error("Please log in first."); await updateProfile(user, { displayName: full_name }); await updateDoc(doc(firebase().db, "User", user.uid), { full_name, updated_date: new Date().toISOString() }); return profile(user); },
-  async changePassword({ oldPassword, newPassword }) { const user = currentUser(); if (!user?.email) throw new Error("Password changes are unavailable for this account."); await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, oldPassword)); await updatePassword(user, newPassword); },
-  async deleteAccount() { const user = currentUser(); if (!user) throw new Error("Please log in first."); await deleteDoc(doc(firebase().db, "User", user.uid)); await deleteUser(user); },
-  async logout(redirectUrl) { await signOut(firebase().auth); if (redirectUrl) window.location.href = redirectUrl; },
-  redirectToLogin() { window.location.href = "/login"; },
+  async me() {
+    const user = (await waitForUser()) || currentUser();
+  
+    if (!user) {
+      throw Object.assign(new Error("Unauthorized"), {
+        status: 401,
+      });
+    }
+
+    return profile(user);
+  },
+
+  async isAuthenticated() {
+    return Boolean((await waitForUser()) || currentUser());
+  },
+
+  async loginViaEmailPassword(email, password) {
+    const cleanEmail = email?.trim().toLowerCase();
+
+    if (!cleanEmail || !password) {
+      throw new Error("Please enter your email and password.");
+    }
+
+    const result = await signInWithEmailAndPassword(
+      firebase().auth,
+      cleanEmail,
+      password
+    );
+
+    try {
+      return await profile(result.user);
+    } catch (error) {
+      console.error("Unable to load the user profile:", error);
+
+      throw new Error(
+        "Login succeeded, but your profile could not be loaded. Check the Firestore rules."
+      );
+    }
+  },
+
+  async register({ email, password, full_name }) {
+    const cleanEmail = email?.trim().toLowerCase();
+    const cleanName = full_name?.trim();
+
+    if (!cleanName) {
+      throw new Error("Please enter your full name.");
+    }
+
+    if (!cleanEmail) {
+      throw new Error("Please enter your email.");
+    }
+
+    if (!password || password.length < 6) {
+      throw new Error("Password must contain at least 6 characters.");
+    }
+
+    const result = await createUserWithEmailAndPassword(
+      firebase().auth,
+      cleanEmail,
+      password
+    );
+
+    try {
+      await updateProfile(result.user, {
+        displayName: cleanName,
+      });
+
+      await profile(result.user);
+      await sendEmailVerification(result.user);
+
+      return {
+        success: true,
+        message:
+          "Registration successful. A verification link has been sent to your email.",
+      };
+    } catch (error) {
+      console.error("Post-registration setup failed:", error);
+
+      throw new Error(
+        "Your account was created, but profile setup failed. Check Firestore rules and then try logging in."
+      );
+    }
+  },
+
+  async verifyOtp() {
+    const user = currentUser();
+
+    if (!user) {
+      throw new Error(
+        "Please log in again after verifying your email."
+      );
+    }
+
+    await user.reload();
+
+    if (!user.emailVerified) {
+      throw new Error(
+        "Your email is not verified yet. Open the verification link, then try again."
+      );
+    }
+
+    return {
+      success: true,
+      user: await profile(user),
+    };
+  },
+
+  async resendOtp() {
+    const user = currentUser();
+
+    if (!user) {
+      throw new Error(
+        "Please log in again to resend the verification email."
+      );
+    }
+
+    await user.reload();
+
+    if (user.emailVerified) {
+      return {
+        success: true,
+        message: "Your email is already verified.",
+      };
+    }
+
+    await sendEmailVerification(user);
+
+    return {
+      success: true,
+      message: "A new verification link has been sent.",
+    };
+  },
+
+  setToken() {
+    // Kept temporarily for compatibility with existing code.
+  },
+
+  async loginWithProvider() {
+    const provider = new GoogleAuthProvider();
+
+    const result = await signInWithPopup(
+      firebase().auth,
+      provider
+    );
+
+    await profile(result.user);
+    window.location.href = "/";
+  },
+
+  async resetPasswordRequest(email) {
+    const cleanEmail = email?.trim().toLowerCase();
+
+    if (!cleanEmail) {
+      throw new Error("Please enter your email address.");
+    }
+
+    await sendPasswordResetEmail(
+      firebase().auth,
+      cleanEmail,
+      {
+        url: `${window.location.origin}/login`,
+      }
+    );
+
+    return {
+      success: true,
+      message: "A password-reset link has been sent to your email.",
+    };
+  },
+
+  async resetPassword({ resetToken, newPassword }) {
+    if (!resetToken) {
+      throw new Error(
+        "The password-reset link is invalid or incomplete."
+      );
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error(
+        "The new password must contain at least 6 characters."
+      );
+    }
+
+    await confirmPasswordReset(
+      firebase().auth,
+      resetToken,
+      newPassword
+    );
+
+    return {
+      success: true,
+      message: "Your password has been reset successfully.",
+    };
+  },
+
+  async updateProfile({ full_name }) {
+    const user = currentUser();
+    const cleanName = full_name?.trim();
+
+    if (!user) {
+      throw new Error("Please log in first.");
+    }
+
+    if (!cleanName) {
+      throw new Error("Full name cannot be empty.");
+    }
+
+    await updateProfile(user, {
+      displayName: cleanName,
+    });
+
+    await updateDoc(
+      doc(firebase().db, "User", user.uid),
+      {
+        full_name: cleanName,
+        updated_date: new Date().toISOString(),
+      }
+    );
+
+    return profile(user);
+  },
+
+  async changePassword({ oldPassword, newPassword }) {
+    const user = currentUser();
+
+    if (!user?.email) {
+      throw new Error(
+        "Password changes are unavailable for this account."
+      );
+    }
+
+    if (!oldPassword) {
+      throw new Error("Please enter your current password.");
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      throw new Error(
+        "The new password must contain at least 6 characters."
+      );
+    }
+
+    if (oldPassword === newPassword) {
+      throw new Error(
+        "The new password must be different from your current password."
+      );
+    }
+
+    const credential = EmailAuthProvider.credential(
+      user.email,
+      oldPassword
+    );
+
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
+
+    return {
+      success: true,
+      message: "Password changed successfully.",
+    };
+  },
+
+  async deleteAccount() {
+    const user = currentUser();
+
+    if (!user) {
+      throw new Error("Please log in first.");
+    }
+
+    await deleteDoc(
+      doc(firebase().db, "User", user.uid)
+    );
+
+    await deleteUser(user);
+
+    return {
+      success: true,
+      message: "Account deleted successfully.",
+    };
+  },
+
+  async logout(redirectUrl) {
+    await signOut(firebase().auth);
+
+    if (redirectUrl) {
+      window.location.href = redirectUrl;
+    }
+
+    return {
+      success: true,
+    };
+  },
+
+  redirectToLogin() {
+    window.location.href = "/login";
+  },
 };
 
 export const firebaseClient = {
