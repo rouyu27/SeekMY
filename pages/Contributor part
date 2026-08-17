@@ -1,0 +1,359 @@
+import { useEffect, useMemo, useState } from "react";
+import { FileUp, MapPin, Check, AlertTriangle, UserRoundCheck } from "lucide-react";
+import type { MockUser, Page } from "../lib/types";
+import { C, F } from "../lib/tokens";
+import { Pill } from "../components/Atoms";
+import { ALL_STATES } from "../lib/constants";
+import { firebaseClient } from "../api/firebaseClient";
+import type { ContributorApplication, LocationSubmission } from "../lib/communityTypes";
+
+const ALLOWED = ["application/pdf", "image/jpeg", "image/png"];
+const MAX_BYTES = 5 * 1024 * 1024;
+
+export function ContributorPage({
+  user,
+  setPage,
+  onSignIn,
+}: {
+  user: MockUser | null;
+  setPage: (p: Page) => void;
+  onSignIn: () => void;
+}) {
+  const [apps, setApps] = useState<ContributorApplication[]>([]);
+  const [subs, setSubs] = useState<LocationSubmission[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [tab, setTab] = useState<"register" | "submit" | "mine" | "profile">("register");
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const myApp = useMemo(
+    () => (user ? apps.find((a) => a.userId === user.id) : undefined),
+    [apps, user]
+  );
+  const verified = myApp?.status === "verified";
+  const mySubs = useMemo(
+    () => (user ? subs.filter((s) => s.contributorId === user.id) : []),
+    [subs, user]
+  );
+
+  // Register form
+  const [fullName, setFullName] = useState(user?.displayName || "");
+  const [phone, setPhone] = useState("");
+  const [area, setArea] = useState("Sabah");
+  const [services, setServices] = useState("");
+  const [experience, setExperience] = useState("");
+  const [docName, setDocName] = useState("");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docError, setDocError] = useState("");
+
+  // Location form
+  const [locName, setLocName] = useState("");
+  const [locAddress, setLocAddress] = useState("");
+  const [locState, setLocState] = useState("Selangor");
+  const [locActivity, setLocActivity] = useState("Hiking");
+  const [locDiff, setLocDiff] = useState("Easy");
+  const [locDesc, setLocDesc] = useState("");
+  const [locFac, setLocFac] = useState("");
+  const [locAccess, setLocAccess] = useState("");
+  const [photoName, setPhotoName] = useState("");
+
+  // Profile
+  const [profServices, setProfServices] = useState(myApp?.services || "");
+  const [profPhone, setProfPhone] = useState(myApp?.phone || "");
+
+  useEffect(() => {
+    if (!user) { setApps([]); setSubs([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      firebaseClient.entities.Contributor.filter({ created_by_id: user.id }),
+      firebaseClient.entities.LocationSubmission.filter({ created_by_id: user.id }),
+    ]).then(([a,s]: any[]) => {
+      if (!cancelled) { setApps(a as ContributorApplication[]); setSubs(s as LocationSubmission[]); }
+    }).catch((error:any) => { if(!cancelled) setMsg({type:"err",text:error?.message||"Unable to load contributor data from Firebase."}); })
+      .finally(()=>{ if(!cancelled) setLoading(false); });
+    return () => { cancelled=true; };
+  }, [user?.id]);
+
+  useEffect(() => { setProfServices(myApp?.services || ""); setProfPhone(myApp?.phone || ""); }, [myApp?.id,myApp?.services,myApp?.phone]);
+
+  if (!user) {
+    return (
+      <div className="pt-14 min-h-screen flex items-center justify-center px-6" style={{ backgroundColor: C.cream }}>
+        <div className="text-center max-w-sm">
+          <div
+            className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6"
+            style={{ backgroundColor: "#EAF2ED" }}
+          >
+            <UserRoundCheck
+              size={36}
+              strokeWidth={1.8}
+              style={{ color: C.jungle }}
+            />
+          </div>
+
+          <h1 className="text-2xl font-normal mb-2" style={{ fontFamily: F.display, color: C.text }}>
+            Local Contributor Portal
+          </h1>
+          <p className="text-sm mb-4" style={{ color: C.textMuted, fontFamily: F.body }}>
+            Sign in to register as a verified local contributor.
+          </p>
+          <Pill variant="filled" onClick={onSignIn}>Sign In</Pill>
+        </div>
+      </div>
+    );
+  }
+
+  function onDocChange(file?: File | null) {
+    setDocError("");
+    if (!file) return;
+    if (!ALLOWED.includes(file.type)) {
+      setDocError("Unsupported file format. Please upload PDF, JPG, or PNG files.");
+      setDocName("");
+      setDocFile(null);
+      return;
+    }
+    if (file.size > MAX_BYTES) {
+      setDocError("File size exceeds 5MB limit.");
+      setDocName("");
+      setDocFile(null);
+      return;
+    }
+    setDocFile(file);
+    setDocName(file.name);
+  }
+
+  async function submitRegistration() {
+    setMsg(null);
+    if (myApp) { setMsg({type:"err",text:"You are already registered as a contributor."}); return; }
+    if (!fullName.trim() || !phone.trim() || !services.trim() || !experience.trim()) { setMsg({type:"err",text:"Please complete all required fields."}); return; }
+    if (!docFile) { setMsg({type:"err",text:"Please upload a verification document."}); return; }
+    setLoading(true);
+    try {
+      const docUrl = await firebaseClient.storage.uploadContributorDocument(docFile);
+      const created:any = await firebaseClient.entities.Contributor.create({
+        userId:user!.id,userEmail:user!.email,fullName:fullName.trim(),phone:phone.trim(),area,services:services.trim(),experience:experience.trim(),docName,docUrl,status:"pending",createdAt:new Date().toISOString(),
+      });
+      setApps([created as ContributorApplication]);
+      setMsg({type:"ok",text:"Your registration has been submitted. Please wait for admin verification."});
+    } catch(error:any) { setMsg({type:"err",text:error?.message||"Unable to submit contributor registration to Firebase."}); }
+    finally { setLoading(false); }
+  }
+
+  async function submitLocation() {
+    setMsg(null);
+    if (!verified) { setMsg({type:"err",text:"Only verified contributors can submit locations."}); return; }
+    if (!locName.trim() || !locAddress.trim() || !locDesc.trim()) { setMsg({type:"err",text:"Please complete all required fields (name, address and description)."}); return; }
+    if (subs.some(s=>s.name.toLowerCase()===locName.trim().toLowerCase() && s.state===locState)) { setMsg({type:"err",text:"This location already exists in your submissions."}); return; }
+    setLoading(true);
+    try {
+      const created:any = await firebaseClient.entities.LocationSubmission.create({
+        contributorId:user!.id,contributorName:myApp?.fullName||user!.displayName,name:locName.trim(),address:locAddress.trim(),state:locState,activity:locActivity,difficulty:locDiff,
+        description:locDesc.trim(),facilities:locFac.trim(),accessibility:locAccess.trim(),photoName:photoName||undefined,status:"pending",createdAt:new Date().toISOString(),
+      });
+      setSubs(current=>[created as LocationSubmission,...current]);
+      setMsg({type:"ok",text:"Location submitted successfully. Awaiting admin approval."});
+      setLocName(""); setLocAddress(""); setLocDesc("");
+    } catch(error:any) { setMsg({type:"err",text:error?.message||"Unable to submit location to Firebase."}); }
+    finally { setLoading(false); }
+  }
+
+  async function saveProfile() {
+    if (!myApp || myApp.status !== "verified") return;
+    if (!profPhone.trim()) { setMsg({type:"err",text:"Please enter a valid phone number."}); return; }
+    setLoading(true);
+    try {
+      const updated:any = await firebaseClient.entities.Contributor.update(myApp.id,{phone:profPhone.trim(),services:profServices.trim()});
+      setApps(current=>current.map(a=>a.id===myApp.id?updated:a));
+      setMsg({type:"ok",text:"Profile updated successfully."});
+    } catch(error:any) { setMsg({type:"err",text:error?.message||"Unable to update contributor profile."}); }
+    finally { setLoading(false); }
+  }
+
+  const inputStyle = {
+    borderColor: C.border,
+    fontFamily: F.body,
+    color: C.text,
+  } as const;
+
+  return (
+    <div className="pt-14 min-h-screen" style={{ backgroundColor: C.cream }}>
+      <div className="px-5 py-6" style={{ background: `linear-gradient(135deg, ${C.jungle} 0%, #0a2318 100%)` }}>
+        <div className="max-w-2xl mx-auto">
+          <h1 className="text-2xl font-normal text-white" style={{ fontFamily: F.display }}>
+            Local Contributor Portal
+          </h1>
+          <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.7)", fontFamily: F.body }}>
+            {myApp
+              ? `Status: ${myApp.status}${myApp.rejectReason ? ` — ${myApp.rejectReason}` : ""}`
+              : "Register to share local outdoor knowledge"}
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-white border-b sticky top-14 z-20" style={{ borderColor: C.border }}>
+        <div className="max-w-2xl mx-auto px-5 flex gap-4 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          {(
+            [
+              ["register", "Register"],
+              ["submit", "Submit location"],
+              ["mine", "My contributions"],
+              ["profile", "Profile"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => { setTab(id); setMsg(null); }}
+              className="py-3 text-sm font-bold whitespace-nowrap"
+              style={{
+                color: tab === id ? C.jungle : C.textMuted,
+                borderBottom: tab === id ? `2px solid ${C.amber}` : "2px solid transparent",
+                fontFamily: F.body,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-5 py-8 space-y-4">
+        {msg && (
+          <div
+            className="p-4 rounded-xl text-sm font-semibold flex gap-2"
+            style={{
+              backgroundColor: msg.type === "ok" ? C.successBg : C.errorBg,
+              color: msg.type === "ok" ? C.success : C.error,
+              fontFamily: F.body,
+            }}
+          >
+            {msg.type === "ok" ? <Check size={16} /> : <AlertTriangle size={16} />}
+            {msg.text}
+          </div>
+        )}
+
+        {tab === "register" && (
+          <div className="bg-white rounded-[18px] p-6 space-y-3" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.1)` }}>
+            <h2 className="font-bold" style={{ fontFamily: F.body, color: C.text }}>Register as Contributor</h2>
+            {myApp ? (
+              <p className="text-sm" style={{ color: C.textSub, fontFamily: F.body }}>
+                Application already submitted ({myApp.status}).
+                {myApp.docName && <> Document: {myApp.docName}</>}
+              </p>
+            ) : (
+              <>
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Full name *" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Phone *" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <select className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={area} onChange={(e) => setArea(e.target.value)}>
+                  {ALL_STATES.map((s) => (
+                    <option key={s.code} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Services offered *" value={services} onChange={(e) => setServices(e.target.value)} />
+                <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none" style={inputStyle} rows={3} placeholder="Experience *" value={experience} onChange={(e) => setExperience(e.target.value)} />
+                <label className="flex items-center gap-2 text-sm font-bold cursor-pointer" style={{ color: C.forest, fontFamily: F.body }}>
+                  <FileUp size={16} />
+                  Upload verification document (PDF/JPG/PNG ≤5MB)
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={(e) => onDocChange(e.target.files?.[0])} />
+                </label>
+                {docName && <p className="text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>Selected: {docName}</p>}
+                {docError && <p className="text-xs" style={{ color: C.error, fontFamily: F.body }}>{docError}</p>}
+                <Pill variant="filled" onClick={submitRegistration}>Submit registration</Pill>
+              </>
+            )}
+          </div>
+        )}
+
+        {tab === "submit" && (
+          <div className="bg-white rounded-[18px] p-6 space-y-3" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.1)` }}>
+            <h2 className="font-bold flex items-center gap-2" style={{ fontFamily: F.body, color: C.text }}>
+              <MapPin size={16} /> Submit New Location
+            </h2>
+            {!verified ? (
+              <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>
+                Your account must be verified by an administrator before submitting locations.
+              </p>
+            ) : (
+              <>
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Location name *" value={locName} onChange={(e) => setLocName(e.target.value)} />
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Full address *" value={locAddress} onChange={(e) => setLocAddress(e.target.value)} />
+                <div className="grid grid-cols-2 gap-3">
+                  <select className="px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locState} onChange={(e) => setLocState(e.target.value)}>
+                    {ALL_STATES.map((s) => <option key={s.code} value={s.name}>{s.name}</option>)}
+                  </select>
+                  <select className="px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locActivity} onChange={(e) => setLocActivity(e.target.value)}>
+                    {"Hiking,Diving,Cycling,Camping,Swimming,Trail Running,Jogging,Rock Climbing,Water Sports".split(",").map((a) => <option key={a}>{a}</option>)}
+                  </select>
+                </div>
+                <select className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locDiff} onChange={(e) => setLocDiff(e.target.value)}>
+                  <option>Easy</option><option>Moderate</option><option>Hard</option>
+                </select>
+                <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none" style={inputStyle} rows={3} placeholder="Description *" value={locDesc} onChange={(e) => setLocDesc(e.target.value)} />
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Facilities (comma-separated)" value={locFac} onChange={(e) => setLocFac(e.target.value)} />
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Accessibility info" value={locAccess} onChange={(e) => setLocAccess(e.target.value)} />
+                <label className="flex items-center gap-2 text-sm font-bold cursor-pointer" style={{ color: C.forest, fontFamily: F.body }}>
+                  <FileUp size={16} /> Photo (optional)
+                  <input type="file" accept=".jpg,.jpeg,.png" className="hidden" onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    if (!["image/jpeg", "image/png"].includes(f.type) || f.size > MAX_BYTES) {
+                      setMsg({ type: "err", text: "Photo must be JPG/PNG under 5MB." });
+                      return;
+                    }
+                    setPhotoName(f.name);
+                  }} />
+                </label>
+                {photoName && <p className="text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>{photoName}</p>}
+                <Pill variant="filled" onClick={submitLocation}>Submit location</Pill>
+              </>
+            )}
+          </div>
+        )}
+
+        {tab === "mine" && (
+          <div className="space-y-3">
+            {mySubs.length === 0 ? (
+              <p className="text-center py-12 text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>
+                You have not submitted any locations yet.
+              </p>
+            ) : (
+              mySubs.map((s) => (
+                <div key={s.id} className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.1)` }}>
+                  <div className="flex justify-between gap-2">
+                    <p className="font-bold text-sm" style={{ color: C.text, fontFamily: F.body }}>{s.name}</p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full capitalize" style={{
+                      backgroundColor: s.status === "approved" ? C.successBg : s.status === "rejected" ? C.errorBg : "#fef3c7",
+                      color: s.status === "approved" ? C.success : s.status === "rejected" ? C.error : "#92400e",
+                      fontFamily: F.body,
+                    }}>{s.status}</span>
+                  </div>
+                  <p className="text-[11px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
+                    {s.state} · {s.activity} · {new Date(s.createdAt).toLocaleDateString()}
+                  </p>
+                  {s.rejectReason && (
+                    <p className="text-[12px] mt-2" style={{ color: C.error, fontFamily: F.body }}>Reason: {s.rejectReason}</p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {tab === "profile" && (
+          <div className="bg-white rounded-[18px] p-6 space-y-3" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.1)` }}>
+            <h2 className="font-bold" style={{ fontFamily: F.body, color: C.text }}>Manage profile</h2>
+            {!verified ? (
+              <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>Available after verification.</p>
+            ) : (
+              <>
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={profPhone} onChange={(e) => setProfPhone(e.target.value)} placeholder="Phone" />
+                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={profServices} onChange={(e) => setProfServices(e.target.value)} placeholder="Services" />
+                <Pill variant="filled" onClick={saveProfile}>Save changes</Pill>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+//==================== WongYueShan END - Local Contributor Portal ====================
