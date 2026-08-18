@@ -1,3 +1,6 @@
+// FILE PRIMARY OWNER: LOW JUN FENG | Badge Achievement System
+// GitHub target: feature/low-jun-feng -> Pull Request -> main
+//==================== LowJunFeng Part - Badge Achievement System ====================
 import type { ActivityLog, BadgeDef, BadgeStatus } from "./types";
 
 export const BADGE_DEFS: BadgeDef[] = [
@@ -70,3 +73,4 @@ export async function shareBadge(badge: BadgeStatus) {
     alert(text);
   }
 }
+//==================== LowJunFeng END - Badge Achievement System ====================
