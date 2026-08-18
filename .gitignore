@@ -1,0 +1,6 @@
+# MAIN / TEAM SHARED CONFIG | GitHub target: main
+.env
+.env.local
+.env.*.local
+node_modules/
+dist/

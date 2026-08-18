@@ -1,0 +1,426 @@
+// FILE PRIMARY OWNER: LIM ROU YU | Main App Integration / App.tsx Owner
+// GitHub target: main
+// SHARED ROUTE/INTEGRATION SECTIONS ARE MARKED INSIDE THIS FILE BY MEMBER NAME.
+// Primary merge/integration owner remains LIM ROU YU.
+// Shared integration file for all SeekMY modules.
+// Module-specific route comments below identify the responsible member.
+import { useEffect, useState } from "react";
+import { UserCircle, LogOut } from "lucide-react";
+import { ImageWithFallback } from "./components/ui/ImageWithFallback";
+const seekMyLogo = new URL("../imports/logo.png", import.meta.url).toString();
+import type { Page, MockUser, Location, ActivityLog } from "./lib/types";
+import type { BookmarkEntry } from "./lib/types";
+import { C, F } from "./lib/tokens";
+import { evaluateBadges } from "./lib/badges";
+import { NavBar } from "./components/NavBar";
+import { AuthModal } from "./components/AuthModal";
+import { FrapButton } from "./components/FrapButton";
+import { Pill } from "./components/Atoms";
+import { HomePage } from "./pages/HomePage";
+import { ExplorePage } from "./pages/ExplorePage";
+import { LocationPage } from "./pages/LocationPage";
+import { SuggestLocationPage } from "./pages/SuggestLocationPage";
+import { MapPage } from "./pages/MapPage";
+import { AIPage } from "./pages/AIPage";
+import { LeaderboardPage } from "./pages/LeaderboardPage";
+import { LogPage } from "./pages/LogPage";
+import { BookmarksPage } from "./pages/BookmarksPage";
+import { AccountPage } from "./pages/AccountPage";
+import { AdminPage } from "./pages/AdminPage";
+import { ContributorPage } from "./pages/ContributorPage";
+import { InsightsPage } from "./pages/InsightsPage";
+import { HelpPage } from "./pages/HelpPage";
+import { firebaseClient } from "./api/firebaseClient";
+
+export default function App() {
+  const [page, setPage]               = useState<Page>("home");
+  const [prevPage, setPrevPage]       = useState<Page>("home");
+  const [mobileOpen, setMobileOpen]   = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<Location|null>(null);
+  const [selectedState, setSelectedState]       = useState("");
+  const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
+  const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [users, setUsers]       = useState<MockUser[]>([]);
+  const [allLocations, setAllLocations] = useState<Location[]>([]);
+  const [user, setUser]         = useState<MockUser|null>(null);
+  const [showAuth, setShowAuth] = useState(false);
+  const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>([]);
+  const [badgeToast, setBadgeToast] = useState<string | null>(null);
+
+  const isAdmin = user?.role === "admin";
+
+  useEffect(() => {
+    const configured = Boolean(
+      import.meta.env.VITE_FIREBASE_API_KEY &&
+      import.meta.env.VITE_FIREBASE_AUTH_DOMAIN &&
+      import.meta.env.VITE_FIREBASE_PROJECT_ID &&
+      import.meta.env.VITE_FIREBASE_STORAGE_BUCKET &&
+      import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID &&
+      import.meta.env.VITE_FIREBASE_APP_ID
+    );
+    if (!configured) return;
+
+    firebaseClient.entities.Location.list("name", 500)
+      .then((rows:any[]) => setAllLocations(rows as Location[]))
+      .catch((error:any) => showToast(error?.message || "Unable to load locations from Firebase.", "err"));
+
+    firebaseClient.auth.me().then(async (profile: any) => {
+      const email = profile?.email || "";
+      const current: MockUser = {
+        id: profile?.id || `firebase-${Date.now()}`,
+        username: profile?.username || email.split("@")[0] || "explorer",
+        displayName: profile?.full_name || email.split("@")[0] || "Explorer",
+        email, password: "", bio: profile?.bio || "",
+        joinDate: profile?.created_date?.slice?.(0,10) || new Date().toISOString().split("T")[0],
+        totalKm: Number(profile?.totalKm || profile?.total_km || 0),
+        states: Number(profile?.states || 0), checkins: Number(profile?.checkins || 0),
+        role: profile?.role === "admin" ? "admin" : "user",
+      };
+      setUser(current);
+
+      const [bookmarkRows, logRows, userRows] = await Promise.all([
+        firebaseClient.entities.Bookmark.filter({ created_by_id: current.id }, "-created_date", 500),
+        firebaseClient.entities.ActivityLog.filter({ created_by_id: current.id }, "-created_date", 500),
+        firebaseClient.entities.User.list("full_name", 500),
+      ]);
+      setBookmarks(bookmarkRows.map((b:any)=>({
+        firestoreId:String(b.id), locationId:b.locationId ?? b.location_id,
+        notes:b.notes||"", folder:b.folder||"Uncategorized", savedAt:b.savedAt||b.created_date||new Date().toISOString(),
+      })));
+      setActivityLogs(logRows.map((l:any)=>({
+        id:l.id, location:l.location||l.locationName||"Unknown", activity:l.activity||"Hiking",
+        distance:Number(l.distance||0), duration:l.duration||"", date:l.date||l.created_date?.slice?.(0,10)||"",
+        notes:l.notes||"", comment:l.comment||"", photoUrl:l.photoUrl||l.photo_url||"",
+        locationId:l.locationId??l.location_id, state:l.state||"",
+      })));
+      setUsers(userRows.map((u:any)=>({
+        id:String(u.id), username:u.username||u.email?.split("@")[0]||"explorer",
+        displayName:u.full_name||u.displayName||u.email||"Explorer", email:u.email||"", password:"", bio:u.bio||"",
+        joinDate:u.created_date?.slice?.(0,10)||new Date().toISOString().split("T")[0],
+        totalKm:Number(u.total_km||u.totalKm||0), states:Number(u.states||0), checkins:Number(u.checkins||0),
+        role:u.role==="admin"?"admin":"user", status:u.status,
+      })));
+    }).catch(() => { /* guest mode: public Firebase locations still load */ });
+  }, []);
+
+  function navigate(p: Page) {
+    // Opening Discover normally should always start with ALL locations.
+    // A state-card click can set the state immediately after this call.
+    if (p === "explore") {
+      setSelectedState("");
+    }
+
+    setPrevPage(page);
+    setPage(p);
+    setMobileOpen(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function selectLocation(l: Location) {
+    setSelectedLocation(l);
+  }
+  function showToast(msg: string, type: "ok" | "err" = "ok") {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3200);
+  }
+  async function toggleBookmark(id: number | string) {
+    if (!user) { setShowAuth(true); return; }
+    const existing = bookmarks.find((b) => String(b.locationId) === String(id));
+    try {
+      if (existing) {
+        if (existing.firestoreId) await firebaseClient.entities.Bookmark.delete(existing.firestoreId);
+        setBookmarks((p)=>p.filter((b)=>String(b.locationId)!==String(id)));
+      } else {
+        const created:any = await firebaseClient.entities.Bookmark.create({
+          locationId:id, notes:"", folder:"Uncategorized", savedAt:new Date().toISOString(),
+        });
+        setBookmarks((p)=>[{firestoreId:String(created.id),locationId:id,notes:"",folder:"Uncategorized",savedAt:created.savedAt||created.created_date||new Date().toISOString()},...p]);
+      }
+    } catch (error:any) { showToast(error?.message || "Unable to update bookmark in Firebase.", "err"); }
+  }
+  function refreshLocations(extra?: Location) {
+    if (extra) setAllLocations((current)=>current.some((l)=>String(l.id)===String(extra.id))?current:[extra,...current]);
+    else firebaseClient.entities.Location.list("name",500).then((rows:any[])=>setAllLocations(rows as Location[])).catch(()=>{});
+  }
+  if (typeof window !== "undefined") (window as any).__seekmyRefreshLocations = (loc: Location) => refreshLocations(loc);
+  function setBookmarksPersist(updater: BookmarkEntry[] | ((p: BookmarkEntry[]) => BookmarkEntry[])) {
+    setBookmarks((previous) => {
+      const next = typeof updater === "function" ? updater(previous) : updater;
+      const nextIds = new Set(next.map((b)=>String(b.locationId)));
+      previous.filter((b)=>!nextIds.has(String(b.locationId)) && b.firestoreId)
+        .forEach((b)=>firebaseClient.entities.Bookmark.delete(b.firestoreId!).catch(()=>{}));
+      next.forEach((b)=>{
+        const old = previous.find((x)=>String(x.locationId)===String(b.locationId));
+        if (old?.firestoreId && (old.notes!==b.notes || old.folder!==b.folder)) {
+          firebaseClient.entities.Bookmark.update(old.firestoreId,{notes:b.notes,folder:b.folder}).catch(()=>{});
+        }
+      });
+      return next;
+    });
+  }
+
+  async function loadUserFirebaseData(current: MockUser) {
+    const [bookmarkRows, logRows] = await Promise.all([
+      firebaseClient.entities.Bookmark.filter({ created_by_id: current.id }, "-created_date", 500),
+      firebaseClient.entities.ActivityLog.filter({ created_by_id: current.id }, "-created_date", 500),
+    ]);
+
+    setBookmarks(bookmarkRows.map((b:any)=>({
+      firestoreId:String(b.id),
+      locationId:b.locationId ?? b.location_id,
+      notes:b.notes || "",
+      folder:b.folder || "Uncategorized",
+      savedAt:b.savedAt || b.created_date || new Date().toISOString(),
+    })));
+
+    setActivityLogs(logRows.map((l:any)=>({
+      id:l.id,
+      location:l.location || l.locationName || "Unknown",
+      activity:l.activity || "Hiking",
+      distance:Number(l.distance || 0),
+      duration:l.duration || "",
+      date:l.date || l.created_date?.slice?.(0,10) || "",
+      notes:l.notes || "",
+      comment:l.comment || "",
+      photoUrl:l.photoUrl || l.photo_url || "",
+      locationId:l.locationId ?? l.location_id,
+      state:l.state || "",
+    })));
+  }
+
+  function addLog(l: Omit<ActivityLog, "id">) {
+    if (!user) { setShowAuth(true); return; }
+    firebaseClient.entities.ActivityLog.create(l).then((created:any)=>{
+      setActivityLogs(prev => {
+        const next = [{ ...l, id: created.id }, ...prev];
+        //==================== LowJunFeng Part - Badge Achievement System ====================
+        const statuses = evaluateBadges(next, 0, earnedBadgeIds);
+        const newly = statuses.filter(b => b.justEarned);
+        if (newly.length) {
+          setEarnedBadgeIds(ids => [...ids, ...newly.map(b => b.id)]);
+          setBadgeToast(`Badge earned: ${newly.map(b => b.name).join(", ")}!`);
+          setTimeout(() => setBadgeToast(null), 4000);
+        }
+        //==================== LowJunFeng END - Badge Achievement System ====================
+        return next;
+      });
+    }).catch((error:any)=>showToast(error?.message || "Unable to save activity to Firebase.","err"));
+  }
+
+  async function handleLogout() {
+    try {
+      if (import.meta.env.VITE_FIREBASE_API_KEY) await firebaseClient.auth.logout(undefined);
+    } catch { /* keep logout usable in demo mode */ }
+    setUser(null);
+    setBookmarks([]);
+    setActivityLogs([]);
+    navigate("home");
+  }
+
+  async function handleLogin(u: MockUser, adminFlag?: boolean) {
+    setUser(u);
+    setShowAuth(false);
+
+    if (adminFlag) {
+      navigate("admin");
+      return;
+    }
+
+    try {
+      await loadUserFirebaseData(u);
+    } catch (error:any) {
+      showToast(error?.message || "Unable to load your Firebase data.", "err");
+    }
+    // Keep the current page after login so protected pages immediately show the user's data.
+  }
+
+  if (isAdmin) {
+    return (
+      <div className="min-h-screen" style={{ fontFamily: F.body }}>
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-white border-b flex items-center justify-between px-5 h-14" style={{ borderColor: C.border, boxShadow: `0 1px 0 ${C.border}` }}>
+          <button onClick={() => navigate("home")} className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full overflow-hidden border-2" style={{ borderColor: C.jungle }}>
+              <ImageWithFallback src={seekMyLogo} alt="SeekMY" className="w-full h-full object-cover"/>
+            </div>
+            <div>
+              <p className="text-sm font-bold leading-tight" style={{ color: C.text, fontFamily: F.display }}>SeekMY</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: C.textMuted, fontFamily: F.body }}>Admin Panel</p>
+            </div>
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: C.muted }}>
+              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: C.jungle }}>A</div>
+              <span className="text-xs font-bold" style={{ color: C.text, fontFamily: F.body }}>{user?.email}</span>
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: C.jungle, color: "#fff", fontFamily: F.body }}>ADMIN</span>
+            </div>
+            <button onClick={handleLogout} className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full"
+              style={{ backgroundColor: "#fde8e6", color: C.error, fontFamily: F.body }}>
+              <LogOut size={12}/> Sign out
+            </button>
+          </div>
+        </nav>
+        {/* ==================== WongYueShan Part - Admin Panel ==================== */}
+        <AdminPage users={users} setUsers={setUsers} locations={allLocations} onLogout={handleLogout}/>
+        {/* ==================== WongYueShan END - Admin Panel ==================== */}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen pb-6" style={{ fontFamily: F.body }}>
+      <NavBar
+        page={page}
+        setPage={navigate}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
+        user={user}
+        onAuthClick={() => !user ? setShowAuth(true) : navigate("account")}
+      />
+
+      {/* ==================== LowJunFeng Part - Home Module ==================== */}
+      {page === "home" && (
+        <HomePage
+          setPage={navigate}
+          setSelectedLocation={selectLocation}
+          setSelectedState={setSelectedState}
+          bookmarks={bookmarks.map(b => b.locationId)}
+          onBookmark={toggleBookmark}
+          locations={allLocations}
+        />
+      )}
+      {/* ==================== LowJunFeng END - Home Module ==================== */}
+
+      {/* ==================== LimRouYu Part - Map Module ==================== */}
+      {page === "map" && (
+        <MapPage setPage={navigate} setSelectedLocation={selectLocation} locations={allLocations} />
+      )}
+      {/* ==================== LimRouYu END - Map Module ==================== */}
+
+      {/* ==================== WilsonChoongWeiShan Part - Activity Filter Module ==================== */}
+      {page === "explore" && (
+        <ExplorePage
+          locations={allLocations}
+          setPage={navigate}
+          setSelectedLocation={selectLocation}
+          selectedState={selectedState}
+          bookmarks={bookmarks.map(b => b.locationId)}
+          onBookmark={toggleBookmark}
+        />
+      )}
+      {/* ==================== WilsonChoongWeiShan END - Activity Filter Module ==================== */}
+
+      {/* ==================== WongYueShan Part - Local Contributor / Location Suggestion ==================== */}
+      {page === "suggest" && (
+        <SuggestLocationPage user={user} setPage={navigate} onToast={showToast} />
+      )}
+      {/* ==================== WongYueShan END - Local Contributor / Location Suggestion ==================== */}
+
+      {/* Shared: LimRouYu Location Detail + WongYueShan Weather + LimTzeXin Bookmark/Review */}
+      {page === "location" && (
+        <LocationPage
+          loc={selectedLocation}
+          onBack={() => navigate(prevPage === "location" ? "explore" : prevPage)}
+          bookmarked={selectedLocation ? bookmarks.some(b => String(b.locationId) === String(selectedLocation.id)) : false}
+          onBookmark={() => selectedLocation && toggleBookmark(selectedLocation.id)}
+          onSuggest={() => navigate("suggest")}
+          onLogActivity={addLog}
+          user={user}
+          activityLogs={activityLogs}
+          onToast={showToast}
+        />
+      )}
+      {/* ==================== WilsonChoongWeiShan Part - AI Outdoor Assistant Chatbot ==================== */}
+      {page === "ai" && <AIPage locations={allLocations}/>}
+      {/* ==================== WilsonChoongWeiShan END - AI Outdoor Assistant Chatbot ==================== */}
+      {/* ==================== FongXinTong Part - Community Leaderboard & Ranking Module ==================== */}
+      {page === "leaderboard" && <LeaderboardPage/>}
+      {/* ==================== FongXinTong END - Community Leaderboard & Ranking Module ==================== */}
+      {/* ==================== FongXinTong Part - Activity Log Module ==================== */}
+      {page === "log" && (
+        <LogPage user={user} logs={activityLogs} locations={allLocations} onAddLog={addLog} onSignIn={() => setShowAuth(true)}/>
+      )}
+      {/* ==================== FongXinTong END - Activity Log Module ==================== */}
+
+      {/* ==================== LimTzeXin Part - Bookmark Module ==================== */}
+      {page === "bookmarks" && (
+        <BookmarksPage
+          bookmarks={bookmarks}
+          setBookmarks={setBookmarksPersist}
+          setPage={navigate}
+          setSelectedLocation={selectLocation}
+          onToast={showToast}
+          locations={allLocations}
+          user={user}
+          onSignIn={() => setShowAuth(true)}
+        />
+      )}
+      {/* ==================== LimTzeXin END - Bookmark Module ==================== */}
+
+      {/* ==================== WongYueShan Part - Local Contributor Portal ==================== */}
+      {page === "contributor" && (
+        <ContributorPage user={user} setPage={navigate} onSignIn={() => setShowAuth(true)} />
+      )}
+      {/* ==================== WongYueShan END - Local Contributor Portal ==================== */}
+
+      {/* ==================== FongXinTong Part - Personal Stats Dashboard ==================== */}
+      {page === "insights" && (
+        <InsightsPage user={user} locations={allLocations} logs={activityLogs} bookmarks={bookmarks} onSignIn={() => setShowAuth(true)} />
+      )}
+      {/* ==================== FongXinTong END - Personal Stats Dashboard ==================== */}
+
+      {page === "help" && <HelpPage setPage={navigate} />}
+      {/* ==================== WilsonChoongWeiShan Part - Account Module ==================== */}
+      {page === "account" && user && (
+        <AccountPage
+          user={user}
+          setUser={setUser}
+          onLogout={handleLogout}
+          logs={activityLogs}
+          bookmarks={bookmarks.map(b => b.locationId)}
+          setPage={navigate}
+          users={users}
+          setUsers={setUsers}
+        />
+      )}
+
+      {/* ==================== WilsonChoongWeiShan END - Account Module ==================== */}
+
+      {showAuth && (
+        <AuthModal onClose={() => setShowAuth(false)} onLogin={handleLogin}/>
+      )}
+
+      {page === "account" && !user && (
+        <div className="pt-14 min-h-screen flex items-center justify-center" style={{ backgroundColor: C.cream }}>
+          <div className="text-center max-w-xs px-6">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ backgroundColor: C.muted }}>
+              <UserCircle size={32} style={{ color: C.jungle }}/>
+            </div>
+            <h2 className="text-2xl font-normal mb-2" style={{ fontFamily: F.display, color: C.text }}>Sign in to your account</h2>
+            <p className="text-sm mb-6" style={{ color: C.textMuted, fontFamily: F.body }}>Access your profile, activity log, and bookmarks.</p>
+            <Pill variant="filled" onClick={() => setShowAuth(true)}>Sign In or Register</Pill>
+          </div>
+        </div>
+      )}
+
+      {badgeToast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-sm font-bold text-white shadow-lg"
+          style={{ backgroundColor: C.jungle, fontFamily: F.body }}
+        >
+          🏅 {badgeToast}
+        </div>
+      )}
+
+      {toast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-sm font-bold text-white shadow-lg max-w-[90vw] text-center"
+          style={{ backgroundColor: toast.type === "err" ? C.error : C.jungle, fontFamily: F.body }}
+        >
+          {toast.msg}
+        </div>
+      )}
+
+      <FrapButton page={page} setPage={navigate}/>
+    </div>
+  );
+}
