@@ -1,115 +1,241 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import { firebaseClient } from "@/api/firebaseClient";
-import { ACTIVITY_TYPES } from "@/lib/malaysia-data";
-import { Map, MapPin } from "lucide-react";
-import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { Map as MapIcon, MapPin, Filter, X } from "lucide-react";
+import type { Location, Page } from "../lib/types";
+import { C, F } from "../lib/tokens";
+import { ACTIVITY_FILTERS } from "../lib/constants";
+import { geocodeMapLocation } from "../lib/mapGeocoding";
 
-// Fix leaflet default icon
-delete L.Icon.Default.prototype._getIconUrl;
+delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-export default function MapView() {
-  const [locations, setLocations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filterActivity, setFilterActivity] = useState("");
+type MapPoint = {
+  location: Location;
+  lat: number;
+  lng: number;
+  approximate: boolean;
+};
 
-  useEffect(() => {
-    firebaseClient.entities.Location.filter({ status: "active" }).then(l => {
-      setLocations(l.filter(loc => loc.latitude && loc.longitude));
-      setLoading(false);
-    });
-  }, []);
+export function MapPage({
+  setPage,
+  setSelectedLocation,
+  locations,
+}: {
+  setPage: (p: Page) => void;
+  setSelectedLocation: (l: Location) => void;
+  locations: Location[];
+}) {
+  const [activity, setActivity] = useState("all");
+  const [difficulty, setDifficulty] = useState("All");
+  const [points, setPoints] = useState<MapPoint[]>([]);
+  const [loadingMap, setLoadingMap] = useState(false);
 
-  const filtered = locations.filter(l =>
-    !filterActivity || (l.activity_types || []).includes(filterActivity)
+  const filteredLocations = useMemo(
+    () =>
+      locations.filter((location) => {
+        if (activity !== "all" && location.activity !== activity) return false;
+        if (difficulty !== "All" && location.difficulty !== difficulty) return false;
+        return true;
+      }),
+    [locations, activity, difficulty]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPoints() {
+      setLoadingMap(true);
+
+      // Use the stored address to geocode each location.
+      // Do not place a marker at a fake state-centre position if geocoding fails.
+      const next: MapPoint[] = [];
+      const concurrency = 5;
+
+      for (let start = 0; start < filteredLocations.length; start += concurrency) {
+        const batch = filteredLocations.slice(start, start + concurrency);
+        const resolved = await Promise.all(
+          batch.map(async (location) => {
+            // Address can be normal human-readable words, for example:
+            // "Bako National Park, Kuching, Sarawak, Malaysia".
+            // The geocoder converts it to temporary coordinates for the marker.
+            const point = await geocodeMapLocation(location);
+            return point
+              ? {
+                  location,
+                  lat: point.lat,
+                  lng: point.lng,
+                  approximate: false,
+                }
+              : null;
+          })
+        );
+
+        next.push(...resolved.filter((point): point is MapPoint => point !== null));
+        if (!cancelled) setPoints([...next]);
+      }
+
+      if (!cancelled) {
+        setPoints(next);
+        setLoadingMap(false);
+      }
+    }
+
+    loadPoints();
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredLocations]);
+
+  const directionsUrl = (location: Location) =>
+    `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+      location.address?.trim() || `${location.name}, ${location.state}, Malaysia`
+    )}`;
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-gradient-to-r from-teal-600 to-green-700 text-white px-4 py-5">
+    <div className="pt-14 min-h-screen" style={{ backgroundColor: C.cream }}>
+      <div
+        className="px-5 py-5"
+        style={{ background: `linear-gradient(135deg, ${C.jungle} 0%, #0a2318 100%)` }}
+      >
         <div className="max-w-5xl mx-auto flex items-center gap-3">
-          <Map className="w-6 h-6" />
+          <MapIcon size={22} className="text-white" />
           <div>
-            <h1 className="font-bold text-xl">Explore Map</h1>
-            <p className="text-white/70 text-sm">Discover outdoor locations across Malaysia</p>
+            <h1 className="text-2xl font-normal text-white" style={{ fontFamily: F.display }}>
+              Explore Map
+            </h1>
+            <p
+              className="text-sm"
+              style={{ color: "rgba(255,255,255,0.65)", fontFamily: F.body }}
+            >
+              {points.length} markers{loadingMap ? " · locating…" : ""}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Activity Filter */}
-      <div className="bg-white border-b border-gray-100 px-4 py-3">
-        <div className="max-w-5xl mx-auto flex gap-2 overflow-x-auto">
-          <button onClick={() => setFilterActivity("")}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-all ${!filterActivity ? "bg-green-600 text-white border-green-600" : "border-gray-200 text-gray-600"}`}>
-            All Activities
-          </button>
-          {ACTIVITY_TYPES.map(a => (
-            <button key={a.name} onClick={() => setFilterActivity(filterActivity === a.name ? "" : a.name)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium border whitespace-nowrap transition-all ${filterActivity === a.name ? "bg-green-600 text-white border-green-600" : "border-gray-200 text-gray-600"}`}>
-              {a.icon} {a.name}
-            </button>
-          ))}
+      <div className="bg-white border-b sticky top-14 z-20" style={{ borderColor: C.border }}>
+        <div className="max-w-5xl mx-auto px-5 py-3 space-y-2">
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            {ACTIVITY_FILTERS.map(({ id, label, icon }) => (
+              <button
+                key={id}
+                onClick={() => setActivity(id)}
+                className="px-3.5 h-9 rounded-full text-[12px] font-bold whitespace-nowrap"
+                style={{
+                  backgroundColor: activity === id ? C.jungle : C.muted,
+                  color: activity === id ? "#fff" : C.textSub,
+                  fontFamily: F.body,
+                }}
+              >
+                {icon} {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <Filter size={14} style={{ color: C.textMuted }} />
+            {(["All", "Easy", "Moderate", "Hard"] as const).map((level) => (
+              <button
+                key={level}
+                onClick={() => setDifficulty(level)}
+                className="px-3 h-8 rounded-full text-[11px] font-bold"
+                style={{
+                  backgroundColor: difficulty === level ? C.forest : C.muted,
+                  color: difficulty === level ? "#fff" : C.textSub,
+                  fontFamily: F.body,
+                }}
+              >
+                {level}
+              </button>
+            ))}
+
+            {(activity !== "all" || difficulty !== "All") && (
+              <button
+                onClick={() => {
+                  setActivity("all");
+                  setDifficulty("All");
+                }}
+                className="flex items-center gap-1 text-[11px] font-bold ml-auto"
+                style={{ color: C.error, fontFamily: F.body }}
+              >
+                <X size={12} /> Clear
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-96 text-gray-400">
-          <div className="text-center">
-            <Map className="w-10 h-10 mx-auto mb-3 opacity-30 animate-pulse" />
-            <p>Loading map...</p>
-          </div>
+      {points.length === 0 ? (
+        <div className="h-[420px] flex flex-col items-center justify-center">
+          <MapPin size={36} style={{ color: C.textMuted, opacity: 0.4 }} />
+          <p className="mt-3 font-bold" style={{ color: C.textSub, fontFamily: F.body }}>
+            No outdoor activity locations found for this filter.
+          </p>
         </div>
       ) : (
-        <div style={{ height: "calc(100vh - 160px)" }}>
-          <MapContainer center={[4.2105, 108.9758]} zoom={6} style={{ height: "100%", width: "100%" }}>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
-            {filtered.map(loc => (
-              <Marker key={loc.id} position={[loc.latitude, loc.longitude]}>
+        <div style={{ height: "calc(100vh - 200px)" }}>
+          <MapContainer center={[4.21, 108.98]} zoom={6} style={{ height: "100%", width: "100%" }}>
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution="&copy; OpenStreetMap"
+            />
+
+            {points.map(({ location, lat, lng, approximate }) => (
+              <Marker key={String(location.id)} position={[lat, lng]}>
                 <Popup>
-                  <div className="min-w-[160px]">
-                    <p className="font-bold text-gray-900 mb-1">{loc.name}</p>
-                    <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                      <span>📍</span> {loc.state}
+                  <div style={{ minWidth: 180, fontFamily: F.body }}>
+                    <p style={{ fontWeight: 700, marginBottom: 4 }}>{location.name}</p>
+                    <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
+                      📍 {location.state} · {location.activity}
                     </p>
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {(loc.activity_types || []).slice(0, 2).map(a => {
-                        const act = ACTIVITY_TYPES.find(t => t.name === a);
-                        return <span key={a} className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{act?.icon} {a}</span>;
-                      })}
-                    </div>
-                    <a href={`/location/${loc.id}`} className="text-xs text-green-700 font-semibold hover:underline">View Details →</a>
+                    {approximate && (
+                      <p style={{ fontSize: 10, color: "#8a6d1d", marginBottom: 8 }}>
+                        Approximate map position
+                      </p>
+                    )}
+                    {location.facilities?.length > 0 && (
+                      <p style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
+                        Facilities: {location.facilities.slice(0, 3).join(", ")}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLocation(location);
+                        setPage("location");
+                      }}
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: C.forest,
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        marginRight: 12,
+                      }}
+                    >
+                      View details →
+                    </button>
+                    <a
+                      href={directionsUrl(location)}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: 12, fontWeight: 700, color: C.jungle }}
+                    >
+                      Get Directions →
+                    </a>
                   </div>
-                
-            <div className="mt-2">
-              <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${loc.latitude},${loc.longitude}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs font-semibold text-green-700 hover:underline"
-              >
-                Get Directions →
-              </a>
-            </div>
-          </Popup>
+                </Popup>
               </Marker>
             ))}
           </MapContainer>
-        </div>
-      )}
-
-      {filtered.length === 0 && !loading && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-white rounded-2xl shadow-lg p-6 text-center max-w-xs">
-            <MapPin className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-            <p className="font-medium text-gray-700">No locations with coordinates yet</p>
-            <p className="text-sm text-gray-400 mt-1">Add locations via the Admin Panel with lat/lng coordinates</p>
-          </div>
         </div>
       )}
     </div>
