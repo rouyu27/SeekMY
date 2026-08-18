@@ -1,3 +1,6 @@
+// FILE PRIMARY OWNER: LOW JUN FENG | Home Module
+// GitHub target: feature/low-jun-feng -> Pull Request -> main
+//==================== LowJunFeng Part - Home Module ====================
 import { useState, useMemo } from "react";
 import {
   Search, X, Sparkles, MessageCircle, ArrowRight, ChevronRight,
@@ -181,3 +184,4 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
     </div>
   );
 }
+//==================== LowJunFeng END - Home Module ====================
