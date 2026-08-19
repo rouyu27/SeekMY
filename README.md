@@ -1,58 +1,27 @@
-# SeekMY
+# SeekMY Fullstack
 
-Progressive web app to discover outdoor activities across Malaysia (Visit Malaysia 2026).
+SeekMY is organized into frontend and backend areas so each part of the system is easy to find.
 
-**This version runs fully offline / without Base44.** Data and auth use browser `localStorage`.
+## Project Structure
 
-## Quick start
+- `frontend/` - Vite React application, public assets, browser favicon, UI pages, and client API code.
+- `backend/firebase/` - Firebase Hosting, Firestore, Storage, and project configuration.
+- `backend/supabase/` - Supabase Edge Functions used for activity logs, reviews, leaderboard, weather, and AI guide APIs.
+- `docs/` - Setup notes, module ownership, API/backend documentation, and import guides.
+
+## Frontend
 
 ```bash
+cd frontend
 npm install
 npm run dev
+npm run build
 ```
 
-Open http://localhost:5173
+## Backend
 
-## Demo accounts
+Firebase rules and hosting config are in `backend/firebase/`.
 
-| Email | Password | Role |
-|-------|----------|------|
-| `admin@seekmy.local` | `admin123` | Admin |
-| `demo@seekmy.local` | `demo123` | User |
+Supabase Edge Functions are in `backend/supabase/functions/`.
 
-Register also works: use OTP **`123456`** when prompted.
-
-## Features
-
-- Activity discovery by state / type / difficulty
-- Map view, location detail, weather (mock)
-- Bookmarks, activity log, badges, leaderboard
-- Contributor portal & admin panel
-- AI insights (local heuristic recommendations)
-
-## Tech
-
-- React 18 + Vite + Tailwind + Radix UI
-- React Router, TanStack Query
-- Local mock API (`src/api/base44Client.js`) replacing Base44 SDK
-
-## Reset local data
-
-In the browser console:
-
-```js
-Object.keys(localStorage).filter(k => k.startsWith('seekmy_')).forEach(k => localStorage.removeItem(k));
-location.reload();
-```
-
-## Custom images
-
-Put your photos in **`public/images/`**.
-
-| Use | Filenames |
-|-----|-----------|
-| Home hero slider | `hero-1.jpg` … `hero-6.jpg` |
-| Logo | `logo.png` |
-| Locations | see `public/images/README.txt` |
-
-Code references them as `/images/filename.jpg` (Vite serves `public/` at the site root).
+See `docs/BACKEND_SETUP.md` for environment variables, deployment commands, and database notes.

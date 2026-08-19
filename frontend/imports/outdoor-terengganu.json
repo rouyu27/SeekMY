@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Chemerong-Berembun-Lansir Trail",
+    "state": "Terengganu",
+    "stateCode": "TRG",
+    "address": "Chemerong-Berembun-Lansir Trail, Terengganu, Malaysia",
+    "lat": 4.6475623,
+    "lng": 102.9862837,
+    "activity": "Hiking",
+    "category": "hiking_route",
+    "source": "OpenStreetMap",
+    "sourceId": "relation/17921986",
+    "sourceUrl": "https://www.openstreetmap.org/relation/17921986",
+    "image_url": "",
+    "photo": null,
+    "photoStatus": "not_found",
+    "status": "pending",
+    "importedAt": "2026-08-17T18:54:01.900Z",
+    "lastVerifiedAt": "2026-08-17T18:54:01.900Z"
+  }
+]

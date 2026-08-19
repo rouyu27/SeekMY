@@ -1,0 +1,24 @@
+{
+  "name": "SeekMY - Malaysia Outdoor Discovery",
+  "short_name": "SeekMY",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f4ea",
+  "theme_color": "#1b4332",
+  "description": "Discover outdoor activities across Malaysia.",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
