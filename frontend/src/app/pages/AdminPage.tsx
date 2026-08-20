@@ -259,10 +259,21 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   async function addStarterPlaces(){
     setSeedingStarter(true);
     try{
-      const existing=new Set(locations.map(location=>`${location.name}|${location.state}`.toLowerCase()));
+      const existing=new Map(locations.map(location=>[`${location.name}|${location.state}`.toLowerCase(),location]));
       const missing=STARTER_LOCATIONS.filter(location=>!existing.has(`${location.name}|${location.state}`.toLowerCase()));
-      if(!missing.length){showToast("Starter places are already in Firebase.");return;}
       const created:Location[]=[];
+      const updated:Location[]=[];
+      for(const starter of STARTER_LOCATIONS){
+        const current=existing.get(`${starter.name}|${starter.state}`.toLowerCase());
+        if(!current || current.image_url || !starter.image_url) continue;
+        const row:any=await firebaseClient.entities.Location.update(String(current.id),{
+          image_url:starter.image_url,
+          image_urls:starter.image_urls || [starter.image_url],
+          photo:starter.photo || null,
+          photoAttribution:starter.photoAttribution || "",
+        });
+        updated.push(row as Location);
+      }
       for(const location of missing){
         const {id, ...data}=location;
         const row:any=await firebaseClient.entities.Location.create({
@@ -273,9 +284,10 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         });
         created.push(row as Location);
       }
-      setLocations(ls=>[...created,...ls]);
+      if(!missing.length&&!updated.length){showToast("Starter places are already in Firebase.");return;}
+      setLocations(ls=>[...created,...ls.map(location=>updated.find(item=>String(item.id)===String(location.id))||location)]);
       (window as any).__seekmyRefreshLocations?.();
-      showToast(`Added ${created.length} starter places to Firebase.`);
+      showToast(`Added ${created.length} starter places and updated ${updated.length} photos.`);
     }catch(e:any){showToast(e?.message||"Unable to add starter places.");}
     finally{setSeedingStarter(false);}
   }
@@ -324,7 +336,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
           {!userLoadError&&filteredUsers.length===0&&<p className="text-sm bg-white rounded-[18px] p-4" style={{color:C.textMuted}}>No Firebase users found.</p>}
           {filteredUsers.map(u=><div key={u.id} className={`${card} flex items-center justify-between gap-3`}><div><p className="font-bold text-sm">{u.displayName}</p><p className="text-xs" style={{color:C.textMuted}}>{u.email}</p></div><div className="flex gap-2 items-center"><span className="text-xs">{u.role}</span>{!isFixedTeamAdmin(u.email)&&<><button onClick={()=>roleChange(u,u.role==="admin"?"user":"admin")} className="p-2 border rounded-lg"><UserCog size={15}/></button><button onClick={()=>deleteUser(u)} className="p-2" style={{color:C.error}}><Trash2 size={15}/></button></>}</div></div>)}
         </div>}
-        {tab==="locations"&&<div><div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4"><div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Location Management</h1><p className="text-sm" style={{color:C.textMuted}}>{locations.length} Firebase locations</p></div><div className="flex flex-wrap gap-2"><Pill variant="outline" small onClick={addStarterPlaces} disabled={seedingStarter}><Database size={13}/> {seedingStarter?"Adding...":"Add starter places"}</Pill><Pill variant="filled" small onClick={()=>{setEditingLocation(null);setForm(emptyLocation);setExistingImages([]);setImageFiles([]);setUploadProgress(0);setShowAdd(true);}}><Plus size={13}/> Add Location</Pill></div></div><div className="space-y-2">{filteredLocs.map(l=><div key={l.id} className={`${card} flex items-center gap-3`}>{l.image_url?<img src={l.image_url} alt={l.name} className="w-14 h-14 rounded-xl object-cover"/>:null}<div className="flex-1"><p className="font-bold text-sm">{l.emoji} {l.name}</p><p className="text-xs" style={{color:C.textMuted}}>{l.state} · {l.activity}{typeof l.estimatedPrice==="number"?` · RM ${l.estimatedPrice.toFixed(2)}`:""}</p></div>{(l as any).is_hidden_gem&&<span>💎</span>}
+        {tab==="locations"&&<div><div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4"><div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Location Management</h1><p className="text-sm" style={{color:C.textMuted}}>{locations.length} Firebase locations</p></div><div className="flex flex-wrap gap-2"><Pill variant="outline" small onClick={addStarterPlaces} disabled={seedingStarter}><Database size={13}/> {seedingStarter?"Updating...":"Add starters / photos"}</Pill><Pill variant="filled" small onClick={()=>{setEditingLocation(null);setForm(emptyLocation);setExistingImages([]);setImageFiles([]);setUploadProgress(0);setShowAdd(true);}}><Plus size={13}/> Add Location</Pill></div></div><div className="space-y-2">{filteredLocs.map(l=><div key={l.id} className={`${card} flex items-center gap-3`}>{l.image_url?<img src={l.image_url} alt={l.name} className="w-14 h-14 rounded-xl object-cover"/>:null}<div className="flex-1"><p className="font-bold text-sm">{l.emoji} {l.name}</p><p className="text-xs" style={{color:C.textMuted}}>{l.state} · {l.activity}{typeof l.estimatedPrice==="number"?` · RM ${l.estimatedPrice.toFixed(2)}`:""}</p></div>{(l as any).is_hidden_gem&&<span>💎</span>}
 <div className="flex items-center gap-2">
   <button
     onClick={()=>toggleGem(l)}

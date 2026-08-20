@@ -193,6 +193,8 @@ export function LocationPage({
   const metadata = locationMetadataFor(loc.name);
   const openingHours = metadata?.openingHours || loc.openingHours || (loc as any).opening_hours || "Hours not verified yet";
   const officialUrl = metadata?.officialUrl || loc.officialUrl || (loc as any).official_url || loc.sourceUrl;
+  const photoSourceUrl = loc.photo?.sourcePageUrl;
+  const photoCredit = loc.photoAttribution || (loc.photo ? `${loc.photo.author} - ${loc.photo.license}` : "");
   const nearbyFacilities = [
     { label: "Toilets", query: "toilet", icon: <Toilet size={14} /> },
     { label: "Parking", query: "parking", icon: <Car size={14} /> },
@@ -293,6 +295,22 @@ export function LocationPage({
         {/* ==================== LimRouYu Part - Location Detail Module ==================== */}
         {tab === "overview" && (
           <div className="space-y-4">
+            {loc.image_url && (
+              <figure className="bg-white rounded-[18px] overflow-hidden" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
+                <img src={loc.image_url} alt={loc.name} className="w-full max-h-[360px] object-cover" />
+                {(photoCredit || photoSourceUrl) && (
+                  <figcaption className="flex flex-col gap-1 px-4 py-3 text-[11px] sm:flex-row sm:items-center sm:justify-between" style={{ color: C.textMuted, fontFamily: F.body }}>
+                    <span>{photoCredit || "Photo source available"}</span>
+                    {photoSourceUrl && (
+                      <a href={photoSourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold" style={{ color: C.forest }}>
+                        Photo source <ExternalLink size={11}/>
+                      </a>
+                    )}
+                  </figcaption>
+                )}
+              </figure>
+            )}
+
             <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
               <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>About this location</h2>
               <p className="text-sm leading-relaxed" style={{ color: C.textSub, fontFamily: F.body }}>

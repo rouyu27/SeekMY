@@ -9,6 +9,79 @@ type SeedLocation = Pick<Location, "name" | "state" | "stateCode" | "lat" | "lng
   officialUrl?: string;
 };
 
+const freePhotos: Record<string, NonNullable<Location["photo"]>> = {
+  "Kinabalu Park Trail": {
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Mount%20Kinabalu%20from%20Kinabalu%20Park.jpg",
+    sourcePageUrl: "https://commons.wikimedia.org/wiki/File:Mount_Kinabalu_from_Kinabalu_Park.jpg",
+    source: "Wikimedia Commons",
+    title: "Mount Kinabalu from Kinabalu Park",
+    author: "Wikimedia Commons contributor",
+    license: "Free licence, verify on source page",
+    matchMethod: "wikimedia_commons",
+    matchConfidence: 0.92,
+  },
+  "Bako National Park Trail": {
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Bako%20National%20Park%2C%20Sarawak%2C%20Malaysia.jpg",
+    sourcePageUrl: "https://commons.wikimedia.org/wiki/File:Bako_National_Park,_Sarawak,_Malaysia.jpg",
+    source: "Wikimedia Commons",
+    title: "Bako National Park, Sarawak, Malaysia",
+    author: "Wikimedia Commons contributor",
+    license: "Free licence, verify on source page",
+    matchMethod: "wikimedia_commons",
+    matchConfidence: 0.9,
+  },
+  "KLCC Park": {
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/KLCC%20Park%20Kuala%20Lumpur.jpg",
+    sourcePageUrl: "https://commons.wikimedia.org/wiki/File:KLCC_Park_Kuala_Lumpur.jpg",
+    source: "Wikimedia Commons",
+    title: "KLCC Park Kuala Lumpur",
+    author: "Wikimedia Commons contributor",
+    license: "Free licence, verify on source page",
+    matchMethod: "wikimedia_commons",
+    matchConfidence: 0.9,
+  },
+  "Taman Negara Kuala Tahan": {
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Taman%20Negara%20Kuala%20Tahan.jpg",
+    sourcePageUrl: "https://commons.wikimedia.org/wiki/File:Taman_Negara_Kuala_Tahan.jpg",
+    source: "Wikimedia Commons",
+    title: "Taman Negara Kuala Tahan",
+    author: "Wikimedia Commons contributor",
+    license: "Free licence, verify on source page",
+    matchMethod: "wikimedia_commons",
+    matchConfidence: 0.86,
+  },
+  "Gua Tempurung": {
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Gua%20Tempurung.jpg",
+    sourcePageUrl: "https://commons.wikimedia.org/wiki/File:Gua_Tempurung.jpg",
+    source: "Wikimedia Commons",
+    title: "Gua Tempurung",
+    author: "Wikimedia Commons contributor",
+    license: "Free licence, verify on source page",
+    matchMethod: "wikimedia_commons",
+    matchConfidence: 0.86,
+  },
+  "Penang Hill Heritage Trail": {
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Penang%20Hill%20view.jpg",
+    sourcePageUrl: "https://commons.wikimedia.org/wiki/File:Penang_Hill_view.jpg",
+    source: "Wikimedia Commons",
+    title: "Penang Hill view",
+    author: "Wikimedia Commons contributor",
+    license: "Free licence, verify on source page",
+    matchMethod: "wikimedia_commons",
+    matchConfidence: 0.82,
+  },
+  "Batu Caves Climbing Area": {
+    imageUrl: "https://commons.wikimedia.org/wiki/Special:FilePath/Batu%20Caves%20outside%202008.jpg",
+    sourcePageUrl: "https://commons.wikimedia.org/wiki/File:Batu_Caves_outside_2008.jpg",
+    source: "Wikimedia Commons",
+    title: "Batu Caves outside",
+    author: "Wikimedia Commons contributor",
+    license: "Free licence, verify on source page",
+    matchMethod: "wikimedia_commons",
+    matchConfidence: 0.8,
+  },
+};
+
 const seeds: SeedLocation[] = [
   { name: "Gunung Pulai", state: "Johor", stateCode: "JHR", lat: 1.6016216, lng: 103.5462487, activity: "Hiking", difficulty: "Moderate", category: "Peak", budget: "Low", tags: ["Beginner", "Family Friendly"] },
   { name: "Kota Tinggi Waterfalls", state: "Johor", stateCode: "JHR", lat: 1.830415, lng: 103.8322397, activity: "Hiking", difficulty: "Easy", category: "Waterfall", budget: "Low", tags: ["Beginner", "Family Friendly"] },
@@ -124,8 +197,10 @@ export const STARTER_LOCATIONS: Location[] = seeds.map((seed, index) => ({
   sourceId: `starter-${index + 1}`,
   sourceUrl: seed.sourceUrl || seed.officialUrl || "",
   officialUrl: seed.officialUrl,
-  image_url: "",
-  image_urls: [],
+  image_url: freePhotos[seed.name]?.imageUrl || "",
+  image_urls: freePhotos[seed.name]?.imageUrl ? [freePhotos[seed.name]!.imageUrl] : [],
+  photo: freePhotos[seed.name] || null,
+  photoAttribution: freePhotos[seed.name] ? `${freePhotos[seed.name]!.source} — ${freePhotos[seed.name]!.license}` : "",
   state: seed.state,
   stateCode: seed.stateCode,
   activity: seed.activity,
@@ -147,9 +222,21 @@ export const STARTER_LOCATIONS: Location[] = seeds.map((seed, index) => ({
 }));
 
 export function mergeLocations(primary: Location[], extras: Location[]) {
-  const seen = new Set(primary.map((location) => `${location.name}|${location.state}`.toLowerCase()));
+  const extraByPlace = new Map(extras.map((location) => [`${location.name}|${location.state}`.toLowerCase(), location]));
+  const enrichedPrimary = primary.map((location) => {
+    const extra = extraByPlace.get(`${location.name}|${location.state}`.toLowerCase());
+    if (!extra || location.image_url) return location;
+    return {
+      ...location,
+      image_url: extra.image_url || location.image_url,
+      image_urls: extra.image_urls?.length ? extra.image_urls : location.image_urls,
+      photo: extra.photo || location.photo,
+      photoAttribution: extra.photoAttribution || location.photoAttribution,
+    };
+  });
+  const seen = new Set(enrichedPrimary.map((location) => `${location.name}|${location.state}`.toLowerCase()));
   return [
-    ...primary,
+    ...enrichedPrimary,
     ...extras.filter((location) => !seen.has(`${location.name}|${location.state}`.toLowerCase())),
   ];
 }

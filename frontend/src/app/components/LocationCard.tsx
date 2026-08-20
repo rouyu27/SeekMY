@@ -1,5 +1,6 @@
 // Shared Integration Code - used by multiple SeekMY modules/members.
 // Member-specific ownership is documented in MODULE_OWNERSHIP.md.
+import { useState } from "react";
 import { Star, Bookmark, BookmarkCheck, MapPin } from "lucide-react";
 import type { Location } from "../lib/types";
 import { C, F } from "../lib/tokens";
@@ -9,14 +10,23 @@ export function LocationCard({ loc, onView, bookmarked, onBookmark }:{
   loc:Location; onView:()=>void; bookmarked:boolean; onBookmark:()=>void;
 }) {
   const d = diffStyle(loc.difficulty);
+  const [imageFailed, setImageFailed] = useState(false);
+  const showPhoto = Boolean(loc.image_url && !imageFailed);
   return (
     <div onClick={onView} className="bg-white rounded-[18px] overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
       style={{boxShadow:`0 1px 3px rgba(27,67,50,0.12), 0 4px 12px rgba(27,67,50,0.06)`}}>
-      <div className="h-36 relative flex items-end p-4" style={{backgroundColor:loc.color}}>
-        <span className="text-5xl absolute top-3 right-12 opacity-15 select-none">{loc.emoji}</span>
-        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{backgroundColor:"rgba(255,255,255,0.18)",color:"#fff",border:"1px solid rgba(255,255,255,0.35)",fontFamily:F.body}}>{loc.badge}</span>
+      <div className="h-36 relative flex items-end overflow-hidden p-4" style={{backgroundColor:loc.color}}>
+        {showPhoto ? (
+          <>
+            <img src={loc.image_url} alt={loc.name} className="absolute inset-0 h-full w-full object-cover" onError={() => setImageFailed(true)} />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/12 to-black/8" />
+          </>
+        ) : (
+          <span className="text-5xl absolute top-3 right-12 opacity-15 select-none">{loc.emoji}</span>
+        )}
+        <span className="relative z-10 text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{backgroundColor:"rgba(255,255,255,0.18)",color:"#fff",border:"1px solid rgba(255,255,255,0.35)",fontFamily:F.body}}>{loc.badge}</span>
         {/* ==================== LimTzeXin Part - Bookmark Module ==================== */}
-        <button onClick={e=>{e.stopPropagation();onBookmark();}} className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+        <button onClick={e=>{e.stopPropagation();onBookmark();}} className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
           style={{backgroundColor:bookmarked?C.amber:"rgba(0,0,0,0.28)"}}>
           {bookmarked ? <BookmarkCheck size={13} style={{color:C.jungle}}/> : <Bookmark size={13} className="text-white"/>}
         </button>
