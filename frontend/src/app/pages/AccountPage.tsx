@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { AppUser, ActivityLog, Page } from "../lib/types";
 import { firebaseClient } from "../api/firebaseClient";
+import { isStrongPassword, PASSWORD_REQUIREMENT } from "../api/firebaseClient";
 import type { LocationSubmission, UserAnnouncement } from "../lib/communityTypes";
 import { C, F } from "../lib/tokens";
 import { evaluateBadges, shareBadge } from "../lib/badges";
@@ -95,7 +96,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   async function changePassword(){
     setPassAlert(null);
     if(!curPass||!newPass||!confPass){setPassAlert({type:"error",msg:"All password fields are required."});return;}
-    if(newPass.length<6){setPassAlert({type:"error",msg:"New password must be at least 6 characters."});return;}
+    if(!isStrongPassword(newPass)){setPassAlert({type:"error",msg:PASSWORD_REQUIREMENT});return;}
     if(newPass!==confPass){setPassAlert({type:"error",msg:"New passwords do not match."});return;}
     try{await firebaseClient.auth.changePassword({oldPassword:curPass,newPassword:newPass});setCurPass("");setNewPass("");setConfPass("");setPassAlert({type:"success",msg:"Password changed successfully in Firebase Authentication."});}
     catch(error:any){setPassAlert({type:"error",msg:error?.message||"Unable to change password."});}

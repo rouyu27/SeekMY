@@ -6,7 +6,7 @@ import type { AppUser } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { isValidEmail } from "../lib/helpers";
 import { Pill, AlertBanner, PasswordInput } from "../components/Atoms";
-import { firebaseClient } from "../api/firebaseClient";
+import { firebaseClient, isStrongPassword, PASSWORD_REQUIREMENT } from "../api/firebaseClient";
 
 const seekMyLogo = new URL("../../imports/logo.png", import.meta.url).toString();
 const firebaseConfigured = Boolean(
@@ -117,7 +117,7 @@ export function AuthModal({ onClose, onLogin }:{
     if (!rUsername||!rName||!rEmail||!rPass) { setAlert({type:"error",msg:"All fields are required."}); return; }
     if (rUsername.length < 3) { setAlert({type:"error",msg:"Username must be at least 3 characters."}); return; }
     if (!isValidEmail(rEmail)) { setAlert({type:"error",msg:"Please enter a valid email address."}); return; }
-    if (rPass.length < 6) { setAlert({type:"error",msg:"Password must be at least 6 characters."}); return; }
+    if (!isStrongPassword(rPass)) { setAlert({type:"error",msg:PASSWORD_REQUIREMENT}); return; }
     if (firebaseConfigured) {
       try {
         await firebaseClient.auth.register({ email: rEmail, password: rPass, full_name: rName, username: rUsername });
@@ -280,7 +280,7 @@ export function AuthModal({ onClose, onLogin }:{
                 <input value={rEmail} onChange={e=>setREmail(e.target.value)} placeholder="Email address" type="email"
                   className="w-full pl-9 pr-4 py-3 rounded-xl text-sm outline-none border" style={{borderColor:C.border,fontFamily:F.body,color:C.text}}/>
               </div>
-              <PasswordInput value={rPass} onChange={setRPass} placeholder="Password (min. 6 characters)"/>
+              <PasswordInput value={rPass} onChange={setRPass} placeholder="Strong password"/>
               <button onClick={handleRegister} className="w-full h-[50px] rounded-full text-sm font-bold text-white active:scale-[0.96] transition-all" style={{backgroundColor:C.jungle,fontFamily:F.body}}>
                 Create Account
               </button>

@@ -7,7 +7,7 @@ const FAQS = [
   ["How do I find outdoor activities?", "Use Explore, Map, or choose a Malaysian state from Home. Filters help narrow results by activity, difficulty, budget and accessibility."],
   ["How do I log an activity?", "Open Activity Log, add the location, activity type, distance, duration and notes. Your progress is reflected in Insights and badges."],
   ["How do bookmarks work?", "Save any location from its card or detail page. Saved locations stay in the Saved page and can be organised with notes and folders."],
-  ["Is the weather data live?", "Yes. SeekMY loads current conditions and forecasts through a secure Supabase Edge Function, using each location's coordinates when available."],
+  ["Where do I check weather?", "Open Discover Locations, choose a location, then select the Weather tab. SeekMY combines OpenWeather conditions with official Malaysia weather data from data.gov.my / MetMalaysia where available."],
   ["What does the AI Guide do?", "The AI Guide provides Malaysia-specific recommendations, gear checklists and safety guidance through the app interface."],
   ["What can contributors do?", "Users can submit a local contributor profile and suggest outdoor locations. Administrators can review contributor and location submissions."],
 ];

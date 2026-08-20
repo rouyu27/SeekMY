@@ -155,6 +155,27 @@ function withTimeout<T>(
   });
 }
 
+function withoutUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => withoutUndefined(item)).filter((item) => item !== undefined) as T;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, any>)
+        .filter(([, item]) => item !== undefined)
+        .map(([key, item]) => [key, withoutUndefined(item)])
+    ) as T;
+  }
+  return value;
+}
+
+export function isStrongPassword(password: string): boolean {
+  return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(password);
+}
+
+export const PASSWORD_REQUIREMENT =
+  "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character.";
+
 /* =========================================================
    USER PROFILE
    ========================================================= */
@@ -396,7 +417,7 @@ function entity(name: string) {
             db,
             name
           ),
-          {
+          withoutUndefined({
             ...data,
 
             created_by:
@@ -415,7 +436,7 @@ function entity(name: string) {
 
             server_created_at:
               serverTimestamp(),
-          }
+          })
         );
 
       return clean(
@@ -430,14 +451,14 @@ function entity(name: string) {
       const user = currentUser();
       if (!user) throw Object.assign(new Error("Please log in first"), { status: 401 });
       const reference = doc(firebase().db, name, id);
-      await setDoc(reference, {
+      await setDoc(reference, withoutUndefined({
         ...data,
         created_by: user.email || "",
         created_by_id: user.uid,
         created_date: new Date().toISOString(),
         updated_date: new Date().toISOString(),
         server_created_at: serverTimestamp(),
-      });
+      }));
       return clean(await getDoc(reference));
     },
 
@@ -456,13 +477,13 @@ function entity(name: string) {
 
       await updateDoc(
         reference,
-        {
+        withoutUndefined({
           ...data,
 
           updated_date:
             new Date()
               .toISOString(),
-        }
+        })
       );
 
       return clean(
@@ -568,25 +589,6 @@ const auth = {
         {
           displayName:
             full_name,
-        }
-      );
-    }
-
-    await profile(result.user);
-
-    if (username) {
-      await updateDoc(
-        doc(
-          firebase().db,
-          "User",
-          result.user.uid
-        ),
-        {
-          username,
-
-          updated_date:
-            new Date()
-              .toISOString(),
         }
       );
     }

@@ -205,7 +205,7 @@ export function LocationPage({
     { label: "Petrol", query: "petrol station", icon: <Fuel size={14} /> },
   ];
   const nearbySearchUrl = (query: string) =>
-    `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${encodeURIComponent(mapTarget)},15z`;
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${query} near ${mapTarget}`)}`;
 
   return (
     <div className="pt-14 min-h-screen" style={{ backgroundColor: C.cream }}>
@@ -376,7 +376,7 @@ export function LocationPage({
                 <div>
                   <h2 className="font-bold text-base" style={{ fontFamily: F.body, color: C.text }}>Find nearby facilities</h2>
                   <p className="text-[12px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
-                    Opens Google Maps around this location.
+                    Opens Google Maps around this destination.
                   </p>
                 </div>
                 <a
