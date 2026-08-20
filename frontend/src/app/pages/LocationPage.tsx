@@ -165,6 +165,12 @@ export function LocationPage({
     const created = new Date(review.created_date || "").getTime();
     return Boolean(user && review.userId === user.id && Number.isFinite(created) && Date.now() - created <= 24 * 60 * 60 * 1000);
   };
+  const reviewDate = (review: StoredReview) => {
+    const created = new Date(review.created_date || "");
+    return Number.isFinite(created.getTime())
+      ? created.toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kuala_Lumpur" })
+      : review.date;
+  };
   const beginEditReview = (review: StoredReview) => {
     setEditingReviewId(review.id);
     setEditingReviewText(review.comment || "");
@@ -748,7 +754,7 @@ export function LocationPage({
                       </div>
                       <span className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>{r.userName || (r as any).user}</span>
                     </div>
-                    <span className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>{r.date}</span>
+                    <span className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>{reviewDate(r)}</span>
                   </div>
                   <div className="flex gap-0.5 mb-2">
                     {[1, 2, 3, 4, 5].map((s) => (
