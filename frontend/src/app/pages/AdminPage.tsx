@@ -231,13 +231,25 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   async function contributorStatus(c:ContributorApplication,status:"approved"|"rejected"){
     const reason=status==="rejected"?prompt("Contributor rejection reason:",c.rejectReason||"")?.trim():"";
     if(status==="rejected"&&!reason){showToast("A rejection reason is required.");return;}
+    const userId =
+      c.userId ||
+      c.created_by_id ||
+      users.find(user=>user.email.toLowerCase()===String(c.userEmail||"").toLowerCase())?.id ||
+      c.id;
+    if(!userId){
+      showToast("Unable to find the Firebase user for this contributor.");
+      return;
+    }
     try{
       const changes={status,rejectReason:status==="rejected"?reason:"",reviewedAt:new Date().toISOString()};
       const [updated]=await Promise.all([
         firebaseClient.entities.Contributor.update(c.id,changes),
-        firebaseClient.entities.User.update(c.userId,{contributorStatus:status}),
+        firebaseClient.entities.User.update(userId,{contributorStatus:status}),
       ]);
       setContributors(cs=>cs.map(y=>y.id===c.id?updated as ContributorApplication:y));
+      const nextUsers=users.map(user=>user.id===userId?{...user,contributorStatus:status}:user);
+      setUsers(nextUsers);
+      setParentUsers(nextUsers);
       showToast(status==="approved"?"Contributor approved.":"Contributor rejected with feedback.");
     }catch(e:any){showToast(e?.message||"Unable to update contributor.");}
   }
