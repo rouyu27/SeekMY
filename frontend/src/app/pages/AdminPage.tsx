@@ -1,6 +1,6 @@
 //==================== WongYueShan Part - Admin Panel ====================
 import { useEffect, useState } from "react";
-import { Search, X, Trash2, LogOut, Users, Shield, CheckCircle, Star, Plus, UserCog, Database, Pencil } from "lucide-react";
+import { Search, X, Trash2, LogOut, Users, Shield, CheckCircle, Star, Plus, UserCog, Database, Pencil, ExternalLink } from "lucide-react";
 import type { Location, AppUser } from "../lib/types";
 import type { ContributorApplication, LocationSubmission, StoredReview } from "../lib/communityTypes";
 import { C, F } from "../lib/tokens";
@@ -9,6 +9,7 @@ import { ALL_STATES } from "../lib/constants";
 import { firebaseClient } from "../api/firebaseClient";
 import { OutdoorImportPanel } from "../components/OutdoorImportPanel";
 import { LocationImageUploader } from "./LocationImageUploader";
+import { STARTER_LOCATIONS } from "../lib/seedLocations";
 
 const TEAM_ADMIN_EMAILS = [
   "shanyuew416@gmail.com",
@@ -24,7 +25,25 @@ function isFixedTeamAdmin(email?: string) {
 }
 const ACTIVITIES = ["Hiking","Diving","Cycling","Camping","Swimming","Trail Running","Jogging","Rock Climbing","Water Sports"];
 const STATE_CODE: Record<string,string> = Object.fromEntries(ALL_STATES.map(s=>[s.name,s.code]));
-const emptyLocation = { name:"",address:"",lat:"",lng:"",state:"Selangor",activity:"Hiking",difficulty:"Easy",description:"",distance:"N/A",duration:"N/A",facilities:"",accessibility:"",image_url:"",image_urls:[] as string[],estimatedPrice:"" };
+const emptyLocation = { name:"",address:"",lat:"",lng:"",state:"Selangor",activity:"Hiking",difficulty:"Easy",description:"",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:"",facilities:"",accessibility:"",image_url:"",image_urls:[] as string[],estimatedPrice:"" };
+
+function locationSearchQuery(form: typeof emptyLocation, suffix: string) {
+  return encodeURIComponent([form.name, form.state, "Malaysia", suffix].filter(Boolean).join(" "));
+}
+
+function openAdminVerificationSearch(form: typeof emptyLocation, kind: "official" | "hours" | "maps") {
+  const query =
+    kind === "official"
+      ? locationSearchQuery(form, "official website")
+      : kind === "hours"
+        ? locationSearchQuery(form, "opening hours official")
+        : encodeURIComponent(`${form.lat},${form.lng}`);
+  const url =
+    kind === "maps"
+      ? `https://www.google.com/maps/search/?api=1&query=${query}`
+      : `https://www.google.com/search?q=${query}`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 
 export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locations: parentLocations, onLogout }:{
   users:AppUser[]; setUsers:(u:AppUser[])=>void; locations:Location[]; onLogout:()=>void;
@@ -48,6 +67,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   const [uploadProgress,setUploadProgress]=useState(0);
   const [userLoadError,setUserLoadError]=useState("");
   const [gemSavingId,setGemSavingId]=useState<string|null>(null);
+  const [seedingStarter,setSeedingStarter]=useState(false);
 
   function showToast(msg:string){setToast(msg);setTimeout(()=>setToast(null),2800);}
 
@@ -69,7 +89,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
 
       if(usersResult.status==="fulfilled"){
         setUserLoadError("");
-        const mapped=(usersResult.value as any[]).map(x=>({id:String(x.id),username:x.username||x.email?.split("@")[0]||"explorer",displayName:x.full_name||x.email||"Explorer",email:x.email||"",password:"",bio:x.bio||"",joinDate:x.created_date?.slice?.(0,10)||"",totalKm:Number(x.total_km||x.totalKm||0),states:Number(x.states||0),checkins:Number(x.checkins||0),role:x.role==="admin"?"admin":"user",status:x.status})) as AppUser[];
+        const mapped=(usersResult.value as any[]).map(x=>({id:String(x.id),username:x.username||x.email?.split("@")[0]||"explorer",displayName:x.full_name||x.email||"Explorer",email:x.email||"",password:"",photoUrl:x.photo_url||x.photoUrl||"",bio:x.bio||"",joinDate:x.created_date?.slice?.(0,10)||"",totalKm:Number(x.total_km||x.totalKm||0),states:Number(x.states||0),checkins:Number(x.checkins||0),role:x.role==="admin"?"admin":"user",status:x.status})) as AppUser[];
         setUsers(mapped);setParentUsers(mapped);
       }else{
         setUserLoadError(usersResult.reason?.message||"Unable to load Firebase users.");
@@ -114,6 +134,8 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       description:loc.description||"",
       distance:String(loc.distance??"N/A"),
       duration:String(loc.duration??"N/A"),
+      openingHours:String((loc as any).openingHours||(loc as any).opening_hours||"Hours not verified yet"),
+      officialUrl:String((loc as any).officialUrl||(loc as any).official_url||(loc as any).sourceUrl||""),
       facilities:Array.isArray((loc as any).facilities)?(loc as any).facilities.join(", "):String((loc as any).facilities||""),
       accessibility:String((loc as any).accessibility||""),
       image_url:String((loc as any).image_url||""),
@@ -159,6 +181,8 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         description:form.description.trim(),
         distance:form.distance||"N/A",
         duration:form.duration||"N/A",
+        openingHours:form.openingHours||"Hours not verified yet",
+        officialUrl:form.officialUrl.trim(),
         facilities:form.facilities.split(",").map(x=>x.trim()).filter(Boolean),
         accessibility:form.accessibility,
         estimatedPrice,
@@ -217,7 +241,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       showToast(status==="approved"?"Contributor approved.":"Contributor rejected with feedback.");
     }catch(e:any){showToast(e?.message||"Unable to update contributor.");}
   }
-  function submissionToLocation(s:LocationSubmission){const price=Number(s.estimatedPrice||0);const images=s.photoUrl?[s.photoUrl]:[];const details=[s.description,s.safetyNotes?`Safety notes: ${s.safetyNotes}`:"",s.contributorTip?`Local contributor tip: ${s.contributorTip}`:""].filter(Boolean).join("\n\n");return {name:s.name,address:s.address||`${s.name}, ${s.state}, Malaysia`,lat:s.lat,lng:s.lng,locationConfirmed:Boolean(s.locationConfirmed),state:s.state,stateCode:STATE_CODE[s.state]||"SLG",activity:s.activity,difficulty:["Easy","Moderate","Hard"].includes(s.difficulty)?s.difficulty:"Easy",distance:"N/A",duration:"N/A",rating:0,reviews:0,badge:"Community",color:C.forest,emoji:"📍",description:details,facilities:s.facilities?s.facilities.split(",").map(x=>x.trim()).filter(Boolean):[],bestMonths:s.bestTime||"Year-round",accessibility:s.accessibility||"See description",tags:[s.activity,"Community suggested","Contributor verified"],estimatedPrice:price,budget:s.budget||(price<=0?"Free":price<=20?"Low":price<=50?"Medium":"High"),image_url:images[0]||"",image_urls:images,suggestedBy:s.contributorName,sourceUrl:s.sourceUrl||"",status:"active"};}
+  function submissionToLocation(s:LocationSubmission){const price=Number(s.estimatedPrice||0);const images=s.photoUrl?[s.photoUrl]:[];const details=[s.description,s.safetyNotes?`Safety notes: ${s.safetyNotes}`:"",s.contributorTip?`Local contributor tip: ${s.contributorTip}`:""].filter(Boolean).join("\n\n");return {name:s.name,address:s.address||`${s.name}, ${s.state}, Malaysia`,lat:s.lat,lng:s.lng,locationConfirmed:Boolean(s.locationConfirmed),state:s.state,stateCode:STATE_CODE[s.state]||"SLG",activity:s.activity,difficulty:["Easy","Moderate","Hard"].includes(s.difficulty)?s.difficulty:"Easy",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:s.sourceUrl||"",rating:0,reviews:0,badge:"Community",color:C.forest,emoji:"📍",description:details,facilities:s.facilities?s.facilities.split(",").map(x=>x.trim()).filter(Boolean):[],bestMonths:s.bestTime||"Year-round",accessibility:s.accessibility||"See description",tags:[s.activity,"Community suggested","Contributor verified"],estimatedPrice:price,budget:s.budget||(price<=0?"Free":price<=20?"Low":price<=50?"Medium":"High"),image_url:images[0]||"",image_urls:images,suggestedBy:s.contributorName,sourceUrl:s.sourceUrl||"",status:"active"};}
   async function approveSubmission(s:LocationSubmission){setSaving(true);try{const published:any=await firebaseClient.entities.Location.create(submissionToLocation(s));const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"approved",publishedLocationId:published.id,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location approved",message:`Your suggestion "${s.name}" was approved and is now live on Discover.`,type:"approved",submissionId:s.id,read:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));setLocations(ls=>[published as Location,...ls]);(window as any).__seekmyRefreshLocations?.(published);showToast("Location approved and published to Firebase.");}catch(e:any){showToast(e?.message||"Unable to approve location.");}finally{setSaving(false);}}
   async function rejectSubmission(s:LocationSubmission){const reason=prompt("Rejection reason:")||"Does not meet guidelines";try{const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"rejected",rejectReason:reason,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location not approved",message:`Your suggestion "${s.name}" was not approved. Reason: ${reason}`,type:"rejected",submissionId:s.id,read:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));showToast("Location rejected and user notified through Firebase.");}catch(e:any){showToast(e?.message||"Unable to reject location.");}}
   async function toggleGem(loc:Location){
@@ -231,6 +255,29 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       showToast(current?"Removed from Hidden Gems.":"Marked as Hidden Gem.");
     }catch(e:any){showToast(e?.message||"Unable to update hidden gem.");}
     finally{setGemSavingId(null);}
+  }
+  async function addStarterPlaces(){
+    setSeedingStarter(true);
+    try{
+      const existing=new Set(locations.map(location=>`${location.name}|${location.state}`.toLowerCase()));
+      const missing=STARTER_LOCATIONS.filter(location=>!existing.has(`${location.name}|${location.state}`.toLowerCase()));
+      if(!missing.length){showToast("Starter places are already in Firebase.");return;}
+      const created:Location[]=[];
+      for(const location of missing){
+        const {id, ...data}=location;
+        const row:any=await firebaseClient.entities.Location.create({
+          ...data,
+          source:"Starter dataset",
+          badge:data.badge || "Verified",
+          status:"active",
+        });
+        created.push(row as Location);
+      }
+      setLocations(ls=>[...created,...ls]);
+      (window as any).__seekmyRefreshLocations?.();
+      showToast(`Added ${created.length} starter places to Firebase.`);
+    }catch(e:any){showToast(e?.message||"Unable to add starter places.");}
+    finally{setSeedingStarter(false);}
   }
 
   const SIDEBAR:{id:AdminTab;icon:string;label:string}[]=[
@@ -253,16 +300,31 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     {toast&&<div className="fixed top-20 left-1/2 -translate-x-1/2 z-[999] px-5 py-3 rounded-2xl text-sm font-bold text-white" style={{backgroundColor:C.jungle,fontFamily:F.body}}>{toast}</div>}
     <aside className="w-56 flex-shrink-0 min-h-screen bg-white border-r hidden md:flex flex-col" style={{borderColor:C.border}}><div className="p-5 border-b" style={{borderColor:C.border}}><div className="flex items-center gap-2"><div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{backgroundColor:C.jungle}}><Shield size={16} className="text-white"/></div><div><p className="text-sm font-bold">Admin Panel</p><p className="text-[10px]" style={{color:C.textMuted}}>Firebase connected</p></div></div></div><nav className="flex-1 p-3">{SIDEBAR.map(s=><button key={s.id} onClick={()=>setTab(s.id)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-left" style={{backgroundColor:tab===s.id?C.muted:"transparent",color:tab===s.id?C.jungle:C.textSub}}><span>{s.icon}</span>{s.label}</button>)}</nav><div className="p-3 border-t"><button onClick={onLogout} className="flex items-center gap-2 px-3 py-2 text-sm font-semibold" style={{color:C.error}}><LogOut size={14}/> Sign Out</button></div></aside>
     <main className="flex-1 min-w-0 p-5 md:p-8 pb-24">
+      <div className="md:hidden -mx-5 mb-5 border-b bg-white" style={{borderColor:C.border}}>
+        <div className="flex gap-2 overflow-x-auto px-5 py-3" style={{scrollbarWidth:"none"}}>
+          {SIDEBAR.map(s=>(
+            <button
+              key={s.id}
+              type="button"
+              onClick={()=>{setSearch("");setTab(s.id);}}
+              className="flex h-10 flex-shrink-0 items-center gap-1.5 rounded-full px-4 text-[12px] font-bold"
+              style={{backgroundColor:tab===s.id?C.jungle:C.muted,color:tab===s.id?"#fff":C.textSub,fontFamily:F.body}}
+            >
+              <span>{s.icon}</span>{s.label.replace(" Management","").replace(" Moderation","")}
+            </button>
+          ))}
+        </div>
+      </div>
       {tab!=="dashboard"&&<div className="flex items-center gap-2 bg-white rounded-full px-4 mb-6 border" style={{borderColor:C.border,height:44}}><Search size={14} style={{color:C.textMuted}}/><input value={search} onChange={e=>setSearch(e.target.value)} className="flex-1 outline-none text-sm bg-transparent" placeholder={`Search ${tab}…`}/>{search&&<button onClick={()=>setSearch("")}><X size={13}/></button>}</div>}
       {loading?<div className="space-y-3">{[1,2,3].map(i=><div key={i} className="h-24 bg-white rounded-[18px] animate-pulse"/>)}</div>:<>
-        {tab==="dashboard"&&<div><div className="flex justify-between mb-7"><div><h1 className="text-3xl font-normal" style={{fontFamily:F.display,color:C.jungle}}>Platform Overview</h1><p className="text-sm" style={{color:C.textMuted}}>Loaded directly from Firebase. Select a card to manage its records.</p></div><Pill variant="outline" small onClick={loadData}><Database size={13}/> Refresh</Pill></div><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{DASHBOARD_CARDS.map(card=><button type="button" key={card.label} onClick={()=>{setSearch("");setTab(card.target);}} className="bg-white rounded-[18px] p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2" style={{outlineColor:C.forest}} aria-label={`Open ${card.label} management`}><span className="text-2xl">{card.icon}</span><p className="text-2xl font-bold mt-2" style={{fontFamily:F.display,color:C.jungle}}>{card.value}</p><p className="text-xs" style={{color:C.textMuted}}>{card.label}</p></button>)}</div></div>}
+        {tab==="dashboard"&&<div><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-7"><div><h1 className="text-3xl font-normal" style={{fontFamily:F.display,color:C.jungle}}>Platform Overview</h1><p className="text-sm" style={{color:C.textMuted}}>Loaded directly from Firebase. Select a card to manage its records.</p></div><Pill variant="outline" small onClick={loadData}><Database size={13}/> Refresh</Pill></div><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{DASHBOARD_CARDS.map(card=><button type="button" key={card.label} onClick={()=>{setSearch("");setTab(card.target);}} className="bg-white rounded-[18px] p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2" style={{outlineColor:C.forest}} aria-label={`Open ${card.label} management`}><span className="text-2xl">{card.icon}</span><p className="text-2xl font-bold mt-2" style={{fontFamily:F.display,color:C.jungle}}>{card.value}</p><p className="text-xs" style={{color:C.textMuted}}>{card.label}</p></button>)}</div></div>}
         {tab==="users"&&<div className="space-y-3">
           <h1 className="text-2xl mb-3" style={{fontFamily:F.display,color:C.jungle}}>User Management</h1>
           {userLoadError&&<p className="text-sm font-semibold bg-white rounded-[18px] p-4" style={{color:C.error}}>{userLoadError}</p>}
           {!userLoadError&&filteredUsers.length===0&&<p className="text-sm bg-white rounded-[18px] p-4" style={{color:C.textMuted}}>No Firebase users found.</p>}
           {filteredUsers.map(u=><div key={u.id} className={`${card} flex items-center justify-between gap-3`}><div><p className="font-bold text-sm">{u.displayName}</p><p className="text-xs" style={{color:C.textMuted}}>{u.email}</p></div><div className="flex gap-2 items-center"><span className="text-xs">{u.role}</span>{!isFixedTeamAdmin(u.email)&&<><button onClick={()=>roleChange(u,u.role==="admin"?"user":"admin")} className="p-2 border rounded-lg"><UserCog size={15}/></button><button onClick={()=>deleteUser(u)} className="p-2" style={{color:C.error}}><Trash2 size={15}/></button></>}</div></div>)}
         </div>}
-        {tab==="locations"&&<div><div className="flex justify-between items-center mb-4"><div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Location Management</h1><p className="text-sm" style={{color:C.textMuted}}>{locations.length} Firebase locations</p></div><Pill variant="filled" small onClick={()=>{setEditingLocation(null);setForm(emptyLocation);setExistingImages([]);setImageFiles([]);setUploadProgress(0);setShowAdd(true);}}><Plus size={13}/> Add Location</Pill></div><div className="space-y-2">{filteredLocs.map(l=><div key={l.id} className={`${card} flex items-center gap-3`}>{l.image_url?<img src={l.image_url} alt={l.name} className="w-14 h-14 rounded-xl object-cover"/>:null}<div className="flex-1"><p className="font-bold text-sm">{l.emoji} {l.name}</p><p className="text-xs" style={{color:C.textMuted}}>{l.state} · {l.activity}{typeof l.estimatedPrice==="number"?` · RM ${l.estimatedPrice.toFixed(2)}`:""}</p></div>{(l as any).is_hidden_gem&&<span>💎</span>}
+        {tab==="locations"&&<div><div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4"><div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Location Management</h1><p className="text-sm" style={{color:C.textMuted}}>{locations.length} Firebase locations</p></div><div className="flex flex-wrap gap-2"><Pill variant="outline" small onClick={addStarterPlaces} disabled={seedingStarter}><Database size={13}/> {seedingStarter?"Adding...":"Add starter places"}</Pill><Pill variant="filled" small onClick={()=>{setEditingLocation(null);setForm(emptyLocation);setExistingImages([]);setImageFiles([]);setUploadProgress(0);setShowAdd(true);}}><Plus size={13}/> Add Location</Pill></div></div><div className="space-y-2">{filteredLocs.map(l=><div key={l.id} className={`${card} flex items-center gap-3`}>{l.image_url?<img src={l.image_url} alt={l.name} className="w-14 h-14 rounded-xl object-cover"/>:null}<div className="flex-1"><p className="font-bold text-sm">{l.emoji} {l.name}</p><p className="text-xs" style={{color:C.textMuted}}>{l.state} · {l.activity}{typeof l.estimatedPrice==="number"?` · RM ${l.estimatedPrice.toFixed(2)}`:""}</p></div>{(l as any).is_hidden_gem&&<span>💎</span>}
 <div className="flex items-center gap-2">
   <button
     onClick={()=>toggleGem(l)}
@@ -299,7 +361,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
 </div></div>)}</div></div>}
         {tab==="outdoorImport"&&<OutdoorImportPanel onPublished={(published)=>{setLocations(ls=>[published as Location,...ls]);(window as any).__seekmyRefreshLocations?.(published);}}/>}
         {tab==="pendingLocs"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Pending Locations</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingSubs.length} awaiting review</p><div className="space-y-3">{submissions.map(s=><div key={s.id} className={card}><div className="flex gap-4">{s.photoUrl&&<img src={s.photoUrl} className="w-20 h-20 rounded-xl object-cover"/>}<div className="flex-1"><p className="font-bold text-sm">{s.name}</p><p className="text-xs" style={{color:C.textMuted}}>{s.state} · {s.activity} · {s.contributorName}</p><p className="text-sm mt-2" style={{color:C.textSub}}>{s.description}</p><p className="text-xs mt-1">Status: {s.status}</p>{s.status==="pending"&&<div className="flex gap-2 mt-3"><Pill variant="filled" small onClick={()=>approveSubmission(s)}>{saving?"Saving...":"Approve"}</Pill><Pill variant="danger" small onClick={()=>rejectSubmission(s)}>Reject</Pill></div>}</div></div></div>)}{!submissions.length&&<p className="text-sm" style={{color:C.textMuted}}>No submissions yet.</p>}</div></div>}
-        {tab==="reviews"&&<div><h1 className="text-2xl mb-4" style={{fontFamily:F.display,color:C.jungle}}>Review Moderation</h1><div className="space-y-3">{reviews.map(r=><div key={r.id} className={card}><div className="flex justify-between gap-3"><div><p className="font-bold text-sm">{r.userName||"Anonymous"} · {r.locationName}</p><div className="flex gap-0.5 my-1">{[1,2,3,4,5].map(n=><Star key={n} size={12} fill={n<=r.rating?C.amber:"none"}/>)}</div><p className="text-sm" style={{color:C.textSub}}>{r.comment}</p><p className="text-xs mt-1">Status: {r.status}</p></div><div className="flex gap-2">{r.status!=="approved"&&r.status!=="active"&&<button onClick={()=>reviewAction(r,"approve")} className="p-2 rounded-lg" style={{backgroundColor:C.successBg,color:C.success}}><CheckCircle size={15}/></button>}<button onClick={()=>reviewAction(r,"remove")} className="p-2 rounded-lg" style={{backgroundColor:C.errorBg,color:C.error}}><Trash2 size={15}/></button></div></div></div>)}{!reviews.length&&<p className="text-sm" style={{color:C.textMuted}}>No reviews yet.</p>}</div></div>}
+        {tab==="reviews"&&<div><h1 className="text-2xl mb-4" style={{fontFamily:F.display,color:C.jungle}}>Review Moderation</h1><div className="space-y-3">{reviews.map(r=><div key={r.id} className={card}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="font-bold text-sm">{r.userName||"Anonymous"} · {r.locationName}</p><div className="flex gap-0.5 my-1">{[1,2,3,4,5].map(n=><Star key={n} size={12} fill={n<=r.rating?C.amber:"none"}/>)}</div><p className="text-sm leading-relaxed" style={{color:C.textSub}}>{r.comment}</p><p className="text-xs mt-1">Status: {r.status}</p></div><div className="flex flex-row gap-2 sm:flex-col sm:items-end">{r.status!=="approved"&&r.status!=="active"&&<button onClick={()=>reviewAction(r,"approve")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.successBg,color:C.success}} aria-label={`Approve review for ${r.locationName}`}><CheckCircle size={15}/></button>}<button onClick={()=>reviewAction(r,"remove")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.errorBg,color:C.error}} aria-label={`Remove review for ${r.locationName}`}><Trash2 size={15}/></button></div></div></div>)}{!reviews.length&&<p className="text-sm" style={{color:C.textMuted}}>No reviews yet.</p>}</div></div>}
         {tab==="contributors"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Contributor Registration Review</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingContributors.length} pending</p><div className="space-y-3">{contributors.map(c=>{const approved=c.status==="approved"||c.status==="verified";return <div key={c.id} className={`${card} flex gap-4`}><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{backgroundColor:approved?C.successBg:c.status==="rejected"?C.errorBg:"#fffbef"}}><Users size={17}/></div><div className="flex-1 min-w-0"><p className="font-bold text-sm">{c.fullName}</p><p className="text-xs" style={{color:C.textMuted}}>{c.area} · {c.contributionArea||c.services||"Area not provided"}</p><p className="text-xs mt-1" style={{color:C.textSub}}>{c.localKnowledgeExperience||c.experience||"Local knowledge not provided"}</p><p className="text-xs mt-1">{c.userEmail} · {c.phone}</p>{c.rejectReason&&<p className="text-xs mt-1" style={{color:C.error}}>Rejection reason: {c.rejectReason}</p>}{c.docUrl&&<button type="button" onClick={()=>openContributorDocument(c.docUrl!)} className="text-xs font-bold block mt-1" style={{color:C.forest}}>View supporting document</button>}</div><div className="flex items-start gap-2"><span className="text-xs capitalize">{approved?"Approved":c.status}</span>{c.status==="pending"&&<><button title="Approve contributor" onClick={()=>contributorStatus(c,"approved")} className="p-2 rounded-lg" style={{backgroundColor:C.successBg,color:C.success}}><CheckCircle size={15}/></button><button title="Reject contributor" onClick={()=>contributorStatus(c,"rejected")} className="p-2 rounded-lg" style={{backgroundColor:C.errorBg,color:C.error}}><X size={15}/></button></>}</div></div>})}{!contributors.length&&<p className="text-sm" style={{color:C.textMuted}}>No contributor applications yet.</p>}</div></div>}
       </>}
     </main>
@@ -418,6 +480,55 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
                   className="w-full border rounded-xl px-4 py-3 text-sm"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Opening hours</label>
+              <input
+                value={form.openingHours}
+                onChange={e=>setForm(f=>({...f,openingHours:e.target.value}))}
+                placeholder="e.g. Daily, 8:00 AM - 6:00 PM"
+                className="w-full border rounded-xl px-4 py-3 text-sm"
+              />
+              <button
+                type="button"
+                onClick={()=>openAdminVerificationSearch(form,"hours")}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-bold"
+                style={{color:C.forest}}
+              >
+                Search official hours <ExternalLink size={11}/>
+              </button>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Official website / hours source</label>
+              <input
+                value={form.officialUrl}
+                onChange={e=>setForm(f=>({...f,officialUrl:e.target.value}))}
+                placeholder="https://official-website.example"
+                className="w-full border rounded-xl px-4 py-3 text-sm"
+              />
+              <div className="mt-2 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={()=>openAdminVerificationSearch(form,"official")}
+                  className="inline-flex items-center gap-1 text-xs font-bold"
+                  style={{color:C.forest}}
+                >
+                  Search official website <ExternalLink size={11}/>
+                </button>
+                <button
+                  type="button"
+                  onClick={()=>openAdminVerificationSearch(form,"maps")}
+                  className="inline-flex items-center gap-1 text-xs font-bold"
+                  style={{color:C.forest}}
+                >
+                  Check on map <ExternalLink size={11}/>
+                </button>
+              </div>
+              <p className="mt-2 text-[11px]" style={{color:C.textMuted}}>
+                Paste the real official page here after checking. SeekMY will only display a source link when this field is saved.
+              </p>
             </div>
 
             <div>

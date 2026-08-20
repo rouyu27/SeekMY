@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import {
   LogOut, Edit3, Check, X, Lock, Trash2, UserCircle, Trophy,
   Activity, Bookmark, Award, ChevronRight, Mail, AlertTriangle,
-  User as UserIcon,
+  User as UserIcon, Camera,
 } from "lucide-react";
 import type { AppUser, ActivityLog, Page } from "../lib/types";
 import { firebaseClient } from "../api/firebaseClient";
@@ -12,10 +12,10 @@ import { C, F } from "../lib/tokens";
 import { evaluateBadges, shareBadge } from "../lib/badges";
 import { Pill, AlertBanner, PasswordInput, SectionHead } from "../components/Atoms";
 
-export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage, users, setUsers }:{
+export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage, users, setUsers, earnedBadgeIds = [] }:{
   user:AppUser; setUser:(u:AppUser)=>void; onLogout:()=>void;
   logs:ActivityLog[]; bookmarks:(string|number)[]; setPage:(p:Page)=>void;
-  users:AppUser[]; setUsers:(u:AppUser[])=>void;
+  users:AppUser[]; setUsers:(u:AppUser[])=>void; earnedBadgeIds?: string[];
 }) {
   type AccTab = "profile"|"suggestions"|"announcements"|"badges"|"security"|"danger";
   const [activeTab,setActiveTab] = useState<AccTab>("profile");
@@ -25,6 +25,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   const [dName,setDName]           = useState(user.displayName);
   const [dUsername,setDUsername]   = useState(user.username);
   const [dBio,setDBio]             = useState(user.bio);
+  const [uploadingPhoto,setUploadingPhoto] = useState(false);
   const [profileAlert,setProfileAlert] = useState<{type:"success"|"error";msg:string}|null>(null);
   const [mySubs,setMySubs]=useState<LocationSubmission[]>([]);
   const [announcements,setAnnouncements]=useState<UserAnnouncement[]>([]);
@@ -52,8 +53,32 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
 
   const totalKm     = logs.reduce((s,l)=>s+l.distance,user.totalKm);
   const uniqueStates = new Set(logs.map(l=>l.state)).size + user.states;
-  const badges = evaluateBadges(logs);
+  const badges = evaluateBadges(logs, 0, earnedBadgeIds);
   const earnedCount = badges.filter(b => b.earned).length;
+
+  const initials = user.displayName.split(" ").map(n=>n[0]).join("").slice(0,2);
+
+  async function uploadProfilePhoto(file?: File) {
+    setProfileAlert(null);
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setProfileAlert({type:"error",msg:"Please upload a JPG, PNG, or WEBP image."});
+      return;
+    }
+    try {
+      setUploadingPhoto(true);
+      const photoUrl = await firebaseClient.storage.uploadProfilePhoto(file);
+      await firebaseClient.auth.updateProfile({ photo_url: photoUrl });
+      const updated = { ...user, photoUrl };
+      setUser(updated);
+      setUsers(users.map(u=>u.id===user.id?updated:u));
+      setProfileAlert({type:"success",msg:"Profile picture updated successfully."});
+    } catch (error:any) {
+      setProfileAlert({type:"error",msg:error?.message||"Unable to upload your profile picture."});
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   async function saveProfile(){
     setProfileAlert(null);
@@ -94,12 +119,29 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
       <div style={{background:`linear-gradient(135deg, ${C.jungle} 0%, ${C.forest} 100%)`}}>
         <div className="max-w-2xl mx-auto px-5 pt-8 pb-0">
           <div className="flex items-end gap-4">
-            <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white border-4 border-white mb-0" style={{backgroundColor:C.forest,flexShrink:0}}>
-              {user.displayName.split(" ").map(n=>n[0]).join("").slice(0,2)}
+            <div className="relative mb-0 flex-shrink-0">
+              {user.photoUrl ? (
+                <img src={user.photoUrl} alt={user.displayName} className="h-20 w-20 rounded-full border-4 border-white object-cover" />
+              ) : (
+                <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-white border-4 border-white" style={{backgroundColor:C.forest}}>
+                  {initials}
+                </div>
+              )}
+              <label className="absolute -bottom-1 -right-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 border-white text-white shadow-lg transition-all active:scale-95" style={{backgroundColor:C.amber,color:C.jungle}}>
+                <Camera size={15}/>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  onChange={(event)=>uploadProfilePhoto(event.target.files?.[0])}
+                  disabled={uploadingPhoto}
+                />
+              </label>
             </div>
             <div className="pb-4">
               <h1 className="text-2xl font-normal text-white" style={{fontFamily:F.display}}>{user.displayName}</h1>
               <p className="text-sm" style={{color:"rgba(255,255,255,0.65)",fontFamily:F.body}}>@{user.username} · Member since {user.joinDate}</p>
+              {uploadingPhoto && <p className="mt-1 text-xs font-bold" style={{color:"rgba(255,255,255,0.82)",fontFamily:F.body}}>Uploading profile picture...</p>}
             </div>
           </div>
           <div className="flex gap-8 mt-3 pb-4 pt-2">
@@ -300,7 +342,12 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
                   }}
                 >
                   <div className="flex items-start gap-3">
-                    <span className="text-3xl" style={{filter: b.earned ? "none" : "grayscale(1)"}}>{b.icon}</span>
+                    <img
+                      src={b.image}
+                      alt={`${b.name} badge`}
+                      className="h-16 w-16 flex-shrink-0 rounded-xl object-contain"
+                      style={{filter: b.earned ? "none" : "grayscale(1)", opacity: b.earned ? 1 : 0.42}}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-bold" style={{fontFamily:F.body,color:C.text}}>{b.name}</p>

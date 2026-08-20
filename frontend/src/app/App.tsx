@@ -26,12 +26,17 @@ import { ContributorPage } from "./pages/ContributorPage";
 import { InsightsPage } from "./pages/InsightsPage";
 import { HelpPage } from "./pages/HelpPage";
 import { firebaseClient } from "./api/firebaseClient";
+import { BADGE_DEFS } from "./lib/badges";
+import type { BadgeDef } from "./lib/types";
+import { SplashScreen } from "./components/SplashScreen";
+import { STARTER_LOCATIONS, mergeLocations } from "./lib/seedLocations";
 
 export default function App() {
   const [page, setPage]               = useState<Page>("home");
   const [prevPage, setPrevPage]       = useState<Page>("home");
   const [mobileOpen, setMobileOpen]   = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<Location|null>(null);
+  const [locationInitialTab, setLocationInitialTab] = useState<"overview" | "weather" | "reviews">("overview");
   const [logLocation, setLogLocation] = useState<Location|null>(null);
   const [selectedState, setSelectedState]       = useState("");
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
@@ -42,7 +47,8 @@ export default function App() {
   const [user, setUser]         = useState<AppUser|null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>([]);
-  const [badgeToast, setBadgeToast] = useState<string | null>(null);
+  const [badgeToast, setBadgeToast] = useState<BadgeDef | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
 
   const isAdmin = user?.role === "admin";
   async function attachReviewSummaries(locations: Location[]) {
@@ -89,8 +95,11 @@ export default function App() {
     if (!configured) return;
 
     firebaseClient.entities.Location.list("name")
-      .then(async (rows:any[]) => setAllLocations(await attachReviewSummaries(rows as Location[])))
-      .catch((error:any) => showToast(error?.message || "Unable to load locations from Firebase.", "err"));
+      .then(async (rows:any[]) => setAllLocations(mergeLocations(await attachReviewSummaries(rows as Location[]), STARTER_LOCATIONS)))
+      .catch((error:any) => {
+        setAllLocations(STARTER_LOCATIONS);
+        showToast(error?.message || "Unable to load locations from Firebase.", "err");
+      });
 
     firebaseClient.auth.me().then(async (profile: any) => {
       const email = profile?.email || "";
@@ -98,7 +107,7 @@ export default function App() {
         id: profile?.id || `firebase-${Date.now()}`,
         username: profile?.username || email.split("@")[0] || "explorer",
         displayName: profile?.full_name || email.split("@")[0] || "Explorer",
-        email, password: "", bio: profile?.bio || "",
+        email, password: "", photoUrl: profile?.photo_url || profile?.photoURL || "", bio: profile?.bio || "",
         joinDate: profile?.created_date?.slice?.(0,10) || new Date().toISOString().split("T")[0],
         totalKm: Number(profile?.totalKm || profile?.total_km || 0),
         states: Number(profile?.states || 0), checkins: Number(profile?.checkins || 0),
@@ -125,7 +134,7 @@ export default function App() {
       setEarnedBadgeIds(backendData.badges.map((badge:any)=>String(badge.key||badge.id).replace(`${current.id}_`,"")));
       setUsers(userRows.map((u:any)=>({
         id:String(u.id), username:u.username||u.email?.split("@")[0]||"explorer",
-        displayName:u.full_name||u.displayName||u.email||"Explorer", email:u.email||"", password:"", bio:u.bio||"",
+        displayName:u.full_name||u.displayName||u.email||"Explorer", email:u.email||"", password:"", photoUrl:u.photo_url||u.photoUrl||"", bio:u.bio||"",
         joinDate:u.created_date?.slice?.(0,10)||new Date().toISOString().split("T")[0],
         totalKm:Number(u.total_km||u.totalKm||0), states:Number(u.states||0), checkins:Number(u.checkins||0),
         role:u.role==="admin"?"admin":"user", status:u.status,
@@ -148,6 +157,18 @@ export default function App() {
   }
   function selectLocation(l: Location) {
     setSelectedLocation(l);
+    setLocationInitialTab("overview");
+  }
+  function openLocationFromLog(log: ActivityLog, tab: "overview" | "reviews" = "overview") {
+    const location = allLocations.find((item) => String(item.id) === String(log.locationId))
+      || allLocations.find((item) => item.name.toLowerCase() === String(log.location || "").toLowerCase());
+    if (!location) {
+      showToast("This logged place is not available in Discover yet.", "err");
+      return;
+    }
+    setSelectedLocation(location);
+    setLocationInitialTab(tab);
+    navigate("location");
   }
   function updateLocationReviewSummary(locationId: number | string, rating: number, reviews: number) {
     const applySummary = (location: Location) =>
@@ -183,7 +204,7 @@ export default function App() {
   }
   function refreshLocations(extra?: Location) {
     if (extra) setAllLocations((current)=>current.some((l)=>String(l.id)===String(extra.id))?current:[extra,...current]);
-    else firebaseClient.entities.Location.list("name").then(async (rows:any[])=>setAllLocations(await attachReviewSummaries(rows as Location[]))).catch(()=>{});
+    else firebaseClient.entities.Location.list("name").then(async (rows:any[])=>setAllLocations(mergeLocations(await attachReviewSummaries(rows as Location[]), STARTER_LOCATIONS))).catch(()=>setAllLocations(STARTER_LOCATIONS));
   }
   if (typeof window !== "undefined") (window as any).__seekmyRefreshLocations = (loc: Location) => refreshLocations(loc);
   function setBookmarksPersist(updater: BookmarkEntry[] | ((p: BookmarkEntry[]) => BookmarkEntry[])) {
@@ -241,8 +262,13 @@ export default function App() {
       setActivityLogs(prev => [result.activity as ActivityLog, ...prev]);
       if (result.newBadges.length) {
         setEarnedBadgeIds(ids => [...new Set([...ids, ...result.newBadges.map((badge:any) => badge.key)])]);
-        setBadgeToast(`Badge earned: ${result.newBadges.map((badge:any) => badge.name).join(", ")}!`);
-        setTimeout(() => setBadgeToast(null), 4000);
+        const earnedBadge = BADGE_DEFS.find((badge) => badge.id === result.newBadges[0].key);
+        if (earnedBadge) {
+          setBadgeToast(earnedBadge);
+          setTimeout(() => setBadgeToast(null), 5200);
+        } else {
+          showToast(`Badge earned: ${result.newBadges.map((badge:any) => badge.name).join(", ")}!`);
+        }
       }
     } catch (error:any) {
       showToast(error?.message || "Unable to save activity to Firebase.","err");
@@ -288,6 +314,7 @@ export default function App() {
   if (isAdmin) {
     return (
       <div className="min-h-screen" style={{ fontFamily: F.body }}>
+        {showSplash && <SplashScreen logoSrc={seekMyLogo} onFinish={() => setShowSplash(false)} minDuration={2000} />}
         <nav className="fixed top-0 left-0 right-0 z-50 bg-white border-b flex items-center justify-between px-5 h-14" style={{ borderColor: C.border, boxShadow: `0 1px 0 ${C.border}` }}>
           <button onClick={() => navigate("home")} className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full overflow-hidden border-2" style={{ borderColor: C.jungle }}>
@@ -300,7 +327,11 @@ export default function App() {
           </button>
           <div className="flex items-center gap-3">
             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: C.muted }}>
-              <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: C.jungle }}>A</div>
+              {user?.photoUrl ? (
+                <img src={user.photoUrl} alt={user.displayName} className="h-6 w-6 rounded-full object-cover" />
+              ) : (
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: C.jungle }}>A</div>
+              )}
               <span className="text-xs font-bold" style={{ color: C.text, fontFamily: F.body }}>{user?.email}</span>
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ backgroundColor: C.jungle, color: "#fff", fontFamily: F.body }}>ADMIN</span>
             </div>
@@ -319,6 +350,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen pb-6" style={{ fontFamily: F.body }}>
+      {showSplash && <SplashScreen logoSrc={seekMyLogo} onFinish={() => setShowSplash(false)} minDuration={2000} />}
       <NavBar
         page={page}
         setPage={navigate}
@@ -379,6 +411,7 @@ export default function App() {
           activityLogs={activityLogs}
           onToast={showToast}
           onReviewSummaryChange={updateLocationReviewSummary}
+          initialTab={locationInitialTab}
         />
       )}
       {/* ==================== WilsonChoongWeiShan Part - AI Outdoor Assistant Chatbot ==================== */}
@@ -389,7 +422,7 @@ export default function App() {
       {/* ==================== FongXinTong END - Community Leaderboard & Ranking Module ==================== */}
       {/* ==================== FongXinTong Part - Activity Log Module ==================== */}
       {page === "log" && (
-        <LogPage user={user} logs={activityLogs} locations={allLocations} initialLocation={logLocation} onInitialLocationUsed={() => setLogLocation(null)} onAddLog={addLog} onDeleteLog={deleteLog} onSignIn={() => setShowAuth(true)}/>
+        <LogPage user={user} logs={activityLogs} locations={allLocations} initialLocation={logLocation} onInitialLocationUsed={() => setLogLocation(null)} onAddLog={addLog} onDeleteLog={deleteLog} onOpenLocation={openLocationFromLog} onSignIn={() => setShowAuth(true)}/>
       )}
       {/* ==================== FongXinTong END - Activity Log Module ==================== */}
 
@@ -432,6 +465,7 @@ export default function App() {
           setPage={navigate}
           users={users}
           setUsers={setUsers}
+          earnedBadgeIds={earnedBadgeIds}
         />
       )}
 
@@ -456,10 +490,17 @@ export default function App() {
 
       {badgeToast && (
         <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full text-sm font-bold text-white shadow-lg"
-          style={{ backgroundColor: C.jungle, fontFamily: F.body }}
+          className="fixed inset-x-4 bottom-6 z-[100] mx-auto w-full max-w-sm overflow-hidden rounded-[18px] bg-white p-4 text-left shadow-2xl"
+          style={{ border: `1px solid ${C.border}`, fontFamily: F.body }}
         >
-          🏅 {badgeToast}
+          <div className="flex items-center gap-4">
+            <img src={badgeToast.image} alt={`${badgeToast.name} badge`} className="h-20 w-20 flex-shrink-0 rounded-xl object-contain" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.forest }}>Achievement unlocked</p>
+              <p className="text-base font-bold leading-tight" style={{ color: C.text, fontFamily: F.display }}>{badgeToast.name}</p>
+              <p className="mt-1 text-xs leading-snug" style={{ color: C.textSub }}>{badgeToast.desc}</p>
+            </div>
+          </div>
         </div>
       )}
 

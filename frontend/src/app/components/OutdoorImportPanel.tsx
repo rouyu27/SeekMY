@@ -24,6 +24,16 @@ function validCandidate(value: any): value is Candidate {
     typeof value.sourceId === "string" && Number.isFinite(Number(value.lat)) && Number.isFinite(Number(value.lng));
 }
 
+function candidateSearchUrl(candidate: Candidate, suffix: string) {
+  const query = encodeURIComponent([candidate.name, candidate.state, "Malaysia", suffix].filter(Boolean).join(" "));
+  return `https://www.google.com/search?q=${query}`;
+}
+
+function candidateMapsUrl(candidate: Candidate) {
+  const query = encodeURIComponent(`${candidate.lat},${candidate.lng}`);
+  return `https://www.google.com/maps/search/?api=1&query=${query}`;
+}
+
 export function OutdoorImportPanel({ onPublished }: { onPublished: (location: any) => void }) {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [preview, setPreview] = useState<Candidate[]>([]);
@@ -78,6 +88,7 @@ export function OutdoorImportPanel({ onPublished }: { onPublished: (location: an
         name: candidate.name, address: candidate.address, state: candidate.state,
         stateCode: candidate.stateCode || "", lat: candidate.lat, lng: candidate.lng,
         activity: candidate.activity || "Hiking", difficulty: "Easy", distance: "N/A", duration: "N/A",
+        openingHours: "Hours not verified yet",
         rating: 0, reviews: 0, badge: "OSM verified", color: C.forest, emoji: "📍",
         description: `${candidate.name} is an outdoor location sourced from OpenStreetMap and approved by a SeekMY administrator.`,
         facilities: [], bestMonths: "Year-round", accessibility: "Details not yet verified",
@@ -125,7 +136,14 @@ export function OutdoorImportPanel({ onPublished }: { onPublished: (location: an
       {candidate.image_url&&<a href={candidate.photo?.sourcePageUrl||candidate.image_url} target="_blank" rel="noreferrer" className="shrink-0"><img src={candidate.image_url} alt={`Suggested view of ${candidate.name}`} className="w-28 h-20 object-cover rounded-xl"/></a>}
       <div className="flex-1 min-w-0"><p className="font-bold text-sm">{candidate.name}</p><p className="text-xs" style={{color:C.textMuted}}>{candidate.state} · {candidate.activity} · {candidate.category||"outdoor"}</p><p className="text-xs mt-1">{candidate.lat.toFixed(5)}, {candidate.lng.toFixed(5)}</p>
       {candidate.photo?<div className="mt-2"><p className="text-xs font-bold" style={{color:candidate.photoStatus==="needs_review"?C.error:C.success}}>{candidate.photoStatus==="needs_review"?"Photo needs careful review":"Suggested photo"} · {Math.round(candidate.photo.matchConfidence*100)}% confidence</p><p className="text-[11px] truncate" title={`${candidate.photo.author} — ${candidate.photo.license}`} style={{color:C.textMuted}}>{candidate.photo.author} — {candidate.photo.license}</p></div>:<p className="text-xs mt-2" style={{color:C.textMuted}}>No reusable photo found</p>}
-      <div className="flex flex-wrap gap-3"><a href={candidate.sourceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold inline-flex items-center gap-1 mt-2" style={{color:C.forest}}>Verify location <ExternalLink size={11}/></a>{candidate.photo?.sourcePageUrl&&<a href={candidate.photo.sourcePageUrl} target="_blank" rel="noreferrer" className="text-xs font-bold inline-flex items-center gap-1 mt-2" style={{color:C.forest}}>Verify photo &amp; licence <ExternalLink size={11}/></a>}</div></div>
+      <div className="flex flex-wrap gap-3">
+        <a href={candidate.sourceUrl} target="_blank" rel="noreferrer" className="text-xs font-bold inline-flex items-center gap-1 mt-2" style={{color:C.forest}}>Verify OSM location <ExternalLink size={11}/></a>
+        <a href={candidateSearchUrl(candidate,"official website")} target="_blank" rel="noreferrer" className="text-xs font-bold inline-flex items-center gap-1 mt-2" style={{color:C.forest}}>Find official website <ExternalLink size={11}/></a>
+        <a href={candidateSearchUrl(candidate,"opening hours official")} target="_blank" rel="noreferrer" className="text-xs font-bold inline-flex items-center gap-1 mt-2" style={{color:C.forest}}>Find official hours <ExternalLink size={11}/></a>
+        <a href={candidateMapsUrl(candidate)} target="_blank" rel="noreferrer" className="text-xs font-bold inline-flex items-center gap-1 mt-2" style={{color:C.forest}}>Check map <ExternalLink size={11}/></a>
+        {candidate.photo?.sourcePageUrl&&<a href={candidate.photo.sourcePageUrl} target="_blank" rel="noreferrer" className="text-xs font-bold inline-flex items-center gap-1 mt-2" style={{color:C.forest}}>Verify photo &amp; licence <ExternalLink size={11}/></a>}
+      </div>
+      <p className="text-[11px] mt-2" style={{color:C.textMuted}}>Official hours are not filled automatically. After publishing, edit the location and paste the confirmed official source.</p></div>
       <button disabled={busy} onClick={()=>approve(candidate)} className="p-2 rounded-lg" style={{backgroundColor:C.successBg,color:C.success}} title="Approve"><CheckCircle size={16}/></button>
       <button disabled={busy} onClick={()=>reject(candidate)} className="p-2 rounded-lg" style={{backgroundColor:C.errorBg,color:C.error}} title="Reject"><Trash2 size={16}/></button>
     </div>)}{!pending.length&&<p className="text-sm" style={{color:C.textMuted}}>No pending imported candidates.</p>}</div>

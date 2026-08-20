@@ -5,7 +5,7 @@ export interface WeatherCurrent {
   feelsLike: number;
   humidity: number;
   wind: number;
-  uv: number;
+  uv: number | null;
   condition: string;
   icon: string;
   advisory: "Good to Go" | "Check Before You Go";
@@ -61,7 +61,7 @@ function buildAdvice(
   wind: number,
   condition: string,
   forecast: ForecastDay[],
-  uv = 0
+  uv: number | null = null
 ) {
   const alerts: WeatherAlert[] = [];
 
@@ -119,7 +119,7 @@ function buildAdvice(
     });
   }
 
-  if (uv >= 7) {
+  if (typeof uv === "number" && uv >= 7) {
     recommendations.push({
       icon: "🧴",
       text: "Use SPF 50+ and sun protection — UV is high.",
@@ -425,6 +425,13 @@ async function fetchLive(
   const condition =
     currentJson.weather?.[0]?.main ??
     "Clouds";
+  const rawUv =
+    response.uv?.value ??
+    response.uv?.uvi ??
+    response.uvi ??
+    currentJson.uvi ??
+    currentJson.uv;
+  const uv = Number.isFinite(Number(rawUv)) ? Number(rawUv) : null;
 
   const {
     alerts,
@@ -435,7 +442,7 @@ async function fetchLive(
     wind,
     condition,
     forecast,
-    0
+    uv
   );
 
   return {
@@ -444,7 +451,7 @@ async function fetchLive(
       feelsLike,
       humidity,
       wind,
-      uv: 0,
+      uv,
       condition,
       icon: emoji(condition),
       advisory:

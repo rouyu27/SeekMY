@@ -124,6 +124,18 @@ function currentUser(): User | null {
   return firebase().auth.currentUser;
 }
 
+function isPasswordUser(user: User): boolean {
+  return user.providerData.some((provider) => provider.providerId === "password");
+}
+
+async function requireVerifiedEmail(user: User): Promise<void> {
+  await user.reload();
+  if (isPasswordUser(user) && !user.emailVerified) {
+    await signOut(firebase().auth);
+    throw new Error("Please verify your email before signing in. Check your inbox for the Firebase verification link.");
+  }
+}
+
 function withTimeout<T>(
   work: Promise<T>,
   milliseconds: number,
@@ -501,6 +513,8 @@ const auth = {
       );
     }
 
+    await requireVerifiedEmail(user);
+
     return profile(user);
   },
 
@@ -521,6 +535,8 @@ const auth = {
         email,
         password
       );
+
+    await requireVerifiedEmail(result.user);
 
     return profile(result.user);
   },
@@ -579,6 +595,8 @@ const auth = {
       result.user
     );
 
+    await signOut(firebase().auth);
+
     return {
       success: true,
       message:
@@ -631,6 +649,29 @@ const auth = {
     return {
       success: true,
     };
+  },
+
+  async resendVerificationEmail(
+    email: string,
+    password: string
+  ): Promise<{
+    success: boolean;
+  }> {
+    const result =
+      await signInWithEmailAndPassword(
+        firebase().auth,
+        email,
+        password
+      );
+
+    if (result.user.emailVerified) {
+      await signOut(firebase().auth);
+      return { success: true };
+    }
+
+    await sendEmailVerification(result.user);
+    await signOut(firebase().auth);
+    return { success: true };
   },
 
   setToken(): void {
@@ -698,8 +739,10 @@ const auth = {
 
   async updateProfile({
     full_name,
+    photo_url,
   }: {
-    full_name: string;
+    full_name?: string;
+    photo_url?: string;
   }): Promise<EntityRecord> {
     const user =
       currentUser();
@@ -710,13 +753,10 @@ const auth = {
       );
     }
 
-    await updateFirebaseProfile(
-      user,
-      {
-        displayName:
-          full_name,
-      }
-    );
+    await updateFirebaseProfile(user, {
+      ...(full_name ? { displayName: full_name } : {}),
+      ...(photo_url !== undefined ? { photoURL: photo_url } : {}),
+    });
 
     await updateDoc(
       doc(
@@ -725,7 +765,8 @@ const auth = {
         user.uid
       ),
       {
-        full_name,
+        ...(full_name ? { full_name } : {}),
+        ...(photo_url !== undefined ? { photo_url } : {}),
 
         updated_date:
           new Date()
@@ -947,20 +988,35 @@ async function getFreeWeather(payload: { locationName?: string; state?: string; 
   const params = new URLSearchParams({ appid: apiKey, units: "metric" });
   const lat = Number(payload.lat);
   const lng = Number(payload.lng);
+  const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
     params.set("lat", String(lat));
     params.set("lon", String(lng));
   } else {
     params.set("q", `${payload.locationName || payload.state || "Kuala Lumpur"},MY`);
   }
-  const [currentResponse, forecastResponse] = await Promise.all([
+  const [currentResponse, forecastResponse, uvResponse] = await Promise.all([
     fetch(`https://api.openweathermap.org/data/2.5/weather?${params}`),
     fetch(`https://api.openweathermap.org/data/2.5/forecast?${params}`),
+    hasCoordinates
+      ? fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(String(lat))}&longitude=${encodeURIComponent(String(lng))}&hourly=uv_index&forecast_days=1&timezone=Asia%2FKuala_Lumpur`).catch(() => null)
+      : Promise.resolve(null),
   ]);
   if (!currentResponse.ok || !forecastResponse.ok) {
     throw new Error(`OpenWeather request failed (${currentResponse.status}/${forecastResponse.status}).`);
   }
-  return { current: await currentResponse.json(), forecast: await forecastResponse.json() };
+  const uvJson = uvResponse?.ok ? await uvResponse.json().catch(() => null) : null;
+  const uvTimes = Array.isArray(uvJson?.hourly?.time) ? uvJson.hourly.time : [];
+  const uvValues = Array.isArray(uvJson?.hourly?.uv_index) ? uvJson.hourly.uv_index.map(Number) : [];
+  const now = Date.now();
+  const nearestIndex = uvTimes.reduce((best: number, time: string, index: number) => {
+    const currentDiff = Math.abs(new Date(`${time}:00+08:00`).getTime() - now);
+    const bestDiff = best >= 0 ? Math.abs(new Date(`${uvTimes[best]}:00+08:00`).getTime() - now) : Number.POSITIVE_INFINITY;
+    return currentDiff < bestDiff ? index : best;
+  }, -1);
+  const rawUv = nearestIndex >= 0 ? uvValues[nearestIndex] : NaN;
+  const uv = Number.isFinite(rawUv) ? Math.round(rawUv * 10) / 10 : null;
+  return { current: await currentResponse.json(), forecast: await forecastResponse.json(), uv: { value: uv } };
 }
 
 const backend = {
@@ -1084,6 +1140,13 @@ const storage = {
     onProgress?: (percent: number) => void
   ): Promise<string> {
     return this.uploadFile("contributor-documents", file, onProgress);
+  },
+
+  async uploadProfilePhoto(
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<string> {
+    return this.uploadFile("profile-photos", file, onProgress);
   },
 };
 

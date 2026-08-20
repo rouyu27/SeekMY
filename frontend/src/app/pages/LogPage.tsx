@@ -1,6 +1,6 @@
 //==================== FongXinTong Part - Activity Log Module ====================
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search } from "lucide-react";
+import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search, Star, ExternalLink } from "lucide-react";
 import type { ActivityLog, Location, AppUser } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
@@ -35,6 +35,7 @@ export function LogPage({
   onInitialLocationUsed,
   onAddLog,
   onDeleteLog,
+  onOpenLocation,
   onSignIn,
 }: {
   user: AppUser | null;
@@ -44,6 +45,7 @@ export function LogPage({
   onInitialLocationUsed?: () => void;
   onAddLog: (l: Omit<ActivityLog, "id">) => Promise<void>;
   onDeleteLog: (id: string | number) => Promise<void>;
+  onOpenLocation?: (log: ActivityLog, tab?: "overview" | "reviews") => void;
   onSignIn: () => void;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -488,6 +490,24 @@ export function LogPage({
                     </p>
                     {log.notes && <p className="text-[11px] mt-2" style={{ color: C.textSub, fontFamily: F.body }}><strong>Notes:</strong> {log.notes}</p>}
                     {log.comment && <p className="text-[11px] mt-1" style={{ color: C.textSub, fontFamily: F.body }}><strong>Place comment:</strong> {log.comment}</p>}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onOpenLocation?.(log, "overview")}
+                        className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold"
+                        style={{ borderColor: C.border, color: C.forest, fontFamily: F.body }}
+                      >
+                        <ExternalLink size={12}/> View place
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenLocation?.(log, "reviews")}
+                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold"
+                        style={{ backgroundColor: C.amber, color: C.jungle, fontFamily: F.body }}
+                      >
+                        <Star size={12}/> Review place
+                      </button>
+                    </div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold" style={{ color: C.jungle, fontFamily: F.body }}>{log.distance} km</p>

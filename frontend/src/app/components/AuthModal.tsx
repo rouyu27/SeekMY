@@ -27,6 +27,7 @@ function firebaseProfileToAppUser(profile: any, fallbackEmail = ""): AppUser {
     displayName,
     email,
     password: "",
+    photoUrl: profile?.photo_url || profile?.photoURL || "",
     bio: profile?.bio || "",
     joinDate: profile?.created_date?.slice?.(0, 10) || new Date().toISOString().split("T")[0],
     totalKm: Number(profile?.totalKm || profile?.total_km || 0),
@@ -44,6 +45,8 @@ export function AuthModal({ onClose, onLogin }:{
   const [tab,setTab]           = useState<AuthTab>("signin");
   const [alert,setAlert]       = useState<{type:"success"|"error";msg:string}|null>(null);
   const [googleLoading,setGoogleLoading] = useState(false);
+  const [canResendVerification,setCanResendVerification] = useState(false);
+  const [resendingVerification,setResendingVerification] = useState(false);
 
   // Sign in
   const [siEmail,setSiEmail]   = useState("");
@@ -58,11 +61,12 @@ export function AuthModal({ onClose, onLogin }:{
   // Forgot
   const [fpEmail,setFpEmail]   = useState("");
 
-  function switchTab(t:AuthTab) { setTab(t); setAlert(null); }
+  function switchTab(t:AuthTab) { setTab(t); setAlert(null); setCanResendVerification(false); }
 
   // 14.2.7 – 14.2.10: Login
   async function handleSignIn() {
     setAlert(null);
+    setCanResendVerification(false);
     if (!siEmail || !siPass) { setAlert({type:"error",msg:"Please enter your email and password."}); return; }
     if (!isValidEmail(siEmail)) { setAlert({type:"error",msg:"Please enter a valid email address."}); return; }
     if (firebaseConfigured) {
@@ -72,7 +76,9 @@ export function AuthModal({ onClose, onLogin }:{
         onLogin(loggedIn, loggedIn.role === "admin");
         onClose();
       } catch (error: any) {
-        setAlert({type:"error",msg:error?.message?.replace(/^Firebase:\s*/i, "") || "Unable to sign in with Firebase."});
+        const message = error?.message?.replace(/^Firebase:\s*/i, "") || "Unable to sign in with Firebase.";
+        setCanResendVerification(/verify your email/i.test(message));
+        setAlert({type:"error",msg:message});
       }
       return;
     }
@@ -107,6 +113,7 @@ export function AuthModal({ onClose, onLogin }:{
   // 14.2.1 – 14.2.6: Register
   async function handleRegister() {
     setAlert(null);
+    setCanResendVerification(false);
     if (!rUsername||!rName||!rEmail||!rPass) { setAlert({type:"error",msg:"All fields are required."}); return; }
     if (rUsername.length < 3) { setAlert({type:"error",msg:"Username must be at least 3 characters."}); return; }
     if (!isValidEmail(rEmail)) { setAlert({type:"error",msg:"Please enter a valid email address."}); return; }
@@ -114,16 +121,35 @@ export function AuthModal({ onClose, onLogin }:{
     if (firebaseConfigured) {
       try {
         await firebaseClient.auth.register({ email: rEmail, password: rPass, full_name: rName, username: rUsername });
-        const profile = await firebaseClient.auth.me();
-        const newUser = firebaseProfileToAppUser({ ...profile, username: rUsername }, rEmail);
-        setAlert({type:"success",msg:"Account created. A verification email has been sent."});
-        setTimeout(()=>{ onLogin(newUser, newUser.role === "admin"); onClose(); }, 900);
+        setAlert({type:"success",msg:"Account created. Please verify your email, then sign in."});
+        setSiEmail(rEmail);
+        setSiPass("");
+        setRPass("");
+        setTab("signin");
       } catch (error: any) {
         setAlert({type:"error",msg:error?.message?.replace(/^Firebase:\s*/i, "") || "Unable to create your Firebase account."});
       }
       return;
     }
     setAlert({type:"error",msg:"Firebase is not configured. Add your Firebase values to .env.local."});
+  }
+
+  async function handleResendVerification() {
+    setAlert(null);
+    if (!siEmail || !siPass) {
+      setAlert({type:"error",msg:"Enter your email and password first, then resend verification."});
+      return;
+    }
+    setResendingVerification(true);
+    try {
+      await firebaseClient.auth.resendVerificationEmail(siEmail, siPass);
+      setAlert({type:"success",msg:"Verification email sent again. Check your inbox and spam folder."});
+      setCanResendVerification(false);
+    } catch (error:any) {
+      setAlert({type:"error",msg:error?.message?.replace(/^Firebase:\s*/i, "") || "Unable to resend verification email."});
+    } finally {
+      setResendingVerification(false);
+    }
   }
 
   // 14.2.11 – 14.2.14: Forgot password
@@ -184,6 +210,17 @@ export function AuthModal({ onClose, onLogin }:{
           )}
 
           {alert && <AlertBanner type={alert.type} message={alert.msg}/>}
+          {tab==="signin" && canResendVerification && (
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={resendingVerification}
+              className="mb-3 w-full rounded-xl px-4 py-2.5 text-xs font-bold disabled:opacity-60"
+              style={{backgroundColor:C.muted,color:C.forest,fontFamily:F.body}}
+            >
+              {resendingVerification ? "Sending verification email..." : "Resend verification email"}
+            </button>
+          )}
 
           {/* Sign In form */}
           {tab==="signin" && (

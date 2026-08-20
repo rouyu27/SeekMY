@@ -1,15 +1,26 @@
 //==================== LowJunFeng Part - Badge Achievement System ====================
 import type { ActivityLog, BadgeDef, BadgeStatus } from "./types";
 
+const firstFootstep = new URL("../../assets/badges/first-footstep.png", import.meta.url).toString();
+const stateExplorer = new URL("../../assets/badges/state-explorer.png", import.meta.url).toString();
+const malaysiaWanderer = new URL("../../assets/badges/malaysia-wanderer.png", import.meta.url).toString();
+const hiddenGemHunter = new URL("../../assets/badges/hidden-gem-hunter.png", import.meta.url).toString();
+const firstContribution = new URL("../../assets/badges/first-contribution.png", import.meta.url).toString();
+const localStoryteller = new URL("../../assets/badges/local-storyteller.png", import.meta.url).toString();
+const trustedContributor = new URL("../../assets/badges/trusted-contributor.png", import.meta.url).toString();
+const communityFavourite = new URL("../../assets/badges/community-favourite.png", import.meta.url).toString();
+const malaysiaInsider = new URL("../../assets/badges/malaysia-insider.png", import.meta.url).toString();
+
 export const BADGE_DEFS: BadgeDef[] = [
-  { id: "summit", icon: "🏔️", name: "Summit Seeker", desc: "Log 5 hiking activities", requirement: 5, metric: "hikes" },
-  { id: "dive", icon: "🌊", name: "Deep Explorer", desc: "Log 3 diving activities", requirement: 3, metric: "dives" },
-  { id: "states", icon: "🗺️", name: "State Hopper", desc: "Visit 5 different states", requirement: 5, metric: "states" },
-  { id: "km", icon: "🔥", name: "Iron Trailblazer", desc: "Log 100 km total", requirement: 100, metric: "km" },
-  { id: "gems", icon: "🌿", name: "Gem Hunter", desc: "Visit 3 hidden-gem locations", requirement: 3, metric: "gems" },
-  { id: "reviews", icon: "⭐", name: "Community Star", desc: "Write 10 reviews", requirement: 10, metric: "reviews" },
-  { id: "cycle", icon: "🚴", name: "Wheel Warrior", desc: "Cycle 50 km total", requirement: 50, metric: "cycleKm" },
-  { id: "camp", icon: "🏕️", name: "Wild Camper", desc: "Camp at 2 sites", requirement: 2, metric: "camps" },
+  { id: "first-footstep", icon: "🥾", image: firstFootstep, name: "First Footstep", desc: "Log your first outdoor activity", requirement: 1, metric: "activities" },
+  { id: "state-explorer", icon: "🧭", image: stateExplorer, name: "State Explorer", desc: "Visit 3 different Malaysian states", requirement: 3, metric: "states" },
+  { id: "malaysia-wanderer", icon: "🗺️", image: malaysiaWanderer, name: "Malaysia Wanderer", desc: "Visit 5 different Malaysian states", requirement: 5, metric: "states" },
+  { id: "hidden-gem-hunter", icon: "💎", image: hiddenGemHunter, name: "Hidden Gem Hunter", desc: "Visit 3 hidden-gem locations", requirement: 3, metric: "gems" },
+  { id: "first-contribution", icon: "✍️", image: firstContribution, name: "First Contribution", desc: "Write your first community review", requirement: 1, metric: "reviews" },
+  { id: "local-storyteller", icon: "📖", image: localStoryteller, name: "Local Storyteller", desc: "Write 3 community reviews", requirement: 3, metric: "reviews" },
+  { id: "trusted-contributor", icon: "✅", image: trustedContributor, name: "Trusted Contributor", desc: "Write 5 community reviews", requirement: 5, metric: "reviews" },
+  { id: "community-favourite", icon: "⭐", image: communityFavourite, name: "Community Favourite", desc: "Write 10 community reviews", requirement: 10, metric: "reviews" },
+  { id: "malaysia-insider", icon: "🏆", image: malaysiaInsider, name: "Malaysia Insider", desc: "Log 100 km of outdoor activities", requirement: 100, metric: "km" },
 ];
 
 const GEM_NAMES = new Set([
@@ -27,6 +38,7 @@ export function evaluateBadges(
 ): BadgeStatus[] {
   const totalKm = logs.reduce((s, l) => s + (l.distance || 0), 0);
   const states = new Set(logs.map((l) => l.state).filter(Boolean)).size;
+  const activities = logs.length;
   const hikes = logs.filter((l) => /hike/i.test(l.activity)).length;
   const dives = logs.filter((l) => /div/i.test(l.activity)).length;
   const camps = logs.filter((l) => /camp/i.test(l.activity)).length;
@@ -36,6 +48,7 @@ export function evaluateBadges(
   const gems = logs.filter((l) => GEM_NAMES.has(l.location)).length;
 
   const metrics: Record<BadgeDef["metric"], number> = {
+    activities,
     hikes,
     dives,
     states,
@@ -48,7 +61,8 @@ export function evaluateBadges(
 
   return BADGE_DEFS.map((b) => {
     const progress = Math.min(metrics[b.metric], b.requirement);
-    const earned = progress >= b.requirement;
+    const storedEarned = previouslyEarned.includes(b.id);
+    const earned = progress >= b.requirement || storedEarned;
     const justEarned = earned && !previouslyEarned.includes(b.id);
     return { ...b, progress, earned, justEarned };
   });

@@ -8,6 +8,7 @@ export interface AppUser {
   displayName: string;
   email: string;
   password: string;
+  photoUrl?: string;
   bio: string;
   joinDate: string;
   totalKm: number;
@@ -46,6 +47,7 @@ export interface Location {
   source?: "OpenStreetMap" | "Community" | "Admin" | string;
   sourceId?: string;
   sourceUrl?: string;
+  officialUrl?: string;
   image_url?: string;
   image_urls?: string[];
   estimatedPrice?: number;
@@ -68,6 +70,7 @@ export interface Location {
   difficulty: "Easy"|"Moderate"|"Hard";
   distance: string;
   duration: string;
+  openingHours?: string;
   rating: number;
   reviews: number;
   badge: string;
@@ -100,10 +103,11 @@ export interface ActivityLog {
 export interface BadgeDef {
   id: string;
   icon: string;
+  image: string;
   name: string;
   desc: string;
   requirement: number;
-  metric: "hikes" | "dives" | "states" | "km" | "gems" | "reviews" | "cycleKm" | "camps";
+  metric: "activities" | "hikes" | "dives" | "states" | "km" | "gems" | "reviews" | "cycleKm" | "camps";
 }
 
 export interface BadgeStatus extends BadgeDef {

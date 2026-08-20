@@ -86,9 +86,13 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
         <div className="flex items-center gap-2">
           {user ? (
             <button onClick={()=>setPage("account")} className="flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-50 transition-colors">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold" style={{backgroundColor:C.jungle}}>
-                {user.displayName.split(" ").map(n=>n[0]).join("").slice(0,2)}
-              </div>
+              {user.photoUrl ? (
+                <img src={user.photoUrl} alt={user.displayName} className="h-7 w-7 rounded-full object-cover" />
+              ) : (
+                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold" style={{backgroundColor:C.jungle}}>
+                  {user.displayName.split(" ").map(n=>n[0]).join("").slice(0,2)}
+                </div>
+              )}
               <span className="hidden md:block text-xs font-bold" style={{color:C.text,fontFamily:F.body}}>{user.displayName.split(" ")[0]}</span>
             </button>
           ) : (

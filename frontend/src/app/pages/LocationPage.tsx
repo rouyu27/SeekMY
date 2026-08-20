@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import {
   ChevronLeft, Star, Bookmark, BookmarkCheck, MapPin, Clock,
   Navigation, Sun, Droplets, Wind, AlertTriangle, Check, Activity, Flag,
-  Users, ExternalLink, Pencil, Trash2, X,
+  Users, ExternalLink, Pencil, Trash2, X, Car, Utensils, Hospital, Bus, Store, Fuel, Toilet, CalendarClock,
 } from "lucide-react";
 import type { Location, ActivityLog } from "../lib/types";
 import { C, F } from "../lib/tokens";
@@ -21,6 +21,7 @@ import {
 } from "../lib/metMalaysia";
 import { firebaseClient } from "../api/firebaseClient";
 import type { StoredReview } from "../lib/communityTypes";
+import { locationMetadataFor } from "../lib/locationMetadata";
 
 export function LocationPage({
   loc,
@@ -33,6 +34,7 @@ export function LocationPage({
   activityLogs,
   onToast,
   onReviewSummaryChange,
+  initialTab,
 }: {
   loc: Location | null;
   onBack: () => void;
@@ -44,6 +46,7 @@ export function LocationPage({
   activityLogs?: ActivityLog[];
   onToast?: (msg: string, type?: "ok" | "err") => void;
   onReviewSummaryChange?: (locationId: number | string, rating: number, reviews: number) => void;
+  initialTab?: "overview" | "weather" | "reviews";
 }) {
   const [tab, setTab] = useState<"overview" | "weather" | "reviews">("overview");
   //==================== LimTzeXin Part - User Review & Rating Module ====================
@@ -68,6 +71,7 @@ export function LocationPage({
 
   useEffect(() => {
     if (!loc) return;
+    if (initialTab) setTab(initialTab);
     let cancelled=false;
     firebaseClient.backend.getReviews(String(loc.id)).then(({reviews:rows})=>{
       if(cancelled) return;
@@ -182,6 +186,24 @@ export function LocationPage({
     loc.distance &&
     loc.distance !== "N/A" &&
     !["Diving", "Swimming", "Water Sports"].includes(loc.activity);
+  const lat = Number(loc.lat ?? loc.latitude);
+  const lng = Number(loc.lng ?? loc.longitude);
+  const hasCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+  const mapTarget = hasCoordinates ? `${lat},${lng}` : `${loc.name}, ${loc.state}, Malaysia`;
+  const metadata = locationMetadataFor(loc.name);
+  const openingHours = metadata?.openingHours || loc.openingHours || (loc as any).opening_hours || "Hours not verified yet";
+  const officialUrl = metadata?.officialUrl || loc.officialUrl || (loc as any).official_url || loc.sourceUrl;
+  const nearbyFacilities = [
+    { label: "Toilets", query: "toilet", icon: <Toilet size={14} /> },
+    { label: "Parking", query: "parking", icon: <Car size={14} /> },
+    { label: "Food", query: "restaurant food", icon: <Utensils size={14} /> },
+    { label: "Clinic", query: "clinic hospital", icon: <Hospital size={14} /> },
+    { label: "Transport", query: "bus station train station", icon: <Bus size={14} /> },
+    { label: "Shops", query: "convenience store", icon: <Store size={14} /> },
+    { label: "Petrol", query: "petrol station", icon: <Fuel size={14} /> },
+  ];
+  const nearbySearchUrl = (query: string) =>
+    `https://www.google.com/maps/search/${encodeURIComponent(query)}/@${encodeURIComponent(mapTarget)},15z`;
 
   return (
     <div className="pt-14 min-h-screen" style={{ backgroundColor: C.cream }}>
@@ -220,15 +242,29 @@ export function LocationPage({
 
           <div className="flex flex-wrap gap-5 mt-5">
             {hasTrail && (
-              <div className="flex items-center gap-1.5 text-sm" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-                <Navigation size={12} />{loc.distance}
+              <div className="flex items-center gap-1.5 text-sm" title="Distance" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
+                <Navigation size={12} />Distance: {loc.distance}
               </div>
             )}
-            <div className="flex items-center gap-1.5 text-sm" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-              <Clock size={12} />{loc.duration}
+            <div className="flex items-center gap-1.5 text-sm" title="Estimated activity duration" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
+              <Clock size={12} />Duration: {loc.duration}
             </div>
-            <div className="flex items-center gap-1.5 text-sm" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-              <Sun size={12} />{loc.bestMonths}
+            <div className="flex items-center gap-1.5 text-sm" title="Opening hours" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
+              <CalendarClock size={12} />Hours: {openingHours}
+              {officialUrl && (
+                <a
+                  href={officialUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-bold underline decoration-white/30 underline-offset-2"
+                  style={{ color: "rgba(255,255,255,0.88)" }}
+                >
+                  Source <ExternalLink size={10} />
+                </a>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 text-sm" title="Best season to visit" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
+              <Sun size={12} />Best season: {loc.bestMonths}
             </div>
           </div>
         </div>
@@ -315,6 +351,41 @@ export function LocationPage({
               ) : (
                 <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>No facility information provided.</p>
               )}
+            </div>
+
+            <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h2 className="font-bold text-base" style={{ fontFamily: F.body, color: C.text }}>Find nearby facilities</h2>
+                  <p className="text-[12px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
+                    Opens Google Maps around this location.
+                  </p>
+                </div>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapTarget)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[11px] font-bold inline-flex items-center gap-1 whitespace-nowrap"
+                  style={{ color: C.forest, fontFamily: F.body }}
+                >
+                  Map <ExternalLink size={11}/>
+                </a>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {nearbyFacilities.map((facility) => (
+                  <a
+                    key={facility.label}
+                    href={nearbySearchUrl(facility.query)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-[12px] font-bold transition-all hover:bg-gray-50 active:scale-[0.98]"
+                    style={{ borderColor: C.border, color: C.textSub, fontFamily: F.body }}
+                  >
+                    <span style={{ color: C.forest }}>{facility.icon}</span>
+                    {facility.label}
+                  </a>
+                ))}
+              </div>
             </div>
 
             <div className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
@@ -429,7 +500,7 @@ export function LocationPage({
                     {[
                       { icon: <Droplets size={16} style={{ color: C.forest }} />, label: "Humidity", val: `${weather.current.humidity}%` },
                       { icon: <Wind size={16} style={{ color: C.forest }} />, label: "Wind", val: `${weather.current.wind} km/h` },
-                      { icon: <Sun size={16} style={{ color: C.forest }} />, label: "UV index", val: String(weather.current.uv) },
+                      { icon: <Sun size={16} style={{ color: C.forest }} />, label: "UV index", val: weather.current.uv === null ? "Not available" : String(weather.current.uv) },
                       { icon: <AlertTriangle size={16} style={{ color: weather.current.advisory === "Good to Go" ? C.forest : "#92400e" }} />, label: "Advisory", val: weather.current.advisory },
                     ].map(({ icon, label, val }) => (
                       <div key={label} className="text-center p-3 rounded-xl" style={{ backgroundColor: C.muted }}>

@@ -1,7 +1,8 @@
 //==================== LowJunFeng Part - Home Module ====================
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Search, X, Sparkles, MessageCircle, ArrowRight, ChevronRight,
+  ChevronLeft, Pause, Play,
 } from "lucide-react";
 import type { Location, Page } from "../lib/types";
 import { C, F } from "../lib/tokens";
@@ -13,6 +14,33 @@ import { StateFlagCard } from "../components/StateFlagCard";
 import { LocationCard } from "../components/LocationCard";
 import { Pill, SectionHead } from "../components/Atoms";
 
+const heroPhotos = [
+  {
+    src: new URL("../../assets/hero/mount-kinabalu.jpg", import.meta.url).toString(),
+    alt: "Mount Kinabalu hiking trail above the clouds",
+  },
+  {
+    src: new URL("../../assets/hero/rainforest-trail.jpg", import.meta.url).toString(),
+    alt: "Misty rainforest hiking trail",
+  },
+  {
+    src: new URL("../../assets/hero/snorkeling.jpg", import.meta.url).toString(),
+    alt: "Snorkeling in clear Malaysian water",
+  },
+  {
+    src: new URL("../../assets/hero/city-park.jpg", import.meta.url).toString(),
+    alt: "City park walking path",
+  },
+  {
+    src: new URL("../../assets/hero/park-lake.jpg", import.meta.url).toString(),
+    alt: "Park lake walking path",
+  },
+  {
+    src: new URL("../../assets/hero/aquatic-centre.jpg", import.meta.url).toString(),
+    alt: "Outdoor aquatic centre swimming pool",
+  },
+];
+
 export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookmarks, onBookmark, locations }:{
   setPage:(p:Page)=>void; setSelectedLocation:(l:Location)=>void;
   setSelectedState:(c:string)=>void; bookmarks:(number|string)[]; onBookmark:(id:number|string)=>void;
@@ -21,6 +49,16 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
   const [query,setQuery]         = useState("");
   const [activeAct,setActiveAct] = useState("all");
   const [gemIndex,setGemIndex]   = useState(0);
+  const [heroIndex,setHeroIndex] = useState(0);
+  const [heroPaused,setHeroPaused] = useState(false);
+
+  useEffect(() => {
+    if (heroPaused) return;
+    const timer = window.setInterval(() => {
+      setHeroIndex((current) => (current + 1) % heroPhotos.length);
+    }, 4500);
+    return () => window.clearInterval(timer);
+  }, [heroPaused]);
 
   const searchResults = useMemo(()=>{
     if (!query) return null;
@@ -49,12 +87,48 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
     }
   }
 
+  function moveHero(direction: -1 | 1) {
+    setHeroIndex((current) => (current + direction + heroPhotos.length) % heroPhotos.length);
+  }
+
   return (
     <div className="pt-14 min-h-screen" style={{backgroundColor:C.cream}}>
-      <section className="relative overflow-hidden" style={{background:`linear-gradient(135deg, ${C.jungle} 0%, #12342a 50%, #0a2318 100%)`,minHeight:310}}>
+      <section className="relative overflow-hidden" style={{backgroundColor:C.jungle,minHeight:310}}>
+        <div className="absolute inset-0 scale-[1.04]" aria-hidden="true">
+          {heroPhotos.map((photo, index) => (
+            <img
+              key={photo.src}
+              src={photo.src}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000"
+              style={{
+                opacity: index === heroIndex ? 1 : 0,
+                filter: "blur(1.2px) saturate(1.05)",
+                transform: "scale(1.025)",
+              }}
+            />
+          ))}
+        </div>
+        <div className="absolute inset-0" style={{background:"linear-gradient(135deg, rgba(27,67,50,0.72) 0%, rgba(18,52,42,0.62) 48%, rgba(10,35,24,0.74) 100%)"}} />
         {[...Array(20)].map((_,i)=>(
           <div key={i} className="absolute rounded-full opacity-10 bg-white" style={{width:4+(i%3)*5,height:4+(i%3)*5,left:`${(i*13+4)%100}%`,top:`${(i*19+7)%100}%`}}/>
         ))}
+        <button
+          type="button"
+          onClick={() => moveHero(-1)}
+          aria-label="Previous hero photo"
+          className="absolute left-4 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/12 text-white backdrop-blur-sm transition-all hover:bg-white/20 md:flex"
+        >
+          <ChevronLeft size={18} />
+        </button>
+        <button
+          type="button"
+          onClick={() => moveHero(1)}
+          aria-label="Next hero photo"
+          className="absolute right-4 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/25 bg-white/12 text-white backdrop-blur-sm transition-all hover:bg-white/20 md:flex"
+        >
+          <ChevronRight size={18} />
+        </button>
         <div className="relative max-w-4xl mx-auto px-6 py-14 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-6 text-[11px] font-bold tracking-wide" style={{backgroundColor:"rgba(255,255,255,0.10)",color:"rgba(255,255,255,0.85)",border:"1px solid rgba(255,255,255,0.18)",fontFamily:F.body}}>
             🇲🇾 Visit Malaysia 2026 · VM2026
@@ -81,6 +155,45 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
                 <p className="text-[11px] font-semibold" style={{color:"rgba(255,255,255,0.50)",fontFamily:F.body}}>{label}</p>
               </div>
             ))}
+          </div>
+          <div className="mt-8 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => moveHero(-1)}
+              aria-label="Previous hero photo"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm md:hidden"
+            >
+              <ChevronLeft size={15} />
+            </button>
+            {heroPhotos.map((photo, index) => (
+              <button
+                key={photo.src}
+                type="button"
+                onClick={() => setHeroIndex(index)}
+                aria-label={`Show ${photo.alt}`}
+                className="h-2 rounded-full transition-all"
+                style={{
+                  width: index === heroIndex ? 24 : 8,
+                  backgroundColor: index === heroIndex ? C.amber : "rgba(255,255,255,0.42)",
+                }}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() => moveHero(1)}
+              aria-label="Next hero photo"
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm md:hidden"
+            >
+              <ChevronRight size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setHeroPaused((paused) => !paused)}
+              aria-label={heroPaused ? "Play hero slideshow" : "Pause hero slideshow"}
+              className="ml-1 flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-sm"
+            >
+              {heroPaused ? <Play size={13} /> : <Pause size={13} />}
+            </button>
           </div>
         </div>
       </section>
