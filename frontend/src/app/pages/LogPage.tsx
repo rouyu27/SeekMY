@@ -1,13 +1,13 @@
 //==================== FongXinTong Part - Activity Log Module ====================
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search, Star, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search, Star, ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { ActivityLog, Location, AppUser } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
 import { ALL_STATES, ACTIVITY_FILTERS } from "../lib/constants";
 import { firebaseClient } from "../api/firebaseClient";
 
-const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 1 * 1024 * 1024;
 const HOUR_OPTIONS = Array.from({ length: 13 }, (_, index) => index);
 const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, index) => index * 5);
 
@@ -548,7 +548,7 @@ export function LogPage({
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold" style={{ color: C.text }}>Upload Photo</p>
                   <p className="text-xs truncate" style={{ color: C.textMuted }}>
-                    {photoFile ? photoFile.name : "JPG / PNG / WEBP up to 2MB"}
+                    {photoFile ? photoFile.name : "JPG / PNG / WEBP up to 1MB"}
                   </p>
                 </div>
                 <input type="file" accept="image/*" className="hidden" onChange={(event) => choosePhoto(event.target.files?.[0])}/>
