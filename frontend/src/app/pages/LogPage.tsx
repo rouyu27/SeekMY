@@ -27,6 +27,39 @@ function formatDuration(hours: string, minutes: string) {
   return `${h ? `${h}h` : ""}${h && m ? " " : ""}${m ? `${m}m` : ""}`;
 }
 
+function malaysiaDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kuala_Lumpur",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value || 0);
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+  };
+}
+
+function isoDateFromUtc(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function currentMalaysiaWeekRange() {
+  const today = malaysiaDateParts();
+  const todayUtc = new Date(Date.UTC(today.year, today.month - 1, today.day, 12));
+  const mondayOffset = (todayUtc.getUTCDay() + 6) % 7;
+  const monday = new Date(todayUtc);
+  monday.setUTCDate(todayUtc.getUTCDate() - mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return {
+    start: isoDateFromUtc(monday),
+    end: isoDateFromUtc(sunday),
+  };
+}
+
 export function LogPage({
   user,
   logs,
@@ -53,6 +86,7 @@ export function LogPage({
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
   const [locationSearch, setLocationSearch] = useState("");
+  const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; alt: string } | null>(null);
   const [form, setForm] = useState({
     locationId: "",
     state: "All",
@@ -245,8 +279,10 @@ export function LogPage({
   const totalKm = logs.reduce((sum, log) => sum + log.distance, 0);
   const uniqueStates = new Set(logs.map((log) => log.state).filter(Boolean)).size;
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const currentWeek = currentMalaysiaWeekRange();
+  const currentWeekLogs = logs.filter((log) => log.date >= currentWeek.start && log.date <= currentWeek.end);
   const weeklyKm = days.map((_, index) =>
-    logs.reduce((sum, log) => {
+    currentWeekLogs.reduce((sum, log) => {
       const date = new Date(`${log.date}T12:00:00`);
       if (!Number.isFinite(date.getTime())) return sum;
       const mondayFirstIndex = (date.getDay() + 6) % 7;
@@ -283,7 +319,12 @@ export function LogPage({
 
         {logs.length > 0 && (
           <div className="bg-white rounded-[18px] p-5 mb-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-            <h2 className="text-sm font-bold mb-4" style={{ fontFamily: F.body, color: C.text }}>Weekly Activity</h2>
+            <div className="mb-4">
+              <h2 className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>This Week's Activity</h2>
+              <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>
+                {currentWeek.start} to {currentWeek.end}
+              </p>
+            </div>
             <div className="flex items-end gap-2 h-24">
               {days.map((day, index) => {
                 const km = weeklyKm[index];
@@ -523,9 +564,15 @@ export function LogPage({
                 </div>
 
                 {log.photoUrl && (
-                  <div className="mt-3 rounded-xl overflow-hidden border" style={{ borderColor: C.border }}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPhoto({ url: log.photoUrl!, alt: `${log.location} activity photo` })}
+                    className="mt-3 block w-full overflow-hidden rounded-xl border text-left"
+                    style={{ borderColor: C.border }}
+                    aria-label={`Open full photo for ${log.location}`}
+                  >
                     <img src={log.photoUrl} alt={`${log.location} activity`} className="w-full max-h-64 object-cover" />
-                  </div>
+                  </button>
                 )}
                 {!log.photoUrl && log.comment && (
                   <div className="mt-2 flex items-center gap-1 text-[10px]" style={{ color: C.textMuted, fontFamily: F.body }}>
@@ -537,6 +584,27 @@ export function LogPage({
           </div>
         )}
       </div>
+      {selectedPhoto && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"
+            onClick={() => setSelectedPhoto(null)}
+            aria-label="Close full image"
+          >
+            <X size={18}/>
+          </button>
+          <img
+            src={selectedPhoto.url}
+            alt={selectedPhoto.alt}
+            className="max-h-[86vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
