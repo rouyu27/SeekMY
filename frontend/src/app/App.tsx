@@ -48,9 +48,15 @@ export default function App() {
   async function attachReviewSummaries(locations: Location[]) {
     try {
       const result = await firebaseClient.backend.getLocationReviewSummaries();
+      const normalize = (value: unknown) => String(value || "").trim().toLowerCase();
       const reviewMap = new Map(result.summaries.map(summary=>[String(summary.locationId), summary]));
+      const reviewNameMap = new Map(
+        result.summaries
+          .filter(summary => summary.locationName)
+          .map(summary => [normalize(summary.locationName), summary])
+      );
       return locations.map((location) => {
-        const summary = reviewMap.get(String(location.id));
+        const summary = reviewMap.get(String(location.id)) || reviewNameMap.get(normalize(location.name));
         if (!summary) return location;
         return { ...location, rating: summary.rating, reviews: summary.count };
       });

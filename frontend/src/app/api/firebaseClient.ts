@@ -1001,7 +1001,7 @@ const backend = {
     return this.call<{ reviews: EntityRecord[] }>("getReviews", { locationId });
   },
   getLocationReviewSummaries() {
-    return this.call<{ summaries: Array<{ locationId: string; count: number; rating: number }> }>("getLocationReviewSummaries");
+    return this.call<{ summaries: Array<{ locationId: string; locationName?: string; count: number; rating: number }> }>("getLocationReviewSummaries");
   },
   submitReview(payload: Record<string, any>) {
     return this.call<{ review: EntityRecord; newBadges: EntityRecord[] }>("submitReview", payload);
