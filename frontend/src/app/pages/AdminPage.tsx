@@ -110,6 +110,9 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   const gemCount=locations.filter((l:any)=>l.is_hidden_gem).length;
   const filteredUsers=users.filter(u=>!search||`${u.displayName} ${u.email}`.toLowerCase().includes(search.toLowerCase()));
   const filteredLocs=locations.filter(l=>!search||`${l.name} ${l.state} ${l.activity}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredPendingSubmissions=pendingSubs.filter(s=>!search||`${s.name} ${s.state} ${s.activity} ${s.contributorName} ${s.status} ${s.description}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredReviews=reviews.filter(r=>!search||`${r.userName||"Anonymous"} ${r.locationName} ${r.comment} ${r.status}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredContributors=contributors.filter(c=>!search||`${c.fullName} ${c.userEmail} ${c.area} ${c.contributionArea||c.services||""} ${c.status}`.toLowerCase().includes(search.toLowerCase()));
 
   async function roleChange(member:AppUser,role:"user"|"admin"){
     if(isFixedTeamAdmin(member.email)&&role!=="admin"){showToast("Fixed team admin cannot be demoted.");return;}
@@ -224,9 +227,25 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     try{const result=await firebaseClient.backend.moderateReview(String(r.id),action);setReviews(rs=>rs.map(y=>String(y.id)===String(r.id)?result.review as StoredReview:y));showToast(action==="remove"?"Review removed in Supabase.":"Review approved in Supabase.");}catch(e:any){showToast(e?.message||"Unable to update review.");}
   }
   async function openContributorDocument(uri:string){
-    const popup=window.open("","_blank","noopener,noreferrer");
-    try{const url=uri.startsWith("supabase://")?(await firebaseClient.backend.signContributorDocument(uri)).url:uri;if(popup)popup.location.href=url;else window.open(url,"_blank","noopener,noreferrer");}
-    catch(e:any){popup?.close();showToast(e?.message||"Unable to open contributor document.");}
+    const popup=window.open("","_blank");
+    if(popup){
+      popup.opener=null;
+      popup.document.title="Opening document";
+      popup.document.body.innerHTML="<p style=\"font-family:Arial,sans-serif;padding:24px;color:#1a2e1e;\">Creating secure document link...</p>";
+    }
+    try{
+      const url=uri.startsWith("supabase://")?(await firebaseClient.backend.signContributorDocument(uri)).url:uri;
+      if(!url||!/^https?:\/\//i.test(url))throw new Error("Document link is missing or invalid. Redeploy seekmy-backend and check the stored contributor docUrl.");
+      if(popup)popup.location.href=url;else window.open(url,"_blank","noopener,noreferrer");
+    }
+    catch(e:any){
+      const message=e?.message||"Unable to open contributor document.";
+      if(popup){
+        popup.document.body.innerHTML="<p style=\"font-family:Arial,sans-serif;padding:24px;color:#c0392b;\"></p>";
+        popup.document.body.querySelector("p")!.textContent=message;
+      }
+      showToast(message);
+    }
   }
   async function contributorStatus(c:ContributorApplication,status:"approved"|"rejected"){
     const reason=status==="rejected"?prompt("Contributor rejection reason:",c.rejectReason||"")?.trim():"";
@@ -245,6 +264,17 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       const [updated]=await Promise.all([
         firebaseClient.entities.Contributor.update(c.id,changes),
         firebaseClient.entities.User.update(userId,{contributorStatus:status}),
+        firebaseClient.entities.Announcement.create({
+          userId,
+          title:status==="approved"?"Contributor registration approved":"Contributor registration not approved",
+          message:status==="approved"
+            ? "Your contributor registration has been approved. You can now submit outdoor locations for admin review."
+            : `Your contributor registration was not approved. Reason: ${reason}`,
+          type:status==="approved"?"approved":"rejected",
+          submissionId:c.id,
+          read:false,
+          createdAt:new Date().toISOString(),
+        }),
       ]);
       setContributors(cs=>cs.map(y=>y.id===c.id?updated as ContributorApplication:y));
       const nextUsers=users.map(user=>user.id===userId?{...user,contributorStatus:status}:user);
@@ -384,9 +414,9 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   </button>
 </div></div>)}</div></div>}
         {tab==="outdoorImport"&&<OutdoorImportPanel onPublished={(published)=>{setLocations(ls=>[published as Location,...ls]);(window as any).__seekmyRefreshLocations?.(published);}}/>}
-        {tab==="pendingLocs"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Pending Locations</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingSubs.length} awaiting review</p><div className="space-y-3">{submissions.map(s=><div key={s.id} className={card}><div className="flex gap-4">{s.photoUrl&&<img src={s.photoUrl} className="w-20 h-20 rounded-xl object-cover"/>}<div className="flex-1"><p className="font-bold text-sm">{s.name}</p><p className="text-xs" style={{color:C.textMuted}}>{s.state} · {s.activity} · {s.contributorName}</p><p className="text-sm mt-2" style={{color:C.textSub}}>{s.description}</p><p className="text-xs mt-1">Status: {s.status}</p>{s.status==="pending"&&<div className="flex gap-2 mt-3"><Pill variant="filled" small onClick={()=>approveSubmission(s)}>{saving?"Saving...":"Approve"}</Pill><Pill variant="danger" small onClick={()=>rejectSubmission(s)}>Reject</Pill></div>}</div></div></div>)}{!submissions.length&&<p className="text-sm" style={{color:C.textMuted}}>No submissions yet.</p>}</div></div>}
-        {tab==="reviews"&&<div><h1 className="text-2xl mb-4" style={{fontFamily:F.display,color:C.jungle}}>Review Moderation</h1><div className="space-y-3">{reviews.map(r=><div key={r.id} className={card}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="font-bold text-sm">{r.userName||"Anonymous"} · {r.locationName}</p><div className="flex gap-0.5 my-1">{[1,2,3,4,5].map(n=><Star key={n} size={12} fill={n<=r.rating?C.amber:"none"}/>)}</div><p className="text-sm leading-relaxed" style={{color:C.textSub}}>{r.comment}</p><p className="text-xs mt-1">Status: {r.status}</p></div><div className="flex flex-row gap-2 sm:flex-col sm:items-end">{r.status!=="approved"&&r.status!=="active"&&<button onClick={()=>reviewAction(r,"approve")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.successBg,color:C.success}} aria-label={`Approve review for ${r.locationName}`}><CheckCircle size={15}/></button>}<button onClick={()=>reviewAction(r,"remove")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.errorBg,color:C.error}} aria-label={`Remove review for ${r.locationName}`}><Trash2 size={15}/></button></div></div></div>)}{!reviews.length&&<p className="text-sm" style={{color:C.textMuted}}>No reviews yet.</p>}</div></div>}
-        {tab==="contributors"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Contributor Registration Review</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingContributors.length} pending</p><div className="space-y-3">{contributors.map(c=>{const approved=c.status==="approved"||c.status==="verified";return <div key={c.id} className={`${card} flex gap-4`}><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{backgroundColor:approved?C.successBg:c.status==="rejected"?C.errorBg:"#fffbef"}}><Users size={17}/></div><div className="flex-1 min-w-0"><p className="font-bold text-sm">{c.fullName}</p><p className="text-xs" style={{color:C.textMuted}}>{c.area} · {c.contributionArea||c.services||"Area not provided"}</p><p className="text-xs mt-1" style={{color:C.textSub}}>{c.localKnowledgeExperience||c.experience||"Local knowledge not provided"}</p><p className="text-xs mt-1">{c.userEmail} · {c.phone}</p>{c.rejectReason&&<p className="text-xs mt-1" style={{color:C.error}}>Rejection reason: {c.rejectReason}</p>}{c.docUrl&&<button type="button" onClick={()=>openContributorDocument(c.docUrl!)} className="text-xs font-bold block mt-1" style={{color:C.forest}}>View supporting document</button>}</div><div className="flex items-start gap-2"><span className="text-xs capitalize">{approved?"Approved":c.status}</span>{c.status==="pending"&&<><button title="Approve contributor" onClick={()=>contributorStatus(c,"approved")} className="p-2 rounded-lg" style={{backgroundColor:C.successBg,color:C.success}}><CheckCircle size={15}/></button><button title="Reject contributor" onClick={()=>contributorStatus(c,"rejected")} className="p-2 rounded-lg" style={{backgroundColor:C.errorBg,color:C.error}}><X size={15}/></button></>}</div></div>})}{!contributors.length&&<p className="text-sm" style={{color:C.textMuted}}>No contributor applications yet.</p>}</div></div>}
+        {tab==="pendingLocs"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Pending Locations</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingSubs.length} awaiting review</p><div className="space-y-3">{filteredPendingSubmissions.map(s=><div key={s.id} className={card}><div className="flex gap-4">{s.photoUrl&&<img src={s.photoUrl} className="w-20 h-20 rounded-xl object-cover"/>}<div className="flex-1"><p className="font-bold text-sm">{s.name}</p><p className="text-xs" style={{color:C.textMuted}}>{s.state} · {s.activity} · {s.contributorName}</p><p className="text-sm mt-2" style={{color:C.textSub}}>{s.description}</p><p className="text-xs mt-1">Status: {s.status}</p><div className="flex gap-2 mt-3"><Pill variant="filled" small onClick={()=>approveSubmission(s)}>{saving?"Saving...":"Approve"}</Pill><Pill variant="danger" small onClick={()=>rejectSubmission(s)}>Reject</Pill></div></div></div></div>)}{!filteredPendingSubmissions.length&&<p className="text-sm" style={{color:C.textMuted}}>{pendingSubs.length?"No pending locations match your search.":"No pending locations yet."}</p>}</div></div>}
+        {tab==="reviews"&&<div><h1 className="text-2xl mb-4" style={{fontFamily:F.display,color:C.jungle}}>Review Moderation</h1><div className="space-y-3">{filteredReviews.map(r=><div key={r.id} className={card}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="font-bold text-sm">{r.userName||"Anonymous"} · {r.locationName}</p><div className="flex gap-0.5 my-1">{[1,2,3,4,5].map(n=><Star key={n} size={12} fill={n<=r.rating?C.amber:"none"}/>)}</div><p className="text-sm leading-relaxed" style={{color:C.textSub}}>{r.comment}</p><p className="text-xs mt-1">Status: {r.status}</p></div><div className="flex flex-row gap-2 sm:flex-col sm:items-end">{r.status!=="approved"&&r.status!=="active"&&<button onClick={()=>reviewAction(r,"approve")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.successBg,color:C.success}} aria-label={`Approve review for ${r.locationName}`}><CheckCircle size={15}/></button>}<button onClick={()=>reviewAction(r,"remove")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.errorBg,color:C.error}} aria-label={`Remove review for ${r.locationName}`}><Trash2 size={15}/></button></div></div></div>)}{!filteredReviews.length&&<p className="text-sm" style={{color:C.textMuted}}>{reviews.length?"No reviews match your search.":"No reviews yet."}</p>}</div></div>}
+        {tab==="contributors"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Contributor Registration Review</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingContributors.length} pending</p><div className="space-y-3">{filteredContributors.map(c=>{const approved=c.status==="approved"||c.status==="verified";return <div key={c.id} className={`${card} flex gap-4`}><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{backgroundColor:approved?C.successBg:c.status==="rejected"?C.errorBg:"#fffbef"}}><Users size={17}/></div><div className="flex-1 min-w-0"><p className="font-bold text-sm">{c.fullName}</p><p className="text-xs" style={{color:C.textMuted}}>{c.area} · {c.contributionArea||c.services||"Area not provided"}</p><p className="text-xs mt-1" style={{color:C.textSub}}>{c.localKnowledgeExperience||c.experience||"Local knowledge not provided"}</p><p className="text-xs mt-1">{c.userEmail} · {c.phone}</p>{c.rejectReason&&<p className="text-xs mt-1" style={{color:C.error}}>Rejection reason: {c.rejectReason}</p>}{c.docUrl&&<button type="button" onClick={()=>openContributorDocument(c.docUrl!)} className="text-xs font-bold block mt-1" style={{color:C.forest}}>View supporting document</button>}</div><div className="flex items-start gap-2"><span className="text-xs capitalize">{approved?"Approved":c.status}</span>{c.status==="pending"&&<><button title="Approve contributor" onClick={()=>contributorStatus(c,"approved")} className="p-2 rounded-lg" style={{backgroundColor:C.successBg,color:C.success}}><CheckCircle size={15}/></button><button title="Reject contributor" onClick={()=>contributorStatus(c,"rejected")} className="p-2 rounded-lg" style={{backgroundColor:C.errorBg,color:C.error}}><X size={15}/></button></>}</div></div>})}{!filteredContributors.length&&<p className="text-sm" style={{color:C.textMuted}}>{contributors.length?"No contributor applications match your search.":"No contributor applications yet."}</p>}</div></div>}
       </>}
     </main>
     {showAdd&&

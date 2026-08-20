@@ -205,6 +205,17 @@ export function ContributorPage({
       const saved:any = myApp
         ? await firebaseClient.entities.Contributor.update(myApp.id,payload)
         : await firebaseClient.entities.Contributor.createWithId(user!.id,payload);
+      await firebaseClient.entities.Announcement.create({
+        userId:user!.id,
+        title:myApp ? "Contributor registration resubmitted" : "Contributor registration received",
+        message:myApp
+          ? "Your contributor registration update has been received and is awaiting administrator review."
+          : "Your contributor registration has been received and is awaiting administrator review.",
+        type:"info",
+        submissionId:saved.id,
+        read:false,
+        createdAt:new Date().toISOString(),
+      });
       setApps([saved as ContributorApplication]);
       setRegistrationErrors({});
       setMsg({type:"ok",text:"Your contributor registration has been submitted successfully and is awaiting administrator review."});
@@ -261,10 +272,28 @@ export function ContributorPage({
         const current = subs.find(s=>s.id===editingSubmissionId);
         if (current?.status === "approved") { setMsg({type:"err",text:"Approved locations cannot be edited here."}); return; }
         const updated:any = await firebaseClient.entities.LocationSubmission.update(editingSubmissionId,payload);
+        await firebaseClient.entities.Announcement.create({
+          userId:user!.id,
+          title:"Location update received",
+          message:`Your update for "${locName.trim()}" has been received and is awaiting administrator review.`,
+          type:"info",
+          submissionId:editingSubmissionId,
+          read:false,
+          createdAt:new Date().toISOString(),
+        });
         setSubs(items=>items.map(item=>item.id===editingSubmissionId?updated as LocationSubmission:item));
         setMsg({type:"ok",text:"Location update resubmitted successfully. Awaiting admin approval."});
       } else {
         const created:any = await firebaseClient.entities.LocationSubmission.create({...payload,createdAt:new Date().toISOString()});
+        await firebaseClient.entities.Announcement.create({
+          userId:user!.id,
+          title:"Location suggestion received",
+          message:`Your suggestion "${locName.trim()}" has been received and is awaiting administrator review.`,
+          type:"info",
+          submissionId:created.id,
+          read:false,
+          createdAt:new Date().toISOString(),
+        });
         setSubs(current=>[created as LocationSubmission,...current]);
         setMsg({type:"ok",text:"Location submitted successfully. Awaiting admin approval."});
       }
