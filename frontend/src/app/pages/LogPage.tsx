@@ -1,6 +1,6 @@
 //==================== FongXinTong Part - Activity Log Module ====================
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search, Star, ExternalLink } from "lucide-react";
+import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search, Star, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import type { ActivityLog, Location, AppUser } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
@@ -46,18 +46,29 @@ function isoDateFromUtc(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function currentMalaysiaWeekRange() {
-  const today = malaysiaDateParts();
-  const todayUtc = new Date(Date.UTC(today.year, today.month - 1, today.day, 12));
-  const mondayOffset = (todayUtc.getUTCDay() + 6) % 7;
-  const monday = new Date(todayUtc);
-  monday.setUTCDate(todayUtc.getUTCDate() - mondayOffset);
+function mondayForMalaysiaDate(date = new Date()) {
+  const parts = malaysiaDateParts(date);
+  const dateUtc = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12));
+  const mondayOffset = (dateUtc.getUTCDay() + 6) % 7;
+  const monday = new Date(dateUtc);
+  monday.setUTCDate(dateUtc.getUTCDate() - mondayOffset);
+  return isoDateFromUtc(monday);
+}
+
+function weekRangeFromMonday(mondayIso: string) {
+  const monday = new Date(`${mondayIso}T12:00:00Z`);
   const sunday = new Date(monday);
   sunday.setUTCDate(monday.getUTCDate() + 6);
   return {
     start: isoDateFromUtc(monday),
     end: isoDateFromUtc(sunday),
   };
+}
+
+function shiftWeek(mondayIso: string, weeks: number) {
+  const monday = new Date(`${mondayIso}T12:00:00Z`);
+  monday.setUTCDate(monday.getUTCDate() + weeks * 7);
+  return isoDateFromUtc(monday);
 }
 
 export function LogPage({
@@ -87,6 +98,8 @@ export function LogPage({
   const [formError, setFormError] = useState("");
   const [locationSearch, setLocationSearch] = useState("");
   const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; alt: string } | null>(null);
+  const currentWeekStart = useMemo(() => mondayForMalaysiaDate(), []);
+  const [selectedWeekStart, setSelectedWeekStart] = useState(currentWeekStart);
   const [form, setForm] = useState({
     locationId: "",
     state: "All",
@@ -279,10 +292,12 @@ export function LogPage({
   const totalKm = logs.reduce((sum, log) => sum + log.distance, 0);
   const uniqueStates = new Set(logs.map((log) => log.state).filter(Boolean)).size;
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const currentWeek = currentMalaysiaWeekRange();
-  const currentWeekLogs = logs.filter((log) => log.date >= currentWeek.start && log.date <= currentWeek.end);
+  const selectedWeek = weekRangeFromMonday(selectedWeekStart);
+  const selectedWeekLogs = logs.filter((log) => log.date >= selectedWeek.start && log.date <= selectedWeek.end);
+  const selectedWeekKm = selectedWeekLogs.reduce((sum, log) => sum + log.distance, 0);
+  const isCurrentWeek = selectedWeekStart === currentWeekStart;
   const weeklyKm = days.map((_, index) =>
-    currentWeekLogs.reduce((sum, log) => {
+    selectedWeekLogs.reduce((sum, log) => {
       const date = new Date(`${log.date}T12:00:00`);
       if (!Number.isFinite(date.getTime())) return sum;
       const mondayFirstIndex = (date.getDay() + 6) % 7;
@@ -319,11 +334,46 @@ export function LogPage({
 
         {logs.length > 0 && (
           <div className="bg-white rounded-[18px] p-5 mb-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-            <div className="mb-4">
-              <h2 className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>This Week's Activity</h2>
-              <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>
-                {currentWeek.start} to {currentWeek.end}
-              </p>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>
+                  {isCurrentWeek ? "This Week's Activity" : "Selected Week Activity"}
+                </h2>
+                <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>
+                  {selectedWeek.start} to {selectedWeek.end} · {selectedWeekLogs.length} activit{selectedWeekLogs.length === 1 ? "y" : "ies"} · {selectedWeekKm.toFixed(1)} km
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedWeekStart((week) => shiftWeek(week, -1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border"
+                  style={{ borderColor: C.border, color: C.forest }}
+                  aria-label="Previous week"
+                >
+                  <ChevronLeft size={14}/>
+                </button>
+                {!isCurrentWeek && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedWeekStart(currentWeekStart)}
+                    className="h-8 rounded-full border px-3 text-[11px] font-bold"
+                    style={{ borderColor: C.border, color: C.forest, fontFamily: F.body }}
+                  >
+                    This week
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedWeekStart((week) => shiftWeek(week, 1))}
+                  disabled={isCurrentWeek}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-40"
+                  style={{ borderColor: C.border, color: C.forest }}
+                  aria-label="Next week"
+                >
+                  <ChevronRight size={14}/>
+                </button>
+              </div>
             </div>
             <div className="flex items-end gap-2 h-24">
               {days.map((day, index) => {
@@ -586,23 +636,27 @@ export function LogPage({
       </div>
       {selectedPhoto && (
         <div
-          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4"
+          className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/70 p-4"
           onClick={() => setSelectedPhoto(null)}
         >
-          <button
-            type="button"
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"
-            onClick={() => setSelectedPhoto(null)}
-            aria-label="Close full image"
-          >
-            <X size={18}/>
-          </button>
-          <img
-            src={selectedPhoto.url}
-            alt={selectedPhoto.alt}
-            className="max-h-[86vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+          <div
+            className="relative flex max-h-[90vh] w-full max-w-5xl items-center justify-center rounded-2xl bg-white p-3 shadow-2xl sm:p-4"
             onClick={(event) => event.stopPropagation()}
-          />
+          >
+            <button
+              type="button"
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-black shadow-md"
+              onClick={() => setSelectedPhoto(null)}
+              aria-label="Close full image"
+            >
+              <X size={18}/>
+            </button>
+            <img
+              src={selectedPhoto.url}
+              alt={selectedPhoto.alt}
+              className="max-h-[84vh] max-w-full rounded-xl object-contain"
+            />
+          </div>
         </div>
       )}
     </div>
