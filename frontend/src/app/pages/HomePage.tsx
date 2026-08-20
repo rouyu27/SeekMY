@@ -1,7 +1,7 @@
 //==================== LowJunFeng Part - Home Module ====================
 import { useEffect, useState, useMemo } from "react";
 import {
-  Search, X, MessageCircle, ArrowRight, ChevronRight,
+  Search, X, Sparkles, MessageCircle, ArrowRight, ChevronRight,
   ChevronLeft, Pause, Play,
 } from "lucide-react";
 import type { Location, Page } from "../lib/types";
@@ -48,6 +48,7 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
 }) {
   const [query,setQuery]         = useState("");
   const [activeAct,setActiveAct] = useState("all");
+  const [gemIndex,setGemIndex]   = useState(0);
   const [heroIndex,setHeroIndex] = useState(0);
   const [heroPaused,setHeroPaused] = useState(false);
 
@@ -68,6 +69,21 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
     };
   },[query]);
 
+  const hiddenGems = useMemo(() => locations.filter((l:any) => l.is_hidden_gem).slice(0,3), [locations]);
+  const gem = hiddenGems[gemIndex] ?? hiddenGems[0] ?? null;
+
+  useEffect(() => {
+    if (hiddenGems.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setGemIndex((current) => (current + 1) % hiddenGems.length);
+    }, 4200);
+    return () => window.clearInterval(timer);
+  }, [hiddenGems.length]);
+
+  useEffect(() => {
+    if (gemIndex >= hiddenGems.length) setGemIndex(0);
+  }, [gemIndex, hiddenGems.length]);
+
   function goState(code:string){
     // Open the normal Discover page first.
     // App.tsx clears previous Discover filters, then this state becomes
@@ -78,6 +94,12 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
 
   function moveHero(direction: -1 | 1) {
     setHeroIndex((current) => (current + direction + heroPhotos.length) % heroPhotos.length);
+  }
+
+  function openGem() {
+    if (!gem) return;
+    setSelectedLocation(gem);
+    setPage("location");
   }
 
   return (
@@ -220,6 +242,52 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
 
       {!searchResults && (
         <div className="max-w-5xl mx-auto px-5 py-10 space-y-12">
+          {/* Hidden Gem */}
+          <div>
+            <div className="flex items-center gap-2.5 mb-5">
+              <Sparkles size={18} style={{color:C.amber}}/>
+              <h2 className="text-2xl font-normal" style={{fontFamily:F.display,color:C.text}}>Hidden Gem Spotlight</h2>
+            </div>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={openGem}
+              onKeyDown={(e)=>{ if(e.key==="Enter") openGem(); }}
+              className="rounded-[22px] overflow-hidden cursor-pointer transition-all hover:-translate-y-0.5 duration-200"
+              style={{background:`linear-gradient(135deg, ${(gem as any)?.color || C.forest} 0%, ${C.jungle} 100%)`,boxShadow:`0 4px 20px rgba(27,67,50,0.18)`}}
+            >
+              <div className="p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{backgroundColor:"rgba(255,255,255,0.20)"}}>
+                      <Sparkles size={22} className="text-white"/>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-normal text-white mb-0.5" style={{fontFamily:F.display}}>{gem?.name || "No hidden gem selected"}</h3>
+                      <p className="text-xs mb-3" style={{color:"rgba(255,255,255,0.72)",fontFamily:F.body}}>{gem?.state ? `${gem.state}, Malaysia` : "Choose hidden gems in Admin Location Management"}</p>
+                      <p className="text-sm leading-relaxed" style={{color:"rgba(255,255,255,0.78)",fontFamily:F.body,maxWidth:520}}>{(gem as any)?.description || "Ask an admin to mark Firebase locations as hidden gems."}</p>
+                      {gem && <p className="text-xs mt-3 font-bold" style={{color:"rgba(255,255,255,0.9)",fontFamily:F.body}}>Tap to view details</p>}
+                    </div>
+                  </div>
+                  <span className="self-start flex-shrink-0 text-[11px] font-bold px-3 py-1 rounded-full" style={{backgroundColor:"rgba(255,255,255,0.20)",color:"#fff",border:"1px solid rgba(255,255,255,0.32)",fontFamily:F.body}}>Hidden Gem</span>
+                </div>
+              </div>
+              {hiddenGems.length > 1 && (
+                <div className="flex items-center gap-1.5 px-6 pb-5" onClick={e=>e.stopPropagation()}>
+                  {hiddenGems.map((item,i)=>(
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={e=>{e.stopPropagation();setGemIndex(i);}}
+                      aria-label={`Show hidden gem ${item.name}`}
+                      className="rounded-full transition-all duration-200"
+                      style={{width:gemIndex===i?22:7,height:7,backgroundColor:gemIndex===i?"rgba(255,255,255,0.92)":"rgba(255,255,255,0.36)"}}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           {/* State sections */}
           <div><SectionHead title="Peninsular Malaysia"/><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{PENINSULAR.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="Peninsular Malaysia" onClick={()=>goState(s.code)}/>)}</div></div>
           <div><SectionHead title="East Malaysia"/><div className="grid grid-cols-2 gap-4">{EAST.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="East Malaysia" onClick={()=>goState(s.code)} large/>)}</div></div>
