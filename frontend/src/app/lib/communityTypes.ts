@@ -3,7 +3,7 @@
 export type ReviewStatus = "approved" | "pending" | "flagged" | "rejected" | "removed" | "active";
 export interface StoredReview {
   id: string; locationId: number|string; locationName: string; userId: string; userName: string;
-  rating: number; comment: string; date: string; status: ReviewStatus; flagReason?: string;
+  rating: number; comment: string; date: string; status: ReviewStatus; flagReason?: string; photoUrl?: string;
   flaggedBy?: string[]; created_by_id?: string; created_date?: string; updated_date?: string;
 }
 export type ContributorStatus = "pending" | "approved" | "verified" | "rejected";

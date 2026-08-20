@@ -1,9 +1,9 @@
 // Shared Integration Code - used by multiple SeekMY modules/members.
 // Member-specific ownership is documented in MODULE_OWNERSHIP.md.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   X, Home, Compass, Map, MessageCircle, Trophy, Activity,
-  Bookmark, UserCircle, ChevronDown, LogOut, Users, BarChart3, CircleHelp,
+  Bookmark, UserCircle, ChevronDown, LogOut, Users, BarChart3, CircleHelp, Bell,
 } from "lucide-react";
 import { ImageWithFallback } from "./ui/ImageWithFallback";
 const seekMyLogo = new URL("../../imports/logo.png", import.meta.url).toString();
@@ -25,19 +25,43 @@ const NAV_MORE = [
   {label:"Help & FAQ",    page:"help"        as Page, icon:<CircleHelp size={14}/>},
 ];
 
-export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthClick }:{
+export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthClick, unreadAnnouncements = 0 }:{
   page:Page; setPage:(p:Page)=>void; mobileOpen:boolean; setMobileOpen:(v:boolean)=>void;
-  user:AppUser|null; onAuthClick:()=>void;
+  user:AppUser|null; onAuthClick:()=>void; unreadAnnouncements?:number;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement | null>(null);
   const moreInPage = NAV_MORE.some(n=>n.page===page);
+
+  function goTo(p: Page) {
+    setMoreOpen(false);
+    setMobileOpen(false);
+    setPage(p);
+  }
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    function closeMore(event: MouseEvent) {
+      if (moreRef.current?.contains(event.target as Node)) return;
+      setMoreOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMoreOpen(false);
+    }
+    document.addEventListener("mousedown", closeMore);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeMore);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [moreOpen]);
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-[1200] bg-white" style={{boxShadow:`0 1px 0 ${C.border}, 0 2px 8px rgba(27,67,50,0.06)`}}>
       <div className="max-w-6xl mx-auto px-5 h-14 flex items-center gap-3">
 
         {/* Logo */}
-        <button onClick={()=>setPage("home")} className="flex items-center gap-2.5 flex-shrink-0 mr-2">
+        <button onClick={()=>goTo("home")} className="flex items-center gap-2.5 flex-shrink-0 mr-2">
           <div className="w-9 h-9 rounded-full overflow-hidden border-2 flex-shrink-0" style={{borderColor:C.jungle}}>
             <ImageWithFallback src={seekMyLogo} alt="SeekMY" className="w-full h-full object-cover"/>
           </div>
@@ -50,7 +74,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
         {/* Primary nav — desktop */}
         <div className="hidden md:flex items-center gap-0.5">
           {NAV_PRIMARY.map(({label,page:p,icon})=>(
-            <button key={label} onClick={()=>setPage(p)}
+            <button key={label} onClick={()=>goTo(p)}
               className="flex items-center gap-1.5 px-3.5 h-8 rounded-xl text-[13px] font-semibold transition-all"
               style={{backgroundColor:page===p?C.muted:"transparent",color:page===p?C.jungle:C.textSub,fontFamily:F.body}}>
               <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{label}
@@ -58,7 +82,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
           ))}
 
           {/* More dropdown */}
-          <div className="relative">
+          <div className="relative" ref={moreRef}>
             <button onClick={()=>setMoreOpen(v=>!v)}
               className="flex items-center gap-1.5 px-3.5 h-8 rounded-xl text-[13px] font-semibold transition-all"
               style={{backgroundColor:moreInPage||moreOpen?C.muted:"transparent",color:moreInPage||moreOpen?C.jungle:C.textSub,fontFamily:F.body}}>
@@ -68,7 +92,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
               <div className="absolute top-10 left-0 w-52 bg-white rounded-2xl py-2 z-[1210]"
                 style={{boxShadow:`0 8px 32px rgba(27,67,50,0.18)`,border:`1px solid ${C.border}`}}>
                 {NAV_MORE.map(({label,page:p,icon})=>(
-                  <button key={label} onClick={()=>{setPage(p);setMoreOpen(false);}}
+                  <button key={label} onClick={()=>goTo(p)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold transition-colors text-left"
                     style={{backgroundColor:page===p?C.muted:"transparent",color:page===p?C.jungle:C.textSub,fontFamily:F.body}}>
                     <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{label}
@@ -85,7 +109,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
         {/* Right side */}
         <div className="flex items-center gap-2">
           {user ? (
-            <button onClick={()=>setPage("account")} className="flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-50 transition-colors">
+            <button onClick={()=>goTo("account")} className="relative flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-50 transition-colors">
               {user.photoUrl ? (
                 <img src={user.photoUrl} alt={user.displayName} className="h-7 w-7 rounded-full object-cover" />
               ) : (
@@ -94,6 +118,15 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
                 </div>
               )}
               <span className="hidden md:block text-xs font-bold" style={{color:C.text,fontFamily:F.body}}>{user.displayName.split(" ")[0]}</span>
+              {unreadAnnouncements > 0 && (
+                <span
+                  className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                  style={{backgroundColor:C.error,fontFamily:F.body}}
+                  aria-label={`${unreadAnnouncements} unread announcements`}
+                >
+                  {unreadAnnouncements > 9 ? "9+" : unreadAnnouncements}
+                </span>
+              )}
             </button>
           ) : (
             <button onClick={onAuthClick} className="hidden md:flex items-center gap-1.5 px-4 h-8 rounded-full text-xs font-bold text-white transition-all active:scale-95" style={{backgroundColor:C.jungle,fontFamily:F.body}}>
@@ -101,7 +134,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
             </button>
           )}
           {/* Hamburger — mobile only */}
-          <button onClick={()=>setMobileOpen(!mobileOpen)} className="md:hidden w-9 h-9 rounded-xl border flex items-center justify-center" style={{borderColor:C.border}}>
+          <button onClick={()=>{setMoreOpen(false);setMobileOpen(!mobileOpen);}} className="md:hidden w-9 h-9 rounded-xl border flex items-center justify-center" style={{borderColor:C.border}}>
             {mobileOpen ? <X size={16} style={{color:C.text}}/> : <div className="flex flex-col gap-[5px]">{[0,1,2].map(i=><div key={i} className="w-4 h-0.5 rounded" style={{backgroundColor:C.text}}/>)}</div>}
           </button>
         </div>
@@ -112,16 +145,21 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
         <div className="absolute top-14 left-0 right-0 bg-white z-[1210] border-t" style={{borderColor:C.border,boxShadow:`0 12px 40px rgba(27,67,50,0.18)`}}>
           <div className="p-4 grid grid-cols-2 gap-1">
             {[...NAV_PRIMARY,...NAV_MORE].map(({label,page:p,icon})=>(
-              <button key={label} onClick={()=>{setPage(p);setMobileOpen(false);}}
+              <button key={label} onClick={()=>goTo(p)}
                 className="flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm font-semibold text-left transition-colors"
                 style={{backgroundColor:page===p?C.muted:"transparent",color:page===p?C.jungle:C.textSub,fontFamily:F.body}}>
                 <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{label}
               </button>
             ))}
-            <button onClick={()=>{setPage("account");setMobileOpen(false);}}
+            <button onClick={()=>goTo("account")}
               className="flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm font-semibold text-left"
               style={{backgroundColor:page==="account"?C.muted:"transparent",color:page==="account"?C.jungle:C.textSub,fontFamily:F.body}}>
               <UserCircle size={14}/> Profile
+              {unreadAnnouncements > 0 && (
+                <span className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{backgroundColor:C.error}}>
+                  <Bell size={10}/> {unreadAnnouncements > 9 ? "9+" : unreadAnnouncements}
+                </span>
+              )}
             </button>
           </div>
           <div className="border-t px-4 py-3" style={{borderColor:C.border}}>

@@ -206,6 +206,12 @@ export function LogPage({
         notes: form.notes.trim(),
         comment: form.comment.trim(),
         photoUrl,
+        locationSnapshot: {
+          name: selectedLocation.name,
+          state: selectedLocation.state,
+          activity: selectedLocation.activity,
+          is_hidden_gem: (selectedLocation as any).is_hidden_gem === true,
+        },
       });
 
       setShowForm(false);

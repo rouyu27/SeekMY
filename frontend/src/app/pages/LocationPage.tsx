@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import {
   ChevronLeft, Star, Bookmark, BookmarkCheck, MapPin, Clock,
   Navigation, Sun, Droplets, Wind, AlertTriangle, Check, Activity, Flag,
-  Users, ExternalLink, Pencil, Trash2, X, Car, Utensils, Hospital, Bus, Store, Fuel, Toilet, CalendarClock,
+  Users, ExternalLink, Pencil, Trash2, X, Car, Utensils, Hospital, Bus, Store, Fuel, Toilet, CalendarClock, Upload,
 } from "lucide-react";
 import type { Location, ActivityLog } from "../lib/types";
 import { C, F } from "../lib/tokens";
@@ -22,6 +22,8 @@ import {
 import { firebaseClient } from "../api/firebaseClient";
 import type { StoredReview } from "../lib/communityTypes";
 import { locationMetadataFor } from "../lib/locationMetadata";
+
+const MAX_REVIEW_PHOTO_BYTES = 1 * 1024 * 1024;
 
 export function LocationPage({
   loc,
@@ -52,6 +54,9 @@ export function LocationPage({
   //==================== LimTzeXin Part - User Review & Rating Module ====================
   const [rt, setRt] = useState("");
   const [rating, setRating] = useState(0);
+  const [reviewPhotoFile, setReviewPhotoFile] = useState<File | null>(null);
+  const [reviewPhotoPreview, setReviewPhotoPreview] = useState("");
+  const [selectedReviewPhoto, setSelectedReviewPhoto] = useState<{url:string;alt:string}|null>(null);
   const [reviews, setReviews] = useState<StoredReview[]>([]);
   const [flagId, setFlagId] = useState<string | null>(null);
   const [flagReason, setFlagReason] = useState("Offensive language");
@@ -181,6 +186,25 @@ export function LocationPage({
     setEditingReviewId(null);
     setEditingReviewText("");
     setEditingReviewRating(0);
+  };
+  const chooseReviewPhoto = (file?: File | null) => {
+    setReviewMsg(null);
+    if (reviewPhotoPreview) URL.revokeObjectURL(reviewPhotoPreview);
+    if (!file) {
+      setReviewPhotoFile(null);
+      setReviewPhotoPreview("");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setReviewMsg("Please upload an image file.");
+      return;
+    }
+    if (file.size > MAX_REVIEW_PHOTO_BYTES) {
+      setReviewMsg("Review photo must be 1MB or smaller.");
+      return;
+    }
+    setReviewPhotoFile(file);
+    setReviewPhotoPreview(URL.createObjectURL(file));
   };
 
   const d = diffStyle(loc.difficulty);
@@ -710,6 +734,31 @@ export function LocationPage({
                 className="w-full rounded-xl px-4 py-3 text-sm outline-none border resize-none mb-3"
                 style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
               />
+              <label
+                className="mb-3 flex cursor-pointer items-center gap-3 rounded-xl border p-3"
+                style={{ borderColor: C.border, fontFamily: F.body }}
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: C.muted, color: C.jungle }}>
+                  <Upload size={15}/>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold" style={{ color: C.text }}>Add review photo</p>
+                  <p className="truncate text-xs" style={{ color: C.textMuted }}>
+                    {reviewPhotoFile ? reviewPhotoFile.name : "Optional JPG / PNG / WEBP up to 1MB"}
+                  </p>
+                </div>
+                <input type="file" accept="image/*" className="hidden" onChange={(event) => chooseReviewPhoto(event.target.files?.[0])}/>
+              </label>
+              {reviewPhotoPreview && (
+                <div className="mb-3 flex items-start gap-3">
+                  <button type="button" onClick={() => setSelectedReviewPhoto({url:reviewPhotoPreview,alt:"Selected review photo preview"})} className="overflow-hidden rounded-xl border" style={{ borderColor: C.border }}>
+                    <img src={reviewPhotoPreview} alt="Selected review photo preview" className="h-24 w-32 object-cover" />
+                  </button>
+                  <button type="button" onClick={() => chooseReviewPhoto(null)} className="text-[11px] font-bold" style={{ color: C.error, fontFamily: F.body }}>
+                    Remove photo
+                  </button>
+                </div>
+              )}
               <Pill
                 variant="filled"
                 small
@@ -721,13 +770,25 @@ export function LocationPage({
                   if(rating===0){setReviewMsg("Please select a rating before submitting.");return;}
                   if(!rt.trim()){setReviewMsg("Please write a review comment.");return;}
                   try{
-                    const result=await firebaseClient.backend.submitReview({locationId:String(loc!.id),rating,comment:rt.trim()});
+                    const photoUrl = reviewPhotoFile ? await firebaseClient.storage.uploadReviewPhoto(reviewPhotoFile) : "";
+                    const result=await firebaseClient.backend.submitReview({
+                      locationId:String(loc!.id),
+                      rating,
+                      comment:rt.trim(),
+                      photoUrl,
+                      locationSnapshot:{
+                        name:loc!.name,
+                        state:loc!.state,
+                        activity:loc!.activity,
+                        is_hidden_gem:(loc as any).is_hidden_gem===true,
+                      },
+                    });
                     setReviews(p=>{
                       const nextReviews = [result.review as StoredReview,...p];
                       publishReviewSummary(nextReviews);
                       return nextReviews;
                     });
-                    setRt(""); setRating(0); onToast?.("Your review has been submitted successfully!");
+                    setRt(""); setRating(0); chooseReviewPhoto(null); onToast?.("Your review has been submitted successfully!");
                   }catch(error:any){setReviewMsg(error?.message||"Unable to submit review to Firebase.");}
                 }}
               >
@@ -800,7 +861,20 @@ export function LocationPage({
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm" style={{ color: C.textSub, fontFamily: F.body }}>{r.comment || (r as any).text}</p>
+                    <>
+                      <p className="text-sm" style={{ color: C.textSub, fontFamily: F.body }}>{r.comment || (r as any).text}</p>
+                      {r.photoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReviewPhoto({url:r.photoUrl!,alt:`Review photo for ${loc.name}`})}
+                          className="mt-3 block overflow-hidden rounded-xl border text-left"
+                          style={{ borderColor: C.border }}
+                          aria-label={`Open full review photo for ${loc.name}`}
+                        >
+                          <img src={r.photoUrl} alt={`Review photo for ${loc.name}`} className="h-44 w-full object-cover sm:w-80" />
+                        </button>
+                      )}
+                    </>
                   )}
                   {user && !editing && (
                     <div className="flex flex-wrap gap-3 mt-2">
@@ -890,6 +964,24 @@ export function LocationPage({
         </div>
       )}
       {/* ==================== LimTzeXin END - User Review & Rating Module: Flag Review ==================== */}
+      {selectedReviewPhoto && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedReviewPhoto(null)}>
+          <button
+            type="button"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"
+            onClick={() => setSelectedReviewPhoto(null)}
+            aria-label="Close full image"
+          >
+            <X size={18}/>
+          </button>
+          <img
+            src={selectedReviewPhoto.url}
+            alt={selectedReviewPhoto.alt}
+            className="max-h-[86vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

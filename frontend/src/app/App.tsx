@@ -49,6 +49,7 @@ export default function App() {
   const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>([]);
   const [badgeToast, setBadgeToast] = useState<BadgeDef | null>(null);
   const [showSplash, setShowSplash] = useState(true);
+  const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
 
   const isAdmin = user?.role === "admin";
   async function attachReviewSummaries(locations: Location[]) {
@@ -139,6 +140,7 @@ export default function App() {
         totalKm:Number(u.total_km||u.totalKm||0), states:Number(u.states||0), checkins:Number(u.checkins||0),
         role:u.role==="admin"?"admin":"user", status:u.status,
       })));
+      refreshUnreadAnnouncements(current);
     }).catch(() => { /* guest mode: public Firebase locations still load */ });
   }, []);
 
@@ -186,6 +188,18 @@ export default function App() {
   function showToast(msg: string, type: "ok" | "err" = "ok") {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3200);
+  }
+  async function refreshUnreadAnnouncements(currentUser = user) {
+    if (!currentUser) {
+      setUnreadAnnouncements(0);
+      return;
+    }
+    try {
+      const rows = await firebaseClient.entities.Announcement.filter({ userId: currentUser.id }, undefined, 500);
+      setUnreadAnnouncements(rows.filter((announcement:any)=>!announcement.read).length);
+    } catch {
+      setUnreadAnnouncements(0);
+    }
   }
   async function toggleBookmark(id: number | string) {
     if (!user) { setShowAuth(true); return; }
@@ -253,6 +267,7 @@ export default function App() {
       state:l.state || "",
       })));
       setEarnedBadgeIds(badgeRows.map((badge:any)=>String(badge.key || badge.id).replace(`${current.id}_`, "")));
+      refreshUnreadAnnouncements(current);
   }
 
   async function addLog(l: Omit<ActivityLog, "id">) {
@@ -291,6 +306,7 @@ export default function App() {
     setUser(null);
     setBookmarks([]);
     setActivityLogs([]);
+    setUnreadAnnouncements(0);
     navigate("home");
   }
 
@@ -357,6 +373,7 @@ export default function App() {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         user={user}
+        unreadAnnouncements={unreadAnnouncements}
         onAuthClick={() => !user ? setShowAuth(true) : navigate("account")}
       />
 
@@ -466,6 +483,7 @@ export default function App() {
           users={users}
           setUsers={setUsers}
           earnedBadgeIds={earnedBadgeIds}
+          onAnnouncementsChanged={setUnreadAnnouncements}
         />
       )}
 

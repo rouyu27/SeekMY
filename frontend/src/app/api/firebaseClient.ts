@@ -1130,6 +1130,13 @@ const storage = {
     return this.uploadFile("activity-photos", file, onProgress);
   },
 
+  async uploadReviewPhoto(
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<string> {
+    return this.uploadFile("review-photos", file, onProgress);
+  },
+
   async uploadLocationPhoto(
     file: File,
     onProgress?: (percent: number) => void

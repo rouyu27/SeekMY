@@ -29,6 +29,7 @@ create table if not exists public.seekmy_reviews (
   user_name text not null default 'Explorer',
   rating smallint not null check (rating between 1 and 5),
   comment text not null check (char_length(comment) between 1 and 2000),
+  photo_url text not null default '',
   status text not null default 'approved' check (status in ('approved','flagged','removed','rejected')),
   flag_reason text,
   flagged_by text[] not null default '{}',

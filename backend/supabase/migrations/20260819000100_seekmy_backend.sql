@@ -15,11 +15,13 @@ create table if not exists public.seekmy_reviews (
   location_id text not null, location_name text not null, user_name text not null default 'Explorer',
   rating smallint not null check (rating between 1 and 5),
   comment text not null check (char_length(comment) between 1 and 2000),
+  photo_url text not null default '',
   status text not null default 'approved' check (status in ('approved','flagged','removed','rejected')),
   flag_reason text, flagged_by text[] not null default '{}', created_at timestamptz not null default now(),
   updated_at timestamptz
 );
 alter table public.seekmy_reviews add column if not exists updated_at timestamptz;
+alter table public.seekmy_reviews add column if not exists photo_url text not null default '';
 create unique index if not exists seekmy_one_active_review_idx on public.seekmy_reviews(firebase_uid, location_id) where status not in ('removed','rejected');
 create index if not exists seekmy_reviews_location_idx on public.seekmy_reviews(location_id, created_at desc);
 

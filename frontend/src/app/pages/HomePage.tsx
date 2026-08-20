@@ -288,10 +288,6 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
               )}
             </div>
           </div>
-          {/* State sections */}
-          <div><SectionHead title="Peninsular Malaysia"/><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{PENINSULAR.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="Peninsular Malaysia" onClick={()=>goState(s.code)}/>)}</div></div>
-          <div><SectionHead title="East Malaysia"/><div className="grid grid-cols-2 gap-4">{EAST.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="East Malaysia" onClick={()=>goState(s.code)} large/>)}</div></div>
-          <div><SectionHead title="Federal Territories"/><div className="grid grid-cols-3 gap-3">{FED.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="Federal Territory" onClick={()=>goState(s.code)}/>)}</div></div>
           {/* Featured locations */}
           <div>
             <div className="flex items-end justify-between mb-5">
@@ -302,6 +298,10 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
               {locations.filter(l => activeAct==="all" || l.activity===activeAct).slice(0,3).map(loc=><LocationCard key={loc.id} loc={loc} bookmarked={bookmarks.includes(loc.id)} onBookmark={()=>onBookmark(loc.id)} onView={()=>{setSelectedLocation(loc);setPage("location");}}/>)}
             </div>
           </div>
+          {/* State sections */}
+          <div><SectionHead title="Peninsular Malaysia"/><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">{PENINSULAR.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="Peninsular Malaysia" onClick={()=>goState(s.code)}/>)}</div></div>
+          <div><SectionHead title="East Malaysia"/><div className="grid grid-cols-2 gap-4">{EAST.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="East Malaysia" onClick={()=>goState(s.code)} large/>)}</div></div>
+          <div><SectionHead title="Federal Territories"/><div className="grid grid-cols-3 gap-3">{FED.map(s=><StateFlagCard key={s.code} code={s.code} name={s.name} region="Federal Territory" onClick={()=>goState(s.code)}/>)}</div></div>
           {/* AI CTA */}
           <div className="rounded-[22px] overflow-hidden" style={{background:`linear-gradient(135deg, ${C.jungle} 0%, #0a2318 100%)`}}>
             <div className="p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6">

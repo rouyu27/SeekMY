@@ -13,10 +13,11 @@ import { C, F } from "../lib/tokens";
 import { evaluateBadges, shareBadge } from "../lib/badges";
 import { Pill, AlertBanner, PasswordInput, SectionHead } from "../components/Atoms";
 
-export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage, users, setUsers, earnedBadgeIds = [] }:{
+export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage, users, setUsers, earnedBadgeIds = [], onAnnouncementsChanged }:{
   user:AppUser; setUser:(u:AppUser)=>void; onLogout:()=>void;
   logs:ActivityLog[]; bookmarks:(string|number)[]; setPage:(p:Page)=>void;
   users:AppUser[]; setUsers:(u:AppUser[])=>void; earnedBadgeIds?: string[];
+  onAnnouncementsChanged?:(count:number)=>void;
 }) {
   type AccTab = "profile"|"suggestions"|"announcements"|"badges"|"security"|"danger";
   const [activeTab,setActiveTab] = useState<AccTab>("profile");
@@ -37,7 +38,9 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
         firebaseClient.entities.Announcement.filter({userId:user.id}),
       ]);
       setMySubs((subs as LocationSubmission[]).sort((a,b)=>String(b.created_date||b.createdAt||"").localeCompare(String(a.created_date||a.createdAt||""))));
-      setAnnouncements((anns as UserAnnouncement[]).sort((a,b)=>String(b.created_date||b.createdAt||"").localeCompare(String(a.created_date||a.createdAt||""))));
+      const nextAnnouncements = (anns as UserAnnouncement[]).sort((a,b)=>String(b.created_date||b.createdAt||"").localeCompare(String(a.created_date||a.createdAt||"")));
+      setAnnouncements(nextAnnouncements);
+      onAnnouncementsChanged?.(nextAnnouncements.filter(a=>!a.read).length);
     }catch(error:any){setProfileAlert({type:"error",msg:error?.message||"Unable to load your Firebase account data."});}
   }
   useEffect(()=>{refreshMine();},[user.id]);
@@ -294,7 +297,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-bold" style={{fontFamily:F.body,color:C.text}}>Announcements</h2>
               {announcements.some(a=>!a.read) && (
-                <button type="button" onClick={async()=>{await Promise.all(announcements.filter(a=>!a.read).map(a=>firebaseClient.entities.Announcement.update(a.id,{read:true})));await refreshMine();}} className="text-xs font-bold" style={{color:C.forest,fontFamily:F.body}}>Mark all read</button>
+                <button type="button" onClick={async()=>{await Promise.all(announcements.filter(a=>!a.read).map(a=>firebaseClient.entities.Announcement.update(a.id,{read:true})));onAnnouncementsChanged?.(0);await refreshMine();}} className="text-xs font-bold" style={{color:C.forest,fontFamily:F.body}}>Mark all read</button>
               )}
             </div>
             {announcements.length===0 ? (
@@ -305,7 +308,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
               <button
                 key={a.id}
                 type="button"
-                onClick={async()=>{await firebaseClient.entities.Announcement.update(a.id,{read:true});await refreshMine();}}
+                onClick={async()=>{await firebaseClient.entities.Announcement.update(a.id,{read:true});onAnnouncementsChanged?.(Math.max(announcements.filter(item=>!item.read).length-1,0));await refreshMine();}}
                 className="w-full text-left bg-white rounded-[18px] p-4"
                 style={{
                   boxShadow:`0 1px 3px rgba(27,67,50,0.08)`,
