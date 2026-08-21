@@ -1,4 +1,4 @@
-import { ImageIcon, Upload, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ImageIcon, Upload, X } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { C } from "../lib/tokens";
 
@@ -28,15 +28,33 @@ async function compressImage(file: File): Promise<File> {
   return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.webp`, { type: "image/webp", lastModified: Date.now() });
 }
 
-export function LocationImageUploader({ existing, files, setFiles, onRemoveExisting, showToast }: {
+export function LocationImageUploader({ existing, files, setFiles, setExisting, onRemoveExisting, showToast }: {
   existing: string[];
   files: File[];
   setFiles: (files: File[]) => void;
+  setExisting: (urls: string[]) => void;
   onRemoveExisting: (url: string) => void;
   showToast: (message: string) => void;
 }) {
   const previews = useMemo(() => files.map((file) => URL.createObjectURL(file)), [files]);
   useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
+  const orderedItems = [
+    ...existing.map((url) => ({ kind: "existing" as const, url })),
+    ...files.map((file, index) => ({ kind: "file" as const, file, preview: previews[index], index })),
+  ];
+
+  function replaceOrdered(items: typeof orderedItems) {
+    setExisting(items.filter((item) => item.kind === "existing").map((item) => item.url));
+    setFiles(items.filter((item) => item.kind === "file").map((item) => item.file));
+  }
+
+  function moveImage(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= orderedItems.length) return;
+    const next = [...orderedItems];
+    [next[index], next[target]] = [next[target], next[index]];
+    replaceOrdered(next);
+  }
 
   async function selectImages(list: FileList | null) {
     if (!list) return;
@@ -68,13 +86,14 @@ export function LocationImageUploader({ existing, files, setFiles, onRemoveExist
   return <div>
     <label className="text-xs font-bold block mb-2" style={{ color: C.textSub }}>Location pictures (maximum 5)</label>
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
-      {existing.map((url) => <div key={url} className="relative">
-        <img src={url} alt="Location" className="w-full h-28 object-cover rounded-xl" />
-        <button type="button" onClick={() => onRemoveExisting(url)} className="absolute top-1 right-1 bg-white rounded-full p-1 shadow" aria-label="Remove existing picture"><X size={13} /></button>
-      </div>)}
-      {files.map((file, index) => <div key={`${file.name}-${index}`} className="relative">
-        <img src={previews[index]} alt={file.name} className="w-full h-28 object-cover rounded-xl" />
-        <button type="button" onClick={() => setFiles(files.filter((_, i) => i !== index))} className="absolute top-1 right-1 bg-white rounded-full p-1 shadow" aria-label={`Remove ${file.name}`}><X size={13} /></button>
+      {orderedItems.map((item, index) => <div key={item.kind === "existing" ? item.url : `${item.file.name}-${index}`} className="relative overflow-hidden rounded-xl border bg-white" style={{ borderColor: index === 0 ? C.amber : C.border }}>
+        <img src={item.kind === "existing" ? item.url : item.preview} alt={item.kind === "existing" ? "Location" : item.file.name} className="w-full h-28 object-cover" />
+        <div className="absolute left-1 top-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: index === 0 ? C.jungle : "rgba(0,0,0,0.55)" }}>{index === 0 ? "Cover" : `#${index + 1}`}</div>
+        <button type="button" onClick={() => item.kind === "existing" ? onRemoveExisting(item.url) : setFiles(files.filter((_, i) => i !== item.index))} className="absolute top-1 right-1 bg-white rounded-full p-1 shadow" aria-label="Remove picture"><X size={13} /></button>
+        <div className="absolute bottom-1 right-1 flex gap-1">
+          <button type="button" disabled={index === 0} onClick={() => moveImage(index, -1)} className="rounded-full bg-white p-1 shadow disabled:opacity-40" aria-label="Move picture earlier"><ArrowLeft size={12}/></button>
+          <button type="button" disabled={index === orderedItems.length - 1} onClick={() => moveImage(index, 1)} className="rounded-full bg-white p-1 shadow disabled:opacity-40" aria-label="Move picture later"><ArrowRight size={12}/></button>
+        </div>
       </div>)}
       {!existing.length && !files.length && <div className="col-span-full h-28 rounded-xl border-2 border-dashed flex items-center justify-center" style={{ borderColor: C.border }}><ImageIcon size={25} style={{ color: C.textMuted }} /></div>}
     </div>
@@ -82,6 +101,6 @@ export function LocationImageUploader({ existing, files, setFiles, onRemoveExist
       <Upload size={16} /> Add pictures
       <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { selectImages(event.target.files); event.currentTarget.value = ""; }} />
     </label>}
-    <p className="text-[10px] mt-1" style={{ color: C.textMuted }}>Images are compressed before upload. Maximum 2 MB per picture. The first picture is used as the cover.</p>
+    <p className="text-[10px] mt-1" style={{ color: C.textMuted }}>Images are compressed before upload. Maximum 2 MB per picture. Use the arrows to arrange the cover and gallery order.</p>
   </div>;
 }

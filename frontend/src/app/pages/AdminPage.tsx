@@ -1,6 +1,8 @@
 //==================== WongYueShan Part - Admin Panel ====================
 import { useEffect, useState } from "react";
-import { Search, X, Trash2, LogOut, Users, Shield, CheckCircle, Star, Plus, UserCog, Database, Pencil, ExternalLink } from "lucide-react";
+import { Search, X, Trash2, LogOut, Users, Shield, CheckCircle, Star, Plus, UserCog, Database, Pencil, ExternalLink, MapPin } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 import type { Location, AppUser } from "../lib/types";
 import type { ContributorApplication, LocationSubmission, StoredReview } from "../lib/communityTypes";
 import { C, F } from "../lib/tokens";
@@ -10,6 +12,7 @@ import { firebaseClient } from "../api/firebaseClient";
 import { OutdoorImportPanel } from "../components/OutdoorImportPanel";
 import { LocationImageUploader } from "./LocationImageUploader";
 import { STARTER_LOCATIONS } from "../lib/seedLocations";
+import { geocodeMapLocation, reverseGeocodeLocation } from "../lib/mapGeocoding";
 
 const TEAM_ADMIN_EMAILS = [
   "shanyuew416@gmail.com",
@@ -65,6 +68,8 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   const [existingImages,setExistingImages]=useState<string[]>([]);
   const [imageFiles,setImageFiles]=useState<File[]>([]);
   const [uploadProgress,setUploadProgress]=useState(0);
+  const [findingLocation,setFindingLocation]=useState(false);
+  const [detectedLocation,setDetectedLocation]=useState<{lat:number;lng:number;address:string}|null>(null);
   const [userLoadError,setUserLoadError]=useState("");
   const [gemSavingId,setGemSavingId]=useState<string|null>(null);
   const [seedingStarter,setSeedingStarter]=useState(false);
@@ -157,6 +162,28 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     setExistingImages([]);
     setImageFiles([]);
     setUploadProgress(0);
+    setDetectedLocation(null);
+    setFindingLocation(false);
+  }
+  async function findAdminLocation(){
+    if(!form.name.trim()){showToast("Enter the location name before searching the map.");return;}
+    setFindingLocation(true);
+    setDetectedLocation(null);
+    try{
+      const found=await geocodeMapLocation({name:form.name.trim(),state:form.state});
+      if(!found){showToast("Place not found. Check the name and state, then try again.");return;}
+      const address=(await reverseGeocodeLocation(found.lat,found.lng))||found.label||`${form.name.trim()}, ${form.state}, Malaysia`;
+      setDetectedLocation({lat:found.lat,lng:found.lng,address});
+    }catch(error:any){
+      showToast(error?.message||"Unable to find this location.");
+    }finally{
+      setFindingLocation(false);
+    }
+  }
+  function confirmAdminLocation(){
+    if(!detectedLocation)return;
+    setForm(f=>({...f,lat:String(detectedLocation.lat),lng:String(detectedLocation.lng),address:detectedLocation.address}));
+    showToast("Map location applied to the form.");
   }
   async function saveLocation(){
     if(!form.name.trim() || !form.address.trim()){showToast("Location name and address are required.");return;}
@@ -441,7 +468,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
               <label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Location name *</label>
               <input
                 value={form.name}
-                onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+                onChange={e=>{setDetectedLocation(null);setForm(f=>({...f,name:e.target.value}));}}
                 placeholder="Location name *"
                 className="w-full border rounded-xl px-4 py-3 text-sm"
               />
@@ -473,7 +500,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
                 <label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>State</label>
                 <select
                   value={form.state}
-                  onChange={e=>setForm(f=>({...f,state:e.target.value}))}
+                  onChange={e=>{setDetectedLocation(null);setForm(f=>({...f,state:e.target.value}));}}
                   className="w-full border rounded-xl px-3 py-3 text-sm"
                 >
                   {ALL_STATES.map(s=><option key={s.code}>{s.name}</option>)}
@@ -491,6 +518,37 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
                 </select>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={findAdminLocation}
+              disabled={findingLocation}
+              className="w-full rounded-xl px-4 py-3 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{backgroundColor:C.muted,color:C.jungle,fontFamily:F.body}}
+            >
+              <Search size={15}/>
+              {findingLocation?"Finding Location...":"Find on Map"}
+            </button>
+
+            {detectedLocation&&
+              <div className="rounded-[16px] overflow-hidden border" style={{borderColor:C.border}}>
+                <div className="p-4 bg-white">
+                  <p className="font-bold text-sm" style={{color:C.text,fontFamily:F.body}}>Detected location</p>
+                  <p className="text-xs mt-1" style={{color:C.textMuted,fontFamily:F.body}}><MapPin size={12} className="inline mr-1"/>{detectedLocation.address}</p>
+                </div>
+                <div style={{height:260,width:"100%"}}>
+                  <MapContainer key={`${detectedLocation.lat}-${detectedLocation.lng}`} center={[detectedLocation.lat,detectedLocation.lng]} zoom={15} style={{height:"100%",width:"100%"}}>
+                    <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+                    <Marker position={[detectedLocation.lat,detectedLocation.lng]}><Popup>{form.name}</Popup></Marker>
+                  </MapContainer>
+                </div>
+                <div className="p-4">
+                  <button type="button" onClick={confirmAdminLocation} className="w-full rounded-xl px-4 py-3 text-sm font-bold text-white" style={{backgroundColor:C.jungle,fontFamily:F.body}}>
+                    Use this map location
+                  </button>
+                </div>
+              </div>
+            }
 
             <div>
               <label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Difficulty</label>
@@ -610,7 +668,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
               <input type="number" min="0" step="0.01" value={form.estimatedPrice} onChange={e=>setForm(f=>({...f,estimatedPrice:e.target.value}))} placeholder="0 if free" className="w-full border rounded-xl px-4 py-3 text-sm" />
             </div>
 
-            <LocationImageUploader existing={existingImages} files={imageFiles} setFiles={setImageFiles} onRemoveExisting={url=>setExistingImages(existingImages.filter(image=>image!==url))} showToast={showToast}/>
+            <LocationImageUploader existing={existingImages} files={imageFiles} setFiles={setImageFiles} setExisting={setExistingImages} onRemoveExisting={url=>setExistingImages(existingImages.filter(image=>image!==url))} showToast={showToast}/>
 
             {saving&&imageFiles.length>0&&<div className="rounded-xl p-4" style={{backgroundColor:C.muted}}><div className="flex justify-between text-xs font-bold mb-2"><span>Uploading pictures...</span><span>{uploadProgress}%</span></div><div className="w-full h-2 rounded-full bg-white overflow-hidden"><div className="h-full rounded-full transition-all" style={{width:`${uploadProgress}%`,backgroundColor:C.jungle}}/></div></div>}
 

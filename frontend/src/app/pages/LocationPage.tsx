@@ -57,6 +57,7 @@ export function LocationPage({
   const [reviewPhotoFile, setReviewPhotoFile] = useState<File | null>(null);
   const [reviewPhotoPreview, setReviewPhotoPreview] = useState("");
   const [selectedReviewPhoto, setSelectedReviewPhoto] = useState<{url:string;alt:string}|null>(null);
+  const [selectedLocationPhoto, setSelectedLocationPhoto] = useState<{url:string;alt:string}|null>(null);
   const [reviews, setReviews] = useState<StoredReview[]>([]);
   const [flagId, setFlagId] = useState<string | null>(null);
   const [flagReason, setFlagReason] = useState("Offensive language");
@@ -225,6 +226,7 @@ export function LocationPage({
   const officialUrl = metadata?.officialUrl || loc.officialUrl || (loc as any).official_url || loc.sourceUrl;
   const photoSourceUrl = loc.photo?.sourcePageUrl;
   const photoCredit = loc.photoAttribution || (loc.photo ? `${loc.photo.author} - ${loc.photo.license}` : "");
+  const locationImages = (Array.isArray(loc.image_urls) && loc.image_urls.length ? loc.image_urls : (loc.image_url ? [loc.image_url] : [])).filter(Boolean);
   const nearbyFacilities = [
     { label: "Toilets", query: "toilet", icon: <Toilet size={14} /> },
     { label: "Parking", query: "parking", icon: <Car size={14} /> },
@@ -325,9 +327,33 @@ export function LocationPage({
         {/* ==================== LimRouYu Part - Location Detail Module ==================== */}
         {tab === "overview" && (
           <div className="space-y-4">
-            {loc.image_url && (
+            {locationImages.length > 0 && (
               <figure className="bg-white rounded-[18px] overflow-hidden" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-                <img src={loc.image_url} alt={loc.name} className="w-full max-h-[360px] object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setSelectedLocationPhoto({url:locationImages[0],alt:`${loc.name} photo 1`})}
+                  className="block w-full text-left"
+                  aria-label={`Open ${loc.name} cover photo`}
+                >
+                  <img src={locationImages[0]} alt={loc.name} className="w-full max-h-[360px] object-cover" />
+                </button>
+                {locationImages.length > 1 && (
+                  <div className="grid grid-cols-4 gap-2 p-3">
+                    {locationImages.map((url,index)=>(
+                      <button
+                        key={`${url}-${index}`}
+                        type="button"
+                        onClick={() => setSelectedLocationPhoto({url,alt:`${loc.name} photo ${index+1}`})}
+                        className="relative overflow-hidden rounded-xl border"
+                        style={{borderColor:index===0?C.amber:C.border}}
+                        aria-label={`Open ${loc.name} photo ${index+1}`}
+                      >
+                        <img src={url} alt={`${loc.name} photo ${index+1}`} className="h-20 w-full object-cover" />
+                        {index===0&&<span className="absolute left-1 top-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{backgroundColor:C.jungle}}>Cover</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {(photoCredit || photoSourceUrl) && (
                   <figcaption className="flex flex-col gap-1 px-4 py-3 text-[11px] sm:flex-row sm:items-center sm:justify-between" style={{ color: C.textMuted, fontFamily: F.body }}>
                     <span>{photoCredit || "Photo source available"}</span>
@@ -977,6 +1003,24 @@ export function LocationPage({
           <img
             src={selectedReviewPhoto.url}
             alt={selectedReviewPhoto.alt}
+            className="max-h-[86vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
+      {selectedLocationPhoto && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedLocationPhoto(null)}>
+          <button
+            type="button"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black"
+            onClick={() => setSelectedLocationPhoto(null)}
+            aria-label="Close full image"
+          >
+            <X size={18}/>
+          </button>
+          <img
+            src={selectedLocationPhoto.url}
+            alt={selectedLocationPhoto.alt}
             className="max-h-[86vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           />
