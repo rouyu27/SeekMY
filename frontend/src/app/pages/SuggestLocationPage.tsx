@@ -61,13 +61,14 @@ function getBudgetLevel(price: number): BudgetLevel {
   return "High";
 }
 
-function parsePriceRange(value: string): { min: number; max: number; label: string } | null {
-  const cleaned = value.trim().replace(/\s+/g, "");
-  if (!cleaned) return null;
-  const match = cleaned.match(/^(\d+(?:\.\d{1,2})?)(?:-(\d+(?:\.\d{1,2})?))?$/);
-  if (!match) return null;
-  const min = Number(match[1]);
-  const max = match[2] === undefined ? min : Number(match[2]);
+function parsePriceRange(minValue: string, maxValue: string): { min: number; max: number; label: string } | null {
+  const minText = minValue.trim();
+  const maxText = maxValue.trim();
+  if (!minText && !maxText) return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(minText || maxText)) return null;
+  if (maxText && !/^\d+(?:\.\d{1,2})?$/.test(maxText)) return null;
+  const min = Number(minText || maxText);
+  const max = Number(maxText || minText);
   if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) return null;
   const format = (price: number) => Number.isInteger(price) ? String(price) : price.toFixed(2);
   return {
@@ -114,8 +115,9 @@ export function SuggestLocationPage({
   const [accessibility, setAccessibility] = useState("");
 
   //==================== WongYueShan Part - Suggested Location Price ====================
-  const [estimatedPrice, setEstimatedPrice] = useState("");
-  const priceRange = parsePriceRange(estimatedPrice);
+  const [estimatedPriceMin, setEstimatedPriceMin] = useState("");
+  const [estimatedPriceMax, setEstimatedPriceMax] = useState("");
+  const priceRange = parsePriceRange(estimatedPriceMin, estimatedPriceMax);
   const budget = getBudgetLevel(priceRange?.max ?? 0);
   //==================== WongYueShan END - Suggested Location Price ====================
 
@@ -297,11 +299,11 @@ export function SuggestLocationPage({
       return;
     }
 
-    const parsedPrice = parsePriceRange(estimatedPrice);
+    const parsedPrice = parsePriceRange(estimatedPriceMin, estimatedPriceMax);
     if (!parsedPrice) {
       setMsg({
         type: "err",
-        text: "Please enter a valid estimated cost range, for example 0, 10-30, or 15.50-45.",
+        text: "Please enter a valid estimated cost. Max RM must be the same or higher than Min RM.",
       });
       return;
     }
@@ -407,7 +409,8 @@ export function SuggestLocationPage({
       setDescription("");
       setFacilities("");
       setAccessibility("");
-      setEstimatedPrice("");
+      setEstimatedPriceMin("");
+      setEstimatedPriceMax("");
       setPhotoName("");
       setPhotoData("");
       setPhotoFile(null);
@@ -662,14 +665,24 @@ export function SuggestLocationPage({
               </label>
             </div>
 
-            <input
-              inputMode="decimal"
-              className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white"
-              style={inputStyle}
-              placeholder="Example: 0, 10-30, or 15.50-45"
-              value={estimatedPrice}
-              onChange={(e) => setEstimatedPrice(e.target.value)}
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                inputMode="decimal"
+                className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white"
+                style={inputStyle}
+                placeholder="Min RM"
+                value={estimatedPriceMin}
+                onChange={(e) => setEstimatedPriceMin(e.target.value)}
+              />
+              <input
+                inputMode="decimal"
+                className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white"
+                style={inputStyle}
+                placeholder="Max RM"
+                value={estimatedPriceMax}
+                onChange={(e) => setEstimatedPriceMax(e.target.value)}
+              />
+            </div>
 
             <div className="flex items-center justify-between mt-2">
               <span
@@ -687,7 +700,7 @@ export function SuggestLocationPage({
                   fontFamily: F.body,
                 }}
               >
-                {estimatedPrice === "" ? "Enter range" : priceRange ? `RM ${priceRange.label} - ${budget}` : "Invalid range"}
+                {!estimatedPriceMin && !estimatedPriceMax ? "Enter price" : priceRange ? `RM ${priceRange.label} - ${budget}` : "Invalid range"}
               </span>
             </div>
 
@@ -695,7 +708,7 @@ export function SuggestLocationPage({
               className="text-[10px] mt-2"
               style={{ color: C.textMuted, fontFamily: F.body }}
             >
-              Budget is classified using the highest price in the range.
+              Type numbers only. For a fixed/free price, fill one box or use the same amount.
             </p>
           </div>
           {/* ==================== WongYueShan END - Estimated Cost / Budget ==================== */}

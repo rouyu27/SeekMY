@@ -28,18 +28,25 @@ function isFixedTeamAdmin(email?: string) {
 }
 const ACTIVITIES = ["Hiking","Diving","Cycling","Camping","Swimming","Trail Running","Jogging","Rock Climbing","Water Sports"];
 const STATE_CODE: Record<string,string> = Object.fromEntries(ALL_STATES.map(s=>[s.name,s.code]));
-const emptyLocation = { name:"",address:"",lat:"",lng:"",state:"Selangor",activity:"Hiking",difficulty:"Easy",description:"",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:"",facilities:"",accessibility:"",image_url:"",image_urls:[] as string[],estimatedPrice:"" };
+const emptyLocation = { name:"",address:"",lat:"",lng:"",state:"Selangor",activity:"Hiking",difficulty:"Easy",description:"",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:"",facilities:"",accessibility:"",image_url:"",image_urls:[] as string[],estimatedPriceMin:"",estimatedPriceMax:"" };
 
-function parsePriceRange(value: string): { min: number; max: number; label: string } | null {
-  const cleaned = value.trim().replace(/\s+/g, "");
-  if (!cleaned) return null;
-  const match = cleaned.match(/^(\d+(?:\.\d{1,2})?)(?:-(\d+(?:\.\d{1,2})?))?$/);
-  if (!match) return null;
-  const min = Number(match[1]);
-  const max = match[2] === undefined ? min : Number(match[2]);
+function parsePriceRange(minValue: string, maxValue: string): { min: number; max: number; label: string } | null {
+  const minText = minValue.trim();
+  const maxText = maxValue.trim();
+  if (!minText && !maxText) return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(minText || maxText)) return null;
+  if (maxText && !/^\d+(?:\.\d{1,2})?$/.test(maxText)) return null;
+  const min = Number(minText || maxText);
+  const max = Number(maxText || minText);
   if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) return null;
   const format = (price: number) => Number.isInteger(price) ? String(price) : price.toFixed(2);
   return { min, max, label: min === max ? format(min) : `${format(min)}-${format(max)}` };
+}
+
+function splitPriceRange(location: any) {
+  const raw = String(location.estimatedPriceRange || (typeof location.estimatedPrice === "number" ? location.estimatedPrice : ""));
+  const [min, max] = raw.split("-");
+  return { min: min || "", max: max || "" };
 }
 
 function displayPrice(location: any) {
@@ -148,6 +155,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   async function deleteLocation(id:string|number){if(!confirm("Delete this location from Firebase?"))return;try{await firebaseClient.entities.Location.delete(String(id));setLocations(ls=>ls.filter(l=>String(l.id)!==String(id)));(window as any).__seekmyRefreshLocations?.();showToast("Location deleted from Firebase.");}catch(e:any){showToast(e?.message||"Unable to delete location.");}}
   function openEditLocation(loc:Location){
     setEditingLocation(loc);
+    const priceParts = splitPriceRange(loc as any);
     setForm({
       name:loc.name||"",
       address:loc.address||"",
@@ -165,7 +173,8 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       accessibility:String((loc as any).accessibility||""),
       image_url:String((loc as any).image_url||""),
       image_urls:Array.isArray((loc as any).image_urls)?(loc as any).image_urls:[],
-      estimatedPrice:String((loc as any).estimatedPriceRange || (typeof (loc as any).estimatedPrice==="number"?(loc as any).estimatedPrice:"")),
+      estimatedPriceMin:priceParts.min,
+      estimatedPriceMax:priceParts.max,
     });
     const images=Array.isArray((loc as any).image_urls)&&((loc as any).image_urls as string[]).length?(loc as any).image_urls:((loc as any).image_url?[(loc as any).image_url]:[]);
     setExistingImages(images);
@@ -206,8 +215,8 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     if(!form.name.trim() || !form.address.trim()){showToast("Location name and address are required.");return;}
     const lat=Number(form.lat);const lng=Number(form.lng);
     if(!Number.isFinite(lat)||lat < -90||lat > 90||!Number.isFinite(lng)||lng < -180||lng > 180){showToast("Valid latitude and longitude are required.");return;}
-    const priceRange=parsePriceRange(form.estimatedPrice);
-    if(!priceRange){showToast("Enter a valid estimated cost range, for example 0, 10-30, or 15.50-45.");return;}
+    const priceRange=parsePriceRange(form.estimatedPriceMin, form.estimatedPriceMax);
+    if(!priceRange){showToast("Enter a valid estimated cost. Max RM must be the same or higher than Min RM.");return;}
     setSaving(true);
     try{
       const uploadedImages:string[]=[];
@@ -683,8 +692,11 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
 
             <div>
               <label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Estimated cost range (RM) *</label>
-              <input inputMode="decimal" value={form.estimatedPrice} onChange={e=>setForm(f=>({...f,estimatedPrice:e.target.value}))} placeholder="Example: 0, 10-30, or 15.50-45" className="w-full border rounded-xl px-4 py-3 text-sm" />
-              <p className="mt-1 text-[10px]" style={{color:C.textMuted}}>Budget is classified using the highest price in the range.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <input inputMode="decimal" value={form.estimatedPriceMin} onChange={e=>setForm(f=>({...f,estimatedPriceMin:e.target.value}))} placeholder="Min RM" className="w-full border rounded-xl px-4 py-3 text-sm" />
+                <input inputMode="decimal" value={form.estimatedPriceMax} onChange={e=>setForm(f=>({...f,estimatedPriceMax:e.target.value}))} placeholder="Max RM" className="w-full border rounded-xl px-4 py-3 text-sm" />
+              </div>
+              <p className="mt-1 text-[10px]" style={{color:C.textMuted}}>Type numbers only. For a fixed/free price, fill one box or use the same amount.</p>
             </div>
 
             <LocationImageUploader existing={existingImages} files={imageFiles} setFiles={setImageFiles} setExisting={setExistingImages} onRemoveExisting={url=>setExistingImages(existingImages.filter(image=>image!==url))} showToast={showToast}/>
