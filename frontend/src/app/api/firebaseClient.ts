@@ -540,10 +540,20 @@ const auth = {
   },
 
   async isAuthenticated(): Promise<boolean> {
-    return Boolean(
+    const user =
       (await waitForUser()) ||
-      currentUser()
-    );
+      currentUser();
+
+    if (!user) {
+      return false;
+    }
+
+    try {
+      await requireVerifiedEmail(user);
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   async loginViaEmailPassword(
@@ -602,7 +612,7 @@ const auth = {
     return {
       success: true,
       message:
-        "Verification email sent",
+        "Verification email sent. Please open the link before signing in.",
     };
   },
 

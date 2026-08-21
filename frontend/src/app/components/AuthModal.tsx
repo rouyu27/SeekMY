@@ -121,7 +121,7 @@ export function AuthModal({ onClose, onLogin }:{
     if (firebaseConfigured) {
       try {
         await firebaseClient.auth.register({ email: rEmail, password: rPass, full_name: rName, username: rUsername });
-        setAlert({type:"success",msg:"Account created. Please verify your email, then sign in."});
+        setAlert({type:"success",msg:"Account created. We sent a verification link to your email. Open that link before signing in."});
         setSiEmail(rEmail);
         setSiPass("");
         setRPass("");
@@ -143,7 +143,7 @@ export function AuthModal({ onClose, onLogin }:{
     setResendingVerification(true);
     try {
       await firebaseClient.auth.resendVerificationEmail(siEmail, siPass);
-      setAlert({type:"success",msg:"Verification email sent again. Check your inbox and spam folder."});
+      setAlert({type:"success",msg:"Verification email sent again. Open the link from your inbox or spam folder before signing in."});
       setCanResendVerification(false);
     } catch (error:any) {
       setAlert({type:"error",msg:error?.message?.replace(/^Firebase:\s*/i, "") || "Unable to resend verification email."});
