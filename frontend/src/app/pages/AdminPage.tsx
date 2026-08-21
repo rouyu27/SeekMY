@@ -1,6 +1,6 @@
 //==================== WongYueShan Part - Admin Panel ====================
 import { useEffect, useState } from "react";
-import { Search, X, Trash2, LogOut, Users, Shield, CheckCircle, Star, Plus, UserCog, Database, Pencil, ExternalLink, MapPin } from "lucide-react";
+import { Search, X, Trash2, LogOut, Users, Shield, CheckCircle, Star, Plus, UserCog, Database, Pencil, ExternalLink, MapPin, Bell, Send } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Location, AppUser } from "../lib/types";
@@ -75,7 +75,7 @@ function openAdminVerificationSearch(form: typeof emptyLocation, kind: "official
 export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locations: parentLocations, onLogout }:{
   users:AppUser[]; setUsers:(u:AppUser[])=>void; locations:Location[]; onLogout:()=>void;
 }) {
-  type AdminTab="dashboard"|"users"|"locations"|"outdoorImport"|"pendingLocs"|"reviews"|"contributors";
+  type AdminTab="dashboard"|"users"|"locations"|"outdoorImport"|"pendingLocs"|"reviews"|"contributors"|"announcements";
   const [tab,setTab]=useState<AdminTab>("dashboard");
   const [search,setSearch]=useState("");
   const [users,setUsers]=useState<AppUser[]>(parentUsers);
@@ -97,6 +97,10 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   const [userLoadError,setUserLoadError]=useState("");
   const [gemSavingId,setGemSavingId]=useState<string|null>(null);
   const [seedingStarter,setSeedingStarter]=useState(false);
+  const [noticeTitle,setNoticeTitle]=useState("");
+  const [noticeMessage,setNoticeMessage]=useState("");
+  const [noticeTarget,setNoticeTarget]=useState("all");
+  const [sendingNotice,setSendingNotice]=useState(false);
 
   function showToast(msg:string){setToast(msg);setTimeout(()=>setToast(null),2800);}
 
@@ -322,11 +326,13 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
           userId,
           title:status==="approved"?"Contributor registration approved":"Contributor registration not approved",
           message:status==="approved"
-            ? "Your contributor registration has been approved. You can now submit outdoor locations for admin review."
-            : `Your contributor registration was not approved. Reason: ${reason}`,
+            ? "Great news. Your contributor registration has been approved. You can now submit outdoor locations for admin review."
+            : `Thanks for applying to become a SeekMY contributor. We cannot approve this registration yet.\n\nReason: ${reason}\n\nYou may update your details and resubmit from the Contributor Portal.`,
           type:status==="approved"?"approved":"rejected",
+          relatedPage:"contributor",
           submissionId:c.id,
           read:false,
+          dismissed:false,
           createdAt:new Date().toISOString(),
         }),
       ]);
@@ -338,8 +344,29 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     }catch(e:any){showToast(e?.message||"Unable to update contributor.");}
   }
   function submissionToLocation(s:LocationSubmission){const price=Number(s.estimatedPrice||0);const images=s.photoUrl?[s.photoUrl]:[];const details=[s.description,s.safetyNotes?`Safety notes: ${s.safetyNotes}`:"",s.contributorTip?`Local contributor tip: ${s.contributorTip}`:""].filter(Boolean).join("\n\n");return {name:s.name,address:s.address||`${s.name}, ${s.state}, Malaysia`,lat:s.lat,lng:s.lng,locationConfirmed:Boolean(s.locationConfirmed),state:s.state,stateCode:STATE_CODE[s.state]||"SLG",activity:s.activity,difficulty:["Easy","Moderate","Hard"].includes(s.difficulty)?s.difficulty:"Easy",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:s.sourceUrl||"",rating:0,reviews:0,badge:"Community",color:C.forest,emoji:"📍",description:details,facilities:s.facilities?s.facilities.split(",").map(x=>x.trim()).filter(Boolean):[],bestMonths:s.bestTime||"Year-round",accessibility:s.accessibility||"See description",tags:[s.activity,"Community suggested","Contributor verified"],estimatedPrice:price,estimatedPriceRange:s.estimatedPriceRange||String(price),budget:s.budget||(price<=0?"Free":price<=20?"Low":price<=50?"Medium":"High"),image_url:images[0]||"",image_urls:images,suggestedBy:s.contributorName,sourceUrl:s.sourceUrl||"",status:"active"};}
-  async function approveSubmission(s:LocationSubmission){setSaving(true);try{const published:any=await firebaseClient.entities.Location.create(submissionToLocation(s));const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"approved",publishedLocationId:published.id,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location approved",message:`Your suggestion "${s.name}" was approved and is now live on Discover.`,type:"approved",submissionId:s.id,read:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));setLocations(ls=>[published as Location,...ls]);(window as any).__seekmyRefreshLocations?.(published);showToast("Location approved and published to Firebase.");}catch(e:any){showToast(e?.message||"Unable to approve location.");}finally{setSaving(false);}}
-  async function rejectSubmission(s:LocationSubmission){const reason=prompt("Rejection reason:")||"Does not meet guidelines";try{const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"rejected",rejectReason:reason,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location not approved",message:`Your suggestion "${s.name}" was not approved. Reason: ${reason}`,type:"rejected",submissionId:s.id,read:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));showToast("Location rejected and user notified through Firebase.");}catch(e:any){showToast(e?.message||"Unable to reject location.");}}
+  async function approveSubmission(s:LocationSubmission){setSaving(true);try{const published:any=await firebaseClient.entities.Location.create(submissionToLocation(s));const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"approved",publishedLocationId:published.id,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location approved",message:`Good news. Your suggestion "${s.name}" was approved and is now live on Discover. Thank you for helping the SeekMY community find better outdoor places.`,type:"approved",relatedPage:"suggestions",submissionId:s.id,read:false,dismissed:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));setLocations(ls=>[published as Location,...ls]);(window as any).__seekmyRefreshLocations?.(published);showToast("Location approved and published to Firebase.");}catch(e:any){showToast(e?.message||"Unable to approve location.");}finally{setSaving(false);}}
+  async function rejectSubmission(s:LocationSubmission){const reason=prompt("Give a friendly rejection reason for the contributor:",s.rejectReason||"Please add more complete location details or clearer safety information.")?.trim();if(!reason){showToast("A rejection reason is required.");return;}try{const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"rejected",rejectReason:reason,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location needs changes",message:`Thanks for submitting "${s.name}". We cannot publish it yet.\n\nReason: ${reason}\n\nYou can edit the suggestion in My Contributions and resubmit it for review.`,type:"rejected",relatedPage:"suggestions",submissionId:s.id,read:false,dismissed:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));showToast("Location rejected and user notified through Firebase.");}catch(e:any){showToast(e?.message||"Unable to reject location.");}}
+  async function sendAdminNotice(){
+    if(!noticeTitle.trim()||!noticeMessage.trim()){showToast("Notice title and message are required.");return;}
+    setSendingNotice(true);
+    try{
+      await firebaseClient.entities.Announcement.create({
+        userId:noticeTarget,
+        title:noticeTitle.trim(),
+        message:noticeMessage.trim(),
+        type:"notice",
+        relatedPage:"announcements",
+        read:false,
+        dismissed:false,
+        createdAt:new Date().toISOString(),
+      });
+      setNoticeTitle("");
+      setNoticeMessage("");
+      setNoticeTarget("all");
+      showToast("Announcement notice sent.");
+    }catch(e:any){showToast(e?.message||"Unable to send announcement.");}
+    finally{setSendingNotice(false);}
+  }
   async function toggleGem(loc:Location){
     const current=Boolean((loc as any).is_hidden_gem);
     if(!current&&gemCount>=3){showToast("You can feature up to 3 hidden gems.");return;}
@@ -396,6 +423,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     {id:"pendingLocs",icon:"⏳",label:"Pending Locations"},
     {id:"reviews",icon:"⭐",label:"Review Moderation"},
     {id:"contributors",icon:"🤝",label:"Contributors"},
+    {id:"announcements",icon:"🔔",label:"Announcements"},
   ];
   const DASHBOARD_CARDS:{icon:string;label:string;value:number;target:AdminTab}[]=[
     {icon:"👥",label:"Users",value:users.length,target:"users"},
@@ -471,6 +499,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         {tab==="pendingLocs"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Pending Locations</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingSubs.length} awaiting review</p><div className="space-y-3">{filteredPendingSubmissions.map(s=><div key={s.id} className={card}><div className="flex gap-4">{s.photoUrl&&<img src={s.photoUrl} className="w-20 h-20 rounded-xl object-cover"/>}<div className="flex-1"><p className="font-bold text-sm">{s.name}</p><p className="text-xs" style={{color:C.textMuted}}>{s.state} · {s.activity} · {s.contributorName}</p><p className="text-sm mt-2" style={{color:C.textSub}}>{s.description}</p><p className="text-xs mt-1">Status: {s.status}</p><div className="flex gap-2 mt-3"><Pill variant="filled" small onClick={()=>approveSubmission(s)}>{saving?"Saving...":"Approve"}</Pill><Pill variant="danger" small onClick={()=>rejectSubmission(s)}>Reject</Pill></div></div></div></div>)}{!filteredPendingSubmissions.length&&<p className="text-sm" style={{color:C.textMuted}}>{pendingSubs.length?"No pending locations match your search.":"No pending locations yet."}</p>}</div></div>}
         {tab==="reviews"&&<div><h1 className="text-2xl mb-4" style={{fontFamily:F.display,color:C.jungle}}>Review Moderation</h1><div className="space-y-3">{filteredReviews.map(r=><div key={r.id} className={card}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="font-bold text-sm">{r.userName||"Anonymous"} · {r.locationName}</p><div className="flex gap-0.5 my-1">{[1,2,3,4,5].map(n=><Star key={n} size={12} fill={n<=r.rating?C.amber:"none"}/>)}</div><p className="text-sm leading-relaxed" style={{color:C.textSub}}>{r.comment}</p><p className="text-xs mt-1">Status: {r.status}</p></div><div className="flex flex-row gap-2 sm:flex-col sm:items-end">{r.status!=="approved"&&r.status!=="active"&&<button onClick={()=>reviewAction(r,"approve")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.successBg,color:C.success}} aria-label={`Approve review for ${r.locationName}`}><CheckCircle size={15}/></button>}<button onClick={()=>reviewAction(r,"remove")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.errorBg,color:C.error}} aria-label={`Remove review for ${r.locationName}`}><Trash2 size={15}/></button></div></div></div>)}{!filteredReviews.length&&<p className="text-sm" style={{color:C.textMuted}}>{reviews.length?"No reviews match your search.":"No reviews yet."}</p>}</div></div>}
         {tab==="contributors"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Contributor Registration Review</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingContributors.length} pending</p><div className="space-y-3">{filteredContributors.map(c=>{const approved=c.status==="approved"||c.status==="verified";return <div key={c.id} className={`${card} flex gap-4`}><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{backgroundColor:approved?C.successBg:c.status==="rejected"?C.errorBg:"#fffbef"}}><Users size={17}/></div><div className="flex-1 min-w-0"><p className="font-bold text-sm">{c.fullName}</p><p className="text-xs" style={{color:C.textMuted}}>{c.area} · {c.contributionArea||c.services||"Area not provided"}</p><p className="text-xs mt-1" style={{color:C.textSub}}>{c.localKnowledgeExperience||c.experience||"Local knowledge not provided"}</p><p className="text-xs mt-1">{c.userEmail} · {c.phone}</p>{c.rejectReason&&<p className="text-xs mt-1" style={{color:C.error}}>Rejection reason: {c.rejectReason}</p>}{c.docUrl&&<button type="button" onClick={()=>openContributorDocument(c.docUrl!)} className="text-xs font-bold block mt-1" style={{color:C.forest}}>View supporting document</button>}</div><div className="flex items-start gap-2"><span className="text-xs capitalize">{approved?"Approved":c.status}</span>{c.status==="pending"&&<><button title="Approve contributor" onClick={()=>contributorStatus(c,"approved")} className="p-2 rounded-lg" style={{backgroundColor:C.successBg,color:C.success}}><CheckCircle size={15}/></button><button title="Reject contributor" onClick={()=>contributorStatus(c,"rejected")} className="p-2 rounded-lg" style={{backgroundColor:C.errorBg,color:C.error}}><X size={15}/></button></>}</div></div>})}{!filteredContributors.length&&<p className="text-sm" style={{color:C.textMuted}}>{contributors.length?"No contributor applications match your search.":"No contributor applications yet."}</p>}</div></div>}
+        {tab==="announcements"&&<div className="max-w-2xl"><div className="mb-5"><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Send Announcement</h1><p className="text-sm" style={{color:C.textMuted}}>Send a notice to everyone or to one user. Approval, rejection, and achievement notices are created automatically.</p></div><div className={`${card} space-y-4`}><div className="flex items-center gap-3"><div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{backgroundColor:C.muted,color:C.forest}}><Bell size={17}/></div><div><p className="text-sm font-bold">Notice details</p><p className="text-xs" style={{color:C.textMuted}}>This appears in the user's profile announcement inbox.</p></div></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Target</label><select value={noticeTarget} onChange={e=>setNoticeTarget(e.target.value)} className="w-full border rounded-xl px-4 py-3 text-sm" style={{borderColor:C.border,fontFamily:F.body}}><option value="all">All users</option>{users.map(member=><option key={member.id} value={member.id}>{member.displayName} - {member.email}</option>)}</select></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Title</label><input value={noticeTitle} onChange={e=>setNoticeTitle(e.target.value)} maxLength={90} placeholder="Example: Weather safety reminder" className="w-full border rounded-xl px-4 py-3 text-sm" style={{borderColor:C.border,fontFamily:F.body}}/></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Message</label><textarea value={noticeMessage} onChange={e=>setNoticeMessage(e.target.value)} rows={5} placeholder="Write a clear, friendly notice for users." className="w-full border rounded-xl px-4 py-3 text-sm resize-none" style={{borderColor:C.border,fontFamily:F.body}}/></div><Pill variant="filled" onClick={sendAdminNotice} disabled={sendingNotice}><Send size={14}/>{sendingNotice?"Sending...":"Send notice"}</Pill></div></div>}
       </>}
     </main>
     {showAdd&&

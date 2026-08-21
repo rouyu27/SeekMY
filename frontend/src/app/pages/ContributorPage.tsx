@@ -230,11 +230,13 @@ export function ContributorPage({
         userId:user!.id,
         title:myApp ? "Contributor registration resubmitted" : "Contributor registration received",
         message:myApp
-          ? "Your contributor registration update has been received and is awaiting administrator review."
-          : "Your contributor registration has been received and is awaiting administrator review.",
+          ? "Thanks for updating your contributor registration. We received the changes and an administrator will review them soon."
+          : "Thanks for registering as a SeekMY contributor. We received your application and an administrator will review it soon.",
         type:"info",
+        relatedPage:"contributor",
         submissionId:saved.id,
         read:false,
+        dismissed:false,
         createdAt:new Date().toISOString(),
       });
       setApps([saved as ContributorApplication]);
@@ -298,10 +300,12 @@ export function ContributorPage({
         await firebaseClient.entities.Announcement.create({
           userId:user!.id,
           title:"Location update received",
-          message:`Your update for "${locName.trim()}" has been received and is awaiting administrator review.`,
+          message:`Thanks for updating "${locName.trim()}". We received the changes and an administrator will review them soon.`,
           type:"info",
+          relatedPage:"suggestions",
           submissionId:editingSubmissionId,
           read:false,
+          dismissed:false,
           createdAt:new Date().toISOString(),
         });
         setSubs(items=>items.map(item=>item.id===editingSubmissionId?updated as LocationSubmission:item));
@@ -311,10 +315,12 @@ export function ContributorPage({
         await firebaseClient.entities.Announcement.create({
           userId:user!.id,
           title:"Location suggestion received",
-          message:`Your suggestion "${locName.trim()}" has been received and is awaiting administrator review.`,
+          message:`Thanks for suggesting "${locName.trim()}". We received it and an administrator will review it soon.`,
           type:"info",
+          relatedPage:"suggestions",
           submissionId:created.id,
           read:false,
+          dismissed:false,
           createdAt:new Date().toISOString(),
         });
         setSubs(current=>[created as LocationSubmission,...current]);

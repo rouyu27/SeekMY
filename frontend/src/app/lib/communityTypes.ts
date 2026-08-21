@@ -25,6 +25,6 @@ export interface LocationSubmission {
   updatedAt?: string; publishedLocationId?: string|number; created_by_id?: string; created_date?: string;
 }
 export interface UserAnnouncement {
-  id: string; userId: string; title: string; message: string; type: "approved"|"rejected"|"info";
-  submissionId?: string; read: boolean; createdAt: string; created_by_id?: string; created_date?: string;
+  id: string; userId: string; title: string; message: string; type: "approved"|"rejected"|"info"|"achievement"|"notice";
+  submissionId?: string; relatedPage?: string; read: boolean; dismissed?: boolean; createdAt: string; created_by_id?: string; created_date?: string;
 }

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import {
   LogOut, Edit3, Check, X, Lock, Trash2, UserCircle, Trophy,
   Activity, Bookmark, Award, ChevronRight, Mail, AlertTriangle,
-  User as UserIcon, Camera,
+  User as UserIcon, Camera, Bell, CheckCheck,
 } from "lucide-react";
 import type { AppUser, ActivityLog, Page } from "../lib/types";
 import { firebaseClient } from "../api/firebaseClient";
@@ -31,14 +31,19 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   const [profileAlert,setProfileAlert] = useState<{type:"success"|"error";msg:string}|null>(null);
   const [mySubs,setMySubs]=useState<LocationSubmission[]>([]);
   const [announcements,setAnnouncements]=useState<UserAnnouncement[]>([]);
+  const [selectedAnnouncement,setSelectedAnnouncement]=useState<UserAnnouncement|null>(null);
   async function refreshMine(){
     try{
-      const [subs,anns]=await Promise.all([
+      const [subs,ownAnns,globalAnns]=await Promise.all([
         firebaseClient.entities.LocationSubmission.filter({created_by_id:user.id}),
         firebaseClient.entities.Announcement.filter({userId:user.id}),
+        firebaseClient.entities.Announcement.filter({userId:"all"}),
       ]);
       setMySubs((subs as LocationSubmission[]).sort((a,b)=>String(b.created_date||b.createdAt||"").localeCompare(String(a.created_date||a.createdAt||""))));
-      const nextAnnouncements = (anns as UserAnnouncement[]).sort((a,b)=>String(b.created_date||b.createdAt||"").localeCompare(String(a.created_date||a.createdAt||"")));
+      const seen = new Set<string>();
+      const nextAnnouncements = ([...(ownAnns as UserAnnouncement[]), ...(globalAnns as UserAnnouncement[])])
+        .filter(a=>!a.dismissed && !seen.has(a.id) && seen.add(a.id))
+        .sort((a,b)=>String(b.created_date||b.createdAt||"").localeCompare(String(a.created_date||a.createdAt||"")));
       setAnnouncements(nextAnnouncements);
       onAnnouncementsChanged?.(nextAnnouncements.filter(a=>!a.read).length);
     }catch(error:any){setProfileAlert({type:"error",msg:error?.message||"Unable to load your Firebase account data."});}
@@ -109,6 +114,47 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
     if(deleteConfirmText!=="DELETE")return;
     try{await firebaseClient.auth.deleteAccount();setUsers(users.filter(u=>u.id!==user.id));onLogout();}
     catch(error:any){setProfileAlert({type:"error",msg:error?.message||"Unable to delete account."});}
+  }
+
+  async function openAnnouncement(announcement: UserAnnouncement) {
+    setSelectedAnnouncement(announcement);
+    if (!announcement.read) {
+      await firebaseClient.entities.Announcement.update(announcement.id,{read:true});
+      setAnnouncements(items=>items.map(item=>item.id===announcement.id?{...item,read:true}:item));
+      onAnnouncementsChanged?.(Math.max(announcements.filter(item=>!item.read).length-1,0));
+    }
+  }
+  async function dismissAnnouncement(announcement: UserAnnouncement) {
+    await firebaseClient.entities.Announcement.update(announcement.id,{dismissed:true,read:true});
+    const next = announcements.filter(item=>item.id!==announcement.id);
+    setAnnouncements(next);
+    if (selectedAnnouncement?.id === announcement.id) setSelectedAnnouncement(null);
+    onAnnouncementsChanged?.(next.filter(item=>!item.read).length);
+  }
+  async function markAllAnnouncementsRead() {
+    await Promise.all(announcements.filter(a=>!a.read).map(a=>firebaseClient.entities.Announcement.update(a.id,{read:true})));
+    setAnnouncements(items=>items.map(item=>({...item,read:true})));
+    onAnnouncementsChanged?.(0);
+  }
+  async function clearReadAnnouncements() {
+    const readItems = announcements.filter(a=>a.read);
+    await Promise.all(readItems.map(a=>firebaseClient.entities.Announcement.update(a.id,{dismissed:true})));
+    const next = announcements.filter(a=>!a.read);
+    setAnnouncements(next);
+    onAnnouncementsChanged?.(next.length);
+  }
+  function announcementTone(type: UserAnnouncement["type"]) {
+    if (type === "rejected") return { label:"Needs attention", bg:C.errorBg, color:C.error, border:C.error };
+    if (type === "approved") return { label:"Approved", bg:C.successBg, color:C.success, border:C.success };
+    if (type === "achievement") return { label:"Achievement", bg:"#fff7dc", color:C.jungle, border:C.amber };
+    if (type === "notice") return { label:"Notice", bg:C.muted, color:C.forest, border:C.forest };
+    return { label:"Update", bg:C.muted, color:C.textMuted, border:C.forest };
+  }
+  function goToAnnouncementRelated(announcement: UserAnnouncement) {
+    setSelectedAnnouncement(null);
+    if (announcement.relatedPage === "badges") setActiveTab("badges");
+    else if (announcement.relatedPage === "suggestions") setActiveTab("suggestions");
+    else if (announcement.relatedPage === "contributor") setPage("contributor");
   }
 
   const tabStyle = (t:AccTab): React.CSSProperties => ({
@@ -294,35 +340,51 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
 
         {activeTab==="announcements" && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-lg font-bold" style={{fontFamily:F.body,color:C.text}}>Announcements</h2>
-              {announcements.some(a=>!a.read) && (
-                <button type="button" onClick={async()=>{await Promise.all(announcements.filter(a=>!a.read).map(a=>firebaseClient.entities.Announcement.update(a.id,{read:true})));onAnnouncementsChanged?.(0);await refreshMine();}} className="text-xs font-bold" style={{color:C.forest,fontFamily:F.body}}>Mark all read</button>
-              )}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+              <div>
+                <h2 className="text-lg font-bold" style={{fontFamily:F.body,color:C.text}}>Announcements</h2>
+                <p className="text-xs" style={{color:C.textMuted,fontFamily:F.body}}>Approval results, rejection feedback, achievements, and admin notices stay here.</p>
+              </div>
+              <div className="flex gap-2">
+                {announcements.some(a=>!a.read) && (
+                  <button type="button" onClick={markAllAnnouncementsRead} className="text-xs font-bold px-3 py-2 rounded-full" style={{color:C.forest,backgroundColor:C.muted,fontFamily:F.body}}><CheckCheck size={13} className="inline mr-1"/>Read all</button>
+                )}
+                {announcements.some(a=>a.read) && (
+                  <button type="button" onClick={clearReadAnnouncements} className="text-xs font-bold px-3 py-2 rounded-full" style={{color:C.textMuted,backgroundColor:"#fff",border:`1px solid ${C.border}`,fontFamily:F.body}}>Clear read</button>
+                )}
+              </div>
             </div>
             {announcements.length===0 ? (
               <div className="bg-white rounded-[18px] p-8 text-center" style={{boxShadow:`0 1px 3px rgba(27,67,50,0.08)`}}>
-                <p className="text-sm" style={{color:C.textMuted,fontFamily:F.body}}>No announcements yet.</p>
+                <Bell size={24} className="mx-auto mb-3" style={{color:C.textMuted}}/>
+                <p className="text-sm font-bold" style={{color:C.text,fontFamily:F.body}}>No announcements yet.</p>
+                <p className="text-xs mt-1" style={{color:C.textMuted,fontFamily:F.body}}>When admin reviews your submissions or you earn a badge, the notice will appear here.</p>
               </div>
-            ) : announcements.map(a=>(
-              <button
-                key={a.id}
-                type="button"
-                onClick={async()=>{await firebaseClient.entities.Announcement.update(a.id,{read:true});onAnnouncementsChanged?.(Math.max(announcements.filter(item=>!item.read).length-1,0));await refreshMine();}}
-                className="w-full text-left bg-white rounded-[18px] p-4"
-                style={{
-                  boxShadow:`0 1px 3px rgba(27,67,50,0.08)`,
-                  borderLeft: a.read ? "4px solid transparent" : `4px solid ${a.type==="rejected"?C.error:C.forest}`,
-                }}
-              >
-                <div className="flex justify-between gap-2">
-                  <p className="text-sm font-bold" style={{fontFamily:F.body,color:C.text}}>{a.title}</p>
-                  {!a.read && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{backgroundColor:C.amber,color:C.jungle,fontFamily:F.body}}>NEW</span>}
+            ) : announcements.map(a=>{
+              const tone = announcementTone(a.type);
+              return (
+                <div
+                  key={a.id}
+                  className="bg-white rounded-[18px] p-4"
+                  style={{boxShadow:`0 1px 3px rgba(27,67,50,0.08)`,borderLeft:`4px solid ${a.read ? "transparent" : tone.border}`}}
+                >
+                  <div className="flex items-start gap-3">
+                    <button type="button" onClick={()=>openAnnouncement(a)} className="flex-1 text-left min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-bold" style={{fontFamily:F.body,color:C.text}}>{a.title}</p>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{backgroundColor:tone.bg,color:tone.color,fontFamily:F.body}}>{tone.label}</span>
+                        {!a.read && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{backgroundColor:C.amber,color:C.jungle,fontFamily:F.body}}>NEW</span>}
+                      </div>
+                      <p className="text-[12px] mt-1 line-clamp-2" style={{color:C.textSub,fontFamily:F.body}}>{a.message}</p>
+                      <p className="text-[10px] mt-2" style={{color:C.textMuted,fontFamily:F.body}}>{new Date(a.createdAt || a.created_date || "").toLocaleString()}</p>
+                    </button>
+                    <button type="button" onClick={()=>dismissAnnouncement(a)} className="h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0" style={{backgroundColor:C.muted,color:C.textMuted}} aria-label={`Dismiss ${a.title}`}>
+                      <X size={13}/>
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[12px] mt-1" style={{color:C.textSub,fontFamily:F.body}}>{a.message}</p>
-                <p className="text-[10px] mt-2" style={{color:C.textMuted,fontFamily:F.body}}>{new Date(a.createdAt).toLocaleString()}</p>
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -493,6 +555,29 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
         )}
 
       </div>
+      {selectedAnnouncement && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 p-4" onClick={()=>setSelectedAnnouncement(null)}>
+          <div className="w-full max-w-lg rounded-[20px] bg-white p-5 shadow-2xl" onClick={event=>event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{backgroundColor:announcementTone(selectedAnnouncement.type).bg,color:announcementTone(selectedAnnouncement.type).color,fontFamily:F.body}}>
+                  {announcementTone(selectedAnnouncement.type).label}
+                </span>
+                <h3 className="mt-3 text-xl font-normal" style={{fontFamily:F.display,color:C.text}}>{selectedAnnouncement.title}</h3>
+                <p className="text-xs mt-1" style={{color:C.textMuted,fontFamily:F.body}}>{new Date(selectedAnnouncement.createdAt || selectedAnnouncement.created_date || "").toLocaleString()}</p>
+              </div>
+              <button type="button" onClick={()=>setSelectedAnnouncement(null)} className="h-9 w-9 rounded-full flex items-center justify-center" style={{backgroundColor:C.muted,color:C.textMuted}} aria-label="Close announcement">
+                <X size={15}/>
+              </button>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed whitespace-pre-line" style={{color:C.textSub,fontFamily:F.body}}>{selectedAnnouncement.message}</p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {selectedAnnouncement.relatedPage && <Pill variant="filled" small onClick={()=>goToAnnouncementRelated(selectedAnnouncement)}>View related</Pill>}
+              <Pill variant="outline" small onClick={()=>dismissAnnouncement(selectedAnnouncement)}>Dismiss</Pill>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -195,7 +195,12 @@ export default function App() {
       return;
     }
     try {
-      const rows = await firebaseClient.entities.Announcement.filter({ userId: currentUser.id }, undefined, 500);
+      const [ownRows, globalRows] = await Promise.all([
+        firebaseClient.entities.Announcement.filter({ userId: currentUser.id }, undefined, 500),
+        firebaseClient.entities.Announcement.filter({ userId: "all" }, undefined, 500),
+      ]);
+      const seen = new Set<string>();
+      const rows = [...ownRows, ...globalRows].filter((announcement:any)=>!announcement.dismissed && !seen.has(String(announcement.id)) && seen.add(String(announcement.id)));
       setUnreadAnnouncements(rows.filter((announcement:any)=>!announcement.read).length);
     } catch {
       setUnreadAnnouncements(0);
@@ -277,6 +282,18 @@ export default function App() {
       setActivityLogs(prev => [result.activity as ActivityLog, ...prev]);
       if (result.newBadges.length) {
         setEarnedBadgeIds(ids => [...new Set([...ids, ...result.newBadges.map((badge:any) => badge.key)])]);
+        await Promise.all(result.newBadges.map((badge:any)=>firebaseClient.entities.Announcement.create({
+          userId:user.id,
+          title:`Achievement unlocked: ${badge.name}`,
+          message:`Nice work. You earned the "${badge.name}" badge.\n\n${badge.desc || "Keep exploring Malaysia's outdoor places with SeekMY."}`,
+          type:"achievement",
+          relatedPage:"badges",
+          submissionId:badge.key,
+          read:false,
+          dismissed:false,
+          createdAt:new Date().toISOString(),
+        }).catch(()=>{})));
+        refreshUnreadAnnouncements(user);
         const earnedBadge = BADGE_DEFS.find((badge) => badge.id === result.newBadges[0].key);
         if (earnedBadge) {
           setBadgeToast(earnedBadge);

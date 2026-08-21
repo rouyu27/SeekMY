@@ -841,6 +841,19 @@ export function LocationPage({
                         is_hidden_gem:(loc as any).is_hidden_gem===true,
                       },
                     });
+                    if (result.newBadges?.length) {
+                      await Promise.all(result.newBadges.map((badge:any)=>firebaseClient.entities.Announcement.create({
+                        userId:user.id,
+                        title:`Achievement unlocked: ${badge.name}`,
+                        message:`Nice work. You earned the "${badge.name}" badge.\n\n${badge.desc || "Thanks for helping other explorers with your review."}`,
+                        type:"achievement",
+                        relatedPage:"badges",
+                        submissionId:badge.key,
+                        read:false,
+                        dismissed:false,
+                        createdAt:new Date().toISOString(),
+                      }).catch(()=>{})));
+                    }
                     setReviews(p=>{
                       const nextReviews = [result.review as StoredReview,...p];
                       publishReviewSummary(nextReviews);
