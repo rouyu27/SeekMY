@@ -60,9 +60,10 @@ export function evaluateBadges(
   };
 
   return BADGE_DEFS.map((b) => {
-    const progress = Math.min(metrics[b.metric], b.requirement);
+    const calculatedProgress = Math.min(metrics[b.metric], b.requirement);
     const storedEarned = previouslyEarned.includes(b.id);
-    const earned = progress >= b.requirement || storedEarned;
+    const progress = storedEarned ? b.requirement : calculatedProgress;
+    const earned = progress >= b.requirement;
     const justEarned = earned && !previouslyEarned.includes(b.id);
     return { ...b, progress, earned, justEarned };
   });
