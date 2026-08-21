@@ -31,7 +31,7 @@ export function StateFlagCard({ code, name, region, onClick, large }:{
 
   return (
     <button onClick={onClick}
-      className={`relative overflow-hidden rounded-[18px] w-full group cursor-pointer transition-all duration-200 hover:-translate-y-0.5 ${large?"aspect-video":"aspect-[4/3]"}`}
+      className="relative overflow-hidden rounded-[18px] w-full group cursor-pointer transition-all duration-200 hover:-translate-y-0.5 aspect-[2/1]"
       style={{boxShadow:`0 2px 8px rgba(27,67,50,0.14), 0 0 0 1px rgba(27,67,50,0.06)`}}>
       {!imageFailed && imageName ? (
         <img

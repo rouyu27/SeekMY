@@ -51,6 +51,7 @@ export interface Location {
   image_url?: string;
   image_urls?: string[];
   estimatedPrice?: number;
+  estimatedPriceRange?: string;
   photoAttribution?: string;
   photo?: {
     imageUrl: string;

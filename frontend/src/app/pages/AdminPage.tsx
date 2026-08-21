@@ -30,6 +30,23 @@ const ACTIVITIES = ["Hiking","Diving","Cycling","Camping","Swimming","Trail Runn
 const STATE_CODE: Record<string,string> = Object.fromEntries(ALL_STATES.map(s=>[s.name,s.code]));
 const emptyLocation = { name:"",address:"",lat:"",lng:"",state:"Selangor",activity:"Hiking",difficulty:"Easy",description:"",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:"",facilities:"",accessibility:"",image_url:"",image_urls:[] as string[],estimatedPrice:"" };
 
+function parsePriceRange(value: string): { min: number; max: number; label: string } | null {
+  const cleaned = value.trim().replace(/\s+/g, "");
+  if (!cleaned) return null;
+  const match = cleaned.match(/^(\d+(?:\.\d{1,2})?)(?:-(\d+(?:\.\d{1,2})?))?$/);
+  if (!match) return null;
+  const min = Number(match[1]);
+  const max = match[2] === undefined ? min : Number(match[2]);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) return null;
+  const format = (price: number) => Number.isInteger(price) ? String(price) : price.toFixed(2);
+  return { min, max, label: min === max ? format(min) : `${format(min)}-${format(max)}` };
+}
+
+function displayPrice(location: any) {
+  if (location.estimatedPriceRange) return `RM ${location.estimatedPriceRange}`;
+  return typeof location.estimatedPrice === "number" ? `RM ${location.estimatedPrice.toFixed(2)}` : "";
+}
+
 function locationSearchQuery(form: typeof emptyLocation, suffix: string) {
   return encodeURIComponent([form.name, form.state, "Malaysia", suffix].filter(Boolean).join(" "));
 }
@@ -148,7 +165,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       accessibility:String((loc as any).accessibility||""),
       image_url:String((loc as any).image_url||""),
       image_urls:Array.isArray((loc as any).image_urls)?(loc as any).image_urls:[],
-      estimatedPrice:typeof (loc as any).estimatedPrice==="number"?String((loc as any).estimatedPrice):"",
+      estimatedPrice:String((loc as any).estimatedPriceRange || (typeof (loc as any).estimatedPrice==="number"?(loc as any).estimatedPrice:"")),
     });
     const images=Array.isArray((loc as any).image_urls)&&((loc as any).image_urls as string[]).length?(loc as any).image_urls:((loc as any).image_url?[(loc as any).image_url]:[]);
     setExistingImages(images);
@@ -189,8 +206,8 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     if(!form.name.trim() || !form.address.trim()){showToast("Location name and address are required.");return;}
     const lat=Number(form.lat);const lng=Number(form.lng);
     if(!Number.isFinite(lat)||lat < -90||lat > 90||!Number.isFinite(lng)||lng < -180||lng > 180){showToast("Valid latitude and longitude are required.");return;}
-    const estimatedPrice=Number(form.estimatedPrice);
-    if(form.estimatedPrice.trim()===""||!Number.isFinite(estimatedPrice)||estimatedPrice<0){showToast("Enter a valid estimated cost. Use 0 for a free location.");return;}
+    const priceRange=parsePriceRange(form.estimatedPrice);
+    if(!priceRange){showToast("Enter a valid estimated cost range, for example 0, 10-30, or 15.50-45.");return;}
     setSaving(true);
     try{
       const uploadedImages:string[]=[];
@@ -215,8 +232,9 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         officialUrl:form.officialUrl.trim(),
         facilities:form.facilities.split(",").map(x=>x.trim()).filter(Boolean),
         accessibility:form.accessibility,
-        estimatedPrice,
-        budget:estimatedPrice<=0?"Free":estimatedPrice<=20?"Low":estimatedPrice<=50?"Medium":"High",
+        estimatedPrice:priceRange.max,
+        estimatedPriceRange:priceRange.label,
+        budget:priceRange.max<=0?"Free":priceRange.max<=20?"Low":priceRange.max<=50?"Medium":"High",
         image_url:images[0]||"",
         image_urls:images,
       };
@@ -310,7 +328,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       showToast(status==="approved"?"Contributor approved.":"Contributor rejected with feedback.");
     }catch(e:any){showToast(e?.message||"Unable to update contributor.");}
   }
-  function submissionToLocation(s:LocationSubmission){const price=Number(s.estimatedPrice||0);const images=s.photoUrl?[s.photoUrl]:[];const details=[s.description,s.safetyNotes?`Safety notes: ${s.safetyNotes}`:"",s.contributorTip?`Local contributor tip: ${s.contributorTip}`:""].filter(Boolean).join("\n\n");return {name:s.name,address:s.address||`${s.name}, ${s.state}, Malaysia`,lat:s.lat,lng:s.lng,locationConfirmed:Boolean(s.locationConfirmed),state:s.state,stateCode:STATE_CODE[s.state]||"SLG",activity:s.activity,difficulty:["Easy","Moderate","Hard"].includes(s.difficulty)?s.difficulty:"Easy",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:s.sourceUrl||"",rating:0,reviews:0,badge:"Community",color:C.forest,emoji:"📍",description:details,facilities:s.facilities?s.facilities.split(",").map(x=>x.trim()).filter(Boolean):[],bestMonths:s.bestTime||"Year-round",accessibility:s.accessibility||"See description",tags:[s.activity,"Community suggested","Contributor verified"],estimatedPrice:price,budget:s.budget||(price<=0?"Free":price<=20?"Low":price<=50?"Medium":"High"),image_url:images[0]||"",image_urls:images,suggestedBy:s.contributorName,sourceUrl:s.sourceUrl||"",status:"active"};}
+  function submissionToLocation(s:LocationSubmission){const price=Number(s.estimatedPrice||0);const images=s.photoUrl?[s.photoUrl]:[];const details=[s.description,s.safetyNotes?`Safety notes: ${s.safetyNotes}`:"",s.contributorTip?`Local contributor tip: ${s.contributorTip}`:""].filter(Boolean).join("\n\n");return {name:s.name,address:s.address||`${s.name}, ${s.state}, Malaysia`,lat:s.lat,lng:s.lng,locationConfirmed:Boolean(s.locationConfirmed),state:s.state,stateCode:STATE_CODE[s.state]||"SLG",activity:s.activity,difficulty:["Easy","Moderate","Hard"].includes(s.difficulty)?s.difficulty:"Easy",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:s.sourceUrl||"",rating:0,reviews:0,badge:"Community",color:C.forest,emoji:"📍",description:details,facilities:s.facilities?s.facilities.split(",").map(x=>x.trim()).filter(Boolean):[],bestMonths:s.bestTime||"Year-round",accessibility:s.accessibility||"See description",tags:[s.activity,"Community suggested","Contributor verified"],estimatedPrice:price,estimatedPriceRange:s.estimatedPriceRange||String(price),budget:s.budget||(price<=0?"Free":price<=20?"Low":price<=50?"Medium":"High"),image_url:images[0]||"",image_urls:images,suggestedBy:s.contributorName,sourceUrl:s.sourceUrl||"",status:"active"};}
   async function approveSubmission(s:LocationSubmission){setSaving(true);try{const published:any=await firebaseClient.entities.Location.create(submissionToLocation(s));const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"approved",publishedLocationId:published.id,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location approved",message:`Your suggestion "${s.name}" was approved and is now live on Discover.`,type:"approved",submissionId:s.id,read:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));setLocations(ls=>[published as Location,...ls]);(window as any).__seekmyRefreshLocations?.(published);showToast("Location approved and published to Firebase.");}catch(e:any){showToast(e?.message||"Unable to approve location.");}finally{setSaving(false);}}
   async function rejectSubmission(s:LocationSubmission){const reason=prompt("Rejection reason:")||"Does not meet guidelines";try{const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"rejected",rejectReason:reason,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location not approved",message:`Your suggestion "${s.name}" was not approved. Reason: ${reason}`,type:"rejected",submissionId:s.id,read:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));showToast("Location rejected and user notified through Firebase.");}catch(e:any){showToast(e?.message||"Unable to reject location.");}}
   async function toggleGem(loc:Location){
@@ -405,7 +423,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
           {!userLoadError&&filteredUsers.length===0&&<p className="text-sm bg-white rounded-[18px] p-4" style={{color:C.textMuted}}>No Firebase users found.</p>}
           {filteredUsers.map(u=><div key={u.id} className={`${card} flex items-center justify-between gap-3`}><div><p className="font-bold text-sm">{u.displayName}</p><p className="text-xs" style={{color:C.textMuted}}>{u.email}</p></div><div className="flex gap-2 items-center"><span className="text-xs">{u.role}</span>{!isFixedTeamAdmin(u.email)&&<><button onClick={()=>roleChange(u,u.role==="admin"?"user":"admin")} className="p-2 border rounded-lg"><UserCog size={15}/></button><button onClick={()=>deleteUser(u)} className="p-2" style={{color:C.error}}><Trash2 size={15}/></button></>}</div></div>)}
         </div>}
-        {tab==="locations"&&<div><div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4"><div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Location Management</h1><p className="text-sm" style={{color:C.textMuted}}>{locations.length} Firebase locations</p></div><div className="flex flex-wrap gap-2"><Pill variant="outline" small onClick={addStarterPlaces} disabled={seedingStarter}><Database size={13}/> {seedingStarter?"Updating...":"Add starters / photos"}</Pill><Pill variant="filled" small onClick={()=>{setEditingLocation(null);setForm(emptyLocation);setExistingImages([]);setImageFiles([]);setUploadProgress(0);setShowAdd(true);}}><Plus size={13}/> Add Location</Pill></div></div><div className="space-y-2">{filteredLocs.map(l=><div key={l.id} className={`${card} flex items-center gap-3`}>{l.image_url?<img src={l.image_url} alt={l.name} className="w-14 h-14 rounded-xl object-cover"/>:null}<div className="flex-1"><p className="font-bold text-sm">{l.emoji} {l.name}</p><p className="text-xs" style={{color:C.textMuted}}>{l.state} · {l.activity}{typeof l.estimatedPrice==="number"?` · RM ${l.estimatedPrice.toFixed(2)}`:""}</p></div>{(l as any).is_hidden_gem&&<span>💎</span>}
+        {tab==="locations"&&<div><div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center mb-4"><div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Location Management</h1><p className="text-sm" style={{color:C.textMuted}}>{locations.length} Firebase locations</p></div><div className="flex flex-wrap gap-2"><Pill variant="outline" small onClick={addStarterPlaces} disabled={seedingStarter}><Database size={13}/> {seedingStarter?"Updating...":"Add starters / photos"}</Pill><Pill variant="filled" small onClick={()=>{setEditingLocation(null);setForm(emptyLocation);setExistingImages([]);setImageFiles([]);setUploadProgress(0);setShowAdd(true);}}><Plus size={13}/> Add Location</Pill></div></div><div className="space-y-2">{filteredLocs.map(l=><div key={l.id} className={`${card} flex items-center gap-3`}>{l.image_url?<img src={l.image_url} alt={l.name} className="w-14 h-14 rounded-xl object-cover"/>:null}<div className="flex-1"><p className="font-bold text-sm">{l.emoji} {l.name}</p><p className="text-xs" style={{color:C.textMuted}}>{l.state} · {l.activity}{displayPrice(l)?` · ${displayPrice(l)}`:""}</p></div>{(l as any).is_hidden_gem&&<span>💎</span>}
 <div className="flex items-center gap-2">
   <button
     onClick={()=>toggleGem(l)}
@@ -664,8 +682,9 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
             </div>
 
             <div>
-              <label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Estimated cost (RM) *</label>
-              <input type="number" min="0" step="0.01" value={form.estimatedPrice} onChange={e=>setForm(f=>({...f,estimatedPrice:e.target.value}))} placeholder="0 if free" className="w-full border rounded-xl px-4 py-3 text-sm" />
+              <label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Estimated cost range (RM) *</label>
+              <input inputMode="decimal" value={form.estimatedPrice} onChange={e=>setForm(f=>({...f,estimatedPrice:e.target.value}))} placeholder="Example: 0, 10-30, or 15.50-45" className="w-full border rounded-xl px-4 py-3 text-sm" />
+              <p className="mt-1 text-[10px]" style={{color:C.textMuted}}>Budget is classified using the highest price in the range.</p>
             </div>
 
             <LocationImageUploader existing={existingImages} files={imageFiles} setFiles={setImageFiles} setExisting={setExistingImages} onRemoveExisting={url=>setExistingImages(existingImages.filter(image=>image!==url))} showToast={showToast}/>

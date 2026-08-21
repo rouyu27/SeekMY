@@ -61,6 +61,22 @@ function getBudgetLevel(price: number): BudgetLevel {
   return "High";
 }
 
+function parsePriceRange(value: string): { min: number; max: number; label: string } | null {
+  const cleaned = value.trim().replace(/\s+/g, "");
+  if (!cleaned) return null;
+  const match = cleaned.match(/^(\d+(?:\.\d{1,2})?)(?:-(\d+(?:\.\d{1,2})?))?$/);
+  if (!match) return null;
+  const min = Number(match[1]);
+  const max = match[2] === undefined ? min : Number(match[2]);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) return null;
+  const format = (price: number) => Number.isInteger(price) ? String(price) : price.toFixed(2);
+  return {
+    min,
+    max,
+    label: min === max ? format(min) : `${format(min)}-${format(max)}`,
+  };
+}
+
 function withTimeout<T>(
   work: Promise<T>,
   milliseconds: number,
@@ -99,8 +115,8 @@ export function SuggestLocationPage({
 
   //==================== WongYueShan Part - Suggested Location Price ====================
   const [estimatedPrice, setEstimatedPrice] = useState("");
-  const numericPrice = Number(estimatedPrice || 0);
-  const budget = getBudgetLevel(Number.isFinite(numericPrice) ? numericPrice : 0);
+  const priceRange = parsePriceRange(estimatedPrice);
+  const budget = getBudgetLevel(priceRange?.max ?? 0);
   //==================== WongYueShan END - Suggested Location Price ====================
 
   //==================== LimRouYu Part - Map Confirmation State ====================
@@ -281,14 +297,11 @@ export function SuggestLocationPage({
       return;
     }
 
-    if (
-      estimatedPrice.trim() === "" ||
-      !Number.isFinite(Number(estimatedPrice)) ||
-      Number(estimatedPrice) < 0
-    ) {
+    const parsedPrice = parsePriceRange(estimatedPrice);
+    if (!parsedPrice) {
       setMsg({
         type: "err",
-        text: "Please enter a valid estimated cost in RM. Enter 0 if the location is free.",
+        text: "Please enter a valid estimated cost range, for example 0, 10-30, or 15.50-45.",
       });
       return;
     }
@@ -351,7 +364,7 @@ export function SuggestLocationPage({
       const photoUrl =
         await firebaseClient.storage.uploadLocationPhoto(photoFile);
 
-      const price = Number(estimatedPrice);
+      const price = parsedPrice.max;
       const payload: Omit<LocationSubmission, "id"> = {
         contributorId: currentUser.id,
         contributorName: currentUser.displayName,
@@ -367,6 +380,7 @@ export function SuggestLocationPage({
         facilities: facilities.trim(),
         accessibility: accessibility.trim(),
         estimatedPrice: price,
+        estimatedPriceRange: parsedPrice.label,
         budget: getBudgetLevel(price),
         photoUrl,
         photoName: photoName || "photo.jpg",
@@ -649,13 +663,10 @@ export function SuggestLocationPage({
             </div>
 
             <input
-              type="number"
-              min="0"
-              step="0.01"
               inputMode="decimal"
               className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white"
               style={inputStyle}
-              placeholder="Example: 15.00 (enter 0 if free)"
+              placeholder="Example: 0, 10-30, or 15.50-45"
               value={estimatedPrice}
               onChange={(e) => setEstimatedPrice(e.target.value)}
             />
@@ -676,9 +687,7 @@ export function SuggestLocationPage({
                   fontFamily: F.body,
                 }}
               >
-                {estimatedPrice === ""
-                  ? "Enter price"
-                  : `RM ${numericPrice.toFixed(2)} · ${budget}`}
+                {estimatedPrice === "" ? "Enter range" : priceRange ? `RM ${priceRange.label} - ${budget}` : "Invalid range"}
               </span>
             </div>
 
@@ -686,7 +695,7 @@ export function SuggestLocationPage({
               className="text-[10px] mt-2"
               style={{ color: C.textMuted, fontFamily: F.body }}
             >
-              RM0 = Free · RM1–20 = Low · RM21–50 = Medium · RM51+ = High
+              Budget is classified using the highest price in the range.
             </p>
           </div>
           {/* ==================== WongYueShan END - Estimated Cost / Budget ==================== */}
@@ -789,3 +798,4 @@ export function SuggestLocationPage({
   );
 }
 //==================== WongYueShan END - Local Contributor / Location Suggestion ====================
+
