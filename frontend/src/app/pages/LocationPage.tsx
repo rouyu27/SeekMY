@@ -4,7 +4,7 @@
 // LimTzeXin: Bookmark Module + User Review & Rating Module
 import { useState, useEffect } from "react";
 import {
-  ChevronLeft, Star, Bookmark, BookmarkCheck, MapPin, Clock,
+  ChevronLeft, ChevronRight, Star, Bookmark, BookmarkCheck, MapPin, Clock,
   Navigation, Sun, Droplets, Wind, AlertTriangle, Check, Activity, Flag,
   Users, ExternalLink, Pencil, Trash2, X, Car, Utensils, Hospital, Bus, Store, Fuel, Toilet, CalendarClock, Upload,
 } from "lucide-react";
@@ -58,6 +58,7 @@ export function LocationPage({
   const [reviewPhotoPreview, setReviewPhotoPreview] = useState("");
   const [selectedReviewPhoto, setSelectedReviewPhoto] = useState<{url:string;alt:string}|null>(null);
   const [selectedLocationPhoto, setSelectedLocationPhoto] = useState<{url:string;alt:string}|null>(null);
+  const [activeLocationImage, setActiveLocationImage] = useState(0);
   const [reviews, setReviews] = useState<StoredReview[]>([]);
   const [flagId, setFlagId] = useState<string | null>(null);
   const [flagReason, setFlagReason] = useState("Offensive language");
@@ -78,6 +79,7 @@ export function LocationPage({
   useEffect(() => {
     if (!loc) return;
     if (initialTab) setTab(initialTab);
+    setActiveLocationImage(0);
     let cancelled=false;
     firebaseClient.backend.getReviews(String(loc.id)).then(({reviews:rows})=>{
       if(cancelled) return;
@@ -227,6 +229,16 @@ export function LocationPage({
   const photoSourceUrl = loc.photo?.sourcePageUrl;
   const photoCredit = loc.photoAttribution || (loc.photo ? `${loc.photo.author} - ${loc.photo.license}` : "");
   const locationImages = (Array.isArray(loc.image_urls) && loc.image_urls.length ? loc.image_urls : (loc.image_url ? [loc.image_url] : [])).filter(Boolean);
+  const activeImage = locationImages[Math.min(activeLocationImage, Math.max(locationImages.length - 1, 0))];
+  const estimatedCostLabel = loc.estimatedPriceRange
+    ? `RM ${loc.estimatedPriceRange}`
+    : typeof loc.estimatedPrice === "number"
+      ? `RM ${loc.estimatedPrice.toFixed(2).replace(/\.00$/, "")}`
+      : "";
+  const goLocationImage = (direction: -1 | 1) => {
+    if (locationImages.length < 2) return;
+    setActiveLocationImage((index) => (index + direction + locationImages.length) % locationImages.length);
+  };
   const nearbyFacilities = [
     { label: "Toilets", query: "toilet", icon: <Toilet size={14} /> },
     { label: "Parking", query: "parking", icon: <Car size={14} /> },
@@ -329,31 +341,39 @@ export function LocationPage({
           <div className="space-y-4">
             {locationImages.length > 0 && (
               <figure className="bg-white rounded-[18px] overflow-hidden" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedLocationPhoto({url:locationImages[0],alt:`${loc.name} photo 1`})}
-                  className="block w-full text-left"
-                  aria-label={`Open ${loc.name} cover photo`}
-                >
-                  <img src={locationImages[0]} alt={loc.name} className="w-full max-h-[360px] object-cover" />
-                </button>
-                {locationImages.length > 1 && (
-                  <div className="grid grid-cols-4 gap-2 p-3">
-                    {locationImages.map((url,index)=>(
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLocationPhoto({url:activeImage,alt:`${loc.name} photo ${activeLocationImage+1}`})}
+                    className="block w-full text-left"
+                    aria-label={`Open ${loc.name} photo ${activeLocationImage+1}`}
+                  >
+                    <img src={activeImage} alt={`${loc.name} photo ${activeLocationImage+1}`} className="w-full max-h-[420px] object-cover" />
+                  </button>
+                  {locationImages.length > 1 && (
+                    <>
                       <button
-                        key={`${url}-${index}`}
                         type="button"
-                        onClick={() => setSelectedLocationPhoto({url,alt:`${loc.name} photo ${index+1}`})}
-                        className="relative overflow-hidden rounded-xl border"
-                        style={{borderColor:index===0?C.amber:C.border}}
-                        aria-label={`Open ${loc.name} photo ${index+1}`}
+                        onClick={() => goLocationImage(-1)}
+                        className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/92 shadow-md"
+                        aria-label="Previous location photo"
                       >
-                        <img src={url} alt={`${loc.name} photo ${index+1}`} className="h-20 w-full object-cover" />
-                        {index===0&&<span className="absolute left-1 top-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{backgroundColor:C.jungle}}>Cover</span>}
+                        <ChevronLeft size={19}/>
                       </button>
-                    ))}
-                  </div>
-                )}
+                      <button
+                        type="button"
+                        onClick={() => goLocationImage(1)}
+                        className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/92 shadow-md"
+                        aria-label="Next location photo"
+                      >
+                        <ChevronRight size={19}/>
+                      </button>
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-xs font-bold text-white" style={{fontFamily:F.body}}>
+                        {activeLocationImage + 1} / {locationImages.length}
+                      </div>
+                    </>
+                  )}
+                </div>
                 {(photoCredit || photoSourceUrl) && (
                   <figcaption className="flex flex-col gap-1 px-4 py-3 text-[11px] sm:flex-row sm:items-center sm:justify-between" style={{ color: C.textMuted, fontFamily: F.body }}>
                     <span>{photoCredit || "Photo source available"}</span>
@@ -373,6 +393,18 @@ export function LocationPage({
                 {loc.description || "Additional details not available for this activity type."}
               </p>
             </div>
+
+            {estimatedCostLabel && (
+              <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
+                <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>Estimated cost</h2>
+                <div className="inline-flex rounded-full px-4 py-2 text-sm font-bold" style={{ backgroundColor: C.muted, color: C.jungle, fontFamily: F.body }}>
+                  {estimatedCostLabel}
+                </div>
+                <p className="mt-2 text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>
+                  Actual prices may vary by operator, package, rental, guide, or season.
+                </p>
+              </div>
+            )}
 
             {loc.activitySpecific && (
               <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
