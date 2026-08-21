@@ -29,6 +29,25 @@ function contributorStatusLabel(status?: ContributorApplication["status"]) {
   return "Pending";
 }
 
+function parsePriceRange(minValue: string, maxValue: string): { min: number; max: number; label: string } | null {
+  const minText = minValue.trim();
+  const maxText = maxValue.trim();
+  if (!minText && !maxText) return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(minText || maxText)) return null;
+  if (maxText && !/^\d+(?:\.\d{1,2})?$/.test(maxText)) return null;
+  const min = Number(minText || maxText);
+  const max = Number(maxText || minText);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) return null;
+  const format = (price: number) => Number.isInteger(price) ? String(price) : price.toFixed(2);
+  return { min, max, label: min === max ? format(min) : `${format(min)}-${format(max)}` };
+}
+
+function splitPriceRange(submission: LocationSubmission) {
+  const raw = String(submission.estimatedPriceRange || (typeof submission.estimatedPrice === "number" ? submission.estimatedPrice : ""));
+  const [min, max] = raw.split("-");
+  return { min: min || "", max: max || "" };
+}
+
 export function ContributorPage({
   user,
   setPage,
@@ -74,7 +93,8 @@ export function ContributorPage({
   const [locDesc, setLocDesc] = useState("");
   const [locFac, setLocFac] = useState("");
   const [locAccess, setLocAccess] = useState("");
-  const [locPrice, setLocPrice] = useState("");
+  const [locPriceMin, setLocPriceMin] = useState("");
+  const [locPriceMax, setLocPriceMax] = useState("");
   const [locSafety, setLocSafety] = useState("");
   const [locBestTime, setLocBestTime] = useState("");
   const [locTip, setLocTip] = useState("");
@@ -91,7 +111,8 @@ export function ContributorPage({
   const [profLanguages, setProfLanguages] = useState(myApp?.languages || "");
   const [profDescription, setProfDescription] = useState(myApp?.serviceDescription || "");
   const [profWebsite, setProfWebsite] = useState(myApp?.websiteUrl || "");
-  const numericPrice = locPrice === "" ? 0 : Number(locPrice);
+  const priceRange = parsePriceRange(locPriceMin, locPriceMax);
+  const numericPrice = priceRange?.max ?? 0;
   const budget = numericPrice <= 0 ? "Free" : numericPrice <= 20 ? "Low" : numericPrice <= 50 ? "Medium" : "High";
   const contributionStats = {
     total: mySubs.length,
@@ -225,7 +246,7 @@ export function ContributorPage({
 
   function resetLocationForm() {
     setLocName(""); setLocAddress(""); setLocState("Selangor"); setLocActivity("Hiking"); setLocDiff("Easy");
-    setLocDesc(""); setLocFac(""); setLocAccess(""); setLocPrice(""); setLocSafety(""); setLocBestTime(""); setLocTip(""); setLocSourceUrl("");
+    setLocDesc(""); setLocFac(""); setLocAccess(""); setLocPriceMin(""); setLocPriceMax(""); setLocSafety(""); setLocBestTime(""); setLocTip(""); setLocSourceUrl("");
     setPhotoName(""); setPhotoFile(null); setEditingSubmissionId(null);
   }
 
@@ -239,7 +260,9 @@ export function ContributorPage({
     setLocDesc(submission.description || "");
     setLocFac(submission.facilities || "");
     setLocAccess(submission.accessibility || "");
-    setLocPrice(typeof submission.estimatedPrice === "number" ? String(submission.estimatedPrice) : "");
+    const priceParts = splitPriceRange(submission);
+    setLocPriceMin(priceParts.min);
+    setLocPriceMax(priceParts.max);
     setLocSafety(submission.safetyNotes || "");
     setLocBestTime(submission.bestTime || "");
     setLocTip(submission.contributorTip || "");
@@ -255,7 +278,7 @@ export function ContributorPage({
     setMsg(null);
     if (!approved) { setMsg({type:"err",text:"Only approved contributors can submit locations."}); return; }
     if (!locName.trim() || !locAddress.trim() || !locDesc.trim()) { setMsg({type:"err",text:"Please complete all required fields (name, address and description)."}); return; }
-    if (locPrice.trim()==="" || !Number.isFinite(numericPrice) || numericPrice < 0) { setMsg({type:"err",text:"Please enter a valid estimated cost. Use 0 if the location is free."}); return; }
+    if (!priceRange) { setMsg({type:"err",text:"Please enter a valid estimated cost. Max RM must be the same or higher than Min RM."}); return; }
     if (locSafety.trim().length < 10) { setMsg({type:"err",text:"Please add at least one useful safety note for visitors."}); return; }
     if (subs.some(s=>s.id!==editingSubmissionId&&s.name.toLowerCase()===locName.trim().toLowerCase() && s.state===locState)) { setMsg({type:"err",text:"This location already exists in your submissions."}); return; }
     setLoading(true);
@@ -263,7 +286,7 @@ export function ContributorPage({
       const photoUrl = photoFile ? await firebaseClient.storage.uploadLocationPhoto(photoFile) : undefined;
       const payload = {
         contributorId:user!.id,contributorName:myApp?.fullName||user!.displayName,name:locName.trim(),address:locAddress.trim(),state:locState,activity:locActivity,difficulty:locDiff,
-        description:locDesc.trim(),facilities:locFac.trim(),accessibility:locAccess.trim(),estimatedPrice:numericPrice,budget,
+        description:locDesc.trim(),facilities:locFac.trim(),accessibility:locAccess.trim(),estimatedPrice:numericPrice,estimatedPriceRange:priceRange.label,budget,
         safetyNotes:locSafety.trim(),bestTime:locBestTime.trim(),contributorTip:locTip.trim(),sourceUrl:locSourceUrl.trim(),
         photoName:photoName||undefined,status:"pending",rejectReason:"",updatedAt:new Date().toISOString(),
         ...(photoUrl ? { photoUrl } : {}),
@@ -505,12 +528,12 @@ export function ContributorPage({
                     <WalletCards size={16} style={{ color: C.jungle }} />
                     <label className="text-sm font-bold" style={{ color: C.text, fontFamily: F.body }}>Estimated Entry / Activity Cost (RM) *</label>
                   </div>
-                  <input type="number" min="0" step="0.01" inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="Example: 15.00 (enter 0 if free)" value={locPrice} onChange={(e) => setLocPrice(e.target.value)} />
+                  <div className="grid grid-cols-2 gap-3"><input inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="Min RM" value={locPriceMin} onChange={(e) => setLocPriceMin(e.target.value)} /><input inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="Max RM" value={locPriceMax} onChange={(e) => setLocPriceMax(e.target.value)} /></div>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>Automatically classified</span>
-                    <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ backgroundColor: "#fff", color: C.jungle, fontFamily: F.body }}>{locPrice === "" ? "Enter price" : `RM ${numericPrice.toFixed(2)} Â· ${budget}`}</span>
+                    <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ backgroundColor: "#fff", color: C.jungle, fontFamily: F.body }}>{!locPriceMin && !locPriceMax ? "Enter price" : priceRange ? `RM ${priceRange.label} - ${budget}` : "Invalid range"}</span>
                   </div>
-                  <p className="text-[10px] mt-2" style={{ color: C.textMuted, fontFamily: F.body }}>RM0 = Free Â· RM1-20 = Low Â· RM21-50 = Medium Â· RM51+ = High</p>
+                  <p className="text-[10px] mt-2" style={{ color: C.textMuted, fontFamily: F.body }}>Type numbers only. For a fixed/free price, fill one box or use the same amount.</p>
                 </div>
                 <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none" style={inputStyle} rows={3} placeholder="Description *" value={locDesc} onChange={(e) => setLocDesc(e.target.value)} />
                 <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Facilities (comma-separated)" value={locFac} onChange={(e) => setLocFac(e.target.value)} />
@@ -566,7 +589,7 @@ export function ContributorPage({
                     }}>{s.status}</span>
                   </div>
                   <p className="text-[11px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
-                    {s.state} Â· {s.activity} Â· {typeof s.estimatedPrice === "number" ? `RM ${s.estimatedPrice.toFixed(2)} Â· ` : ""}{new Date(s.createdAt).toLocaleDateString()}
+                    {s.state} · {s.activity} · {s.estimatedPriceRange ? `RM ${s.estimatedPriceRange} · ` : typeof s.estimatedPrice === "number" ? `RM ${s.estimatedPrice.toFixed(2)} · ` : ""}{new Date(s.createdAt).toLocaleDateString()}
                   </p>
                   {(s.safetyNotes || s.bestTime || s.contributorTip) && (
                     <div className="mt-3 rounded-xl p-3 space-y-1" style={{ backgroundColor: C.muted }}>
@@ -693,3 +716,4 @@ export function ContributorPage({
   );
 }
 //==================== WongYueShan END - Local Contributor Portal ====================
+
