@@ -196,6 +196,11 @@ async function profile(user: User): Promise<EntityRecord> {
       ? existing.data()
       : {};
 
+  if (existingData.status === "deleted" || existingData.status === "disabled") {
+    await signOut(firebase().auth);
+    throw new Error("This account has been disabled by an administrator.");
+  }
+
   const now = new Date().toISOString();
 
   /*
@@ -844,7 +849,34 @@ const auth = {
   },
 
   async adminDeleteUser(uid: string): Promise<void> {
-    await entity("User").delete(uid);
+    const now = new Date().toISOString();
+
+    await backend.adminDeleteUserData(uid);
+
+    for (const collection of ["Bookmark", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
+      const createdRows = await entity(collection).filter({ created_by_id: uid }, undefined, 500);
+      const userRows = await entity(collection).filter({ userId: uid }, undefined, 500);
+      const contributorRows = await entity(collection).filter({ contributorId: uid }, undefined, 500);
+      const rows = [...createdRows, ...userRows, ...contributorRows];
+      const ids = [...new Set(rows.map((record) => String(record.id)))];
+      await Promise.all(ids.map((id) => entity(collection).delete(id)));
+    }
+
+    const announcements = await entity("Announcement").filter({ userId: uid }, undefined, 500);
+    await Promise.all(announcements.map((record) => entity("Announcement").delete(String(record.id))));
+
+    await setDoc(
+      doc(firebase().db, "User", uid),
+      {
+        status: "deleted",
+        role: "user",
+        deleted_at: now,
+        full_name: "Deleted user",
+        username: `deleted_${uid.slice(0, 8)}`,
+        photo_url: "",
+      },
+      { merge: true }
+    );
   },
 
   async logout(
@@ -1088,6 +1120,9 @@ const backend = {
   },
   moderateReview(id: string, action: "approve" | "remove") {
     return this.call<{ review: EntityRecord }>("moderateReview", { id, action });
+  },
+  adminDeleteUserData(uid: string) {
+    return this.call<{ success: boolean }>("adminDeleteUserData", { uid });
   },
   signContributorDocument(uri: string) {
     return this.call<{ url: string }>("signContributorDocument", { uri });

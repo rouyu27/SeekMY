@@ -120,8 +120,8 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   }
   async function deleteUser(member:AppUser){
     if(isFixedTeamAdmin(member.email)){showToast("Fixed team admin profile cannot be deleted here.");return;}
-    if(!confirm(`Delete the Firestore profile for ${member.email}? Their Firebase login cannot be removed on the free plan.`))return;
-    try{await firebaseClient.auth.adminDeleteUser(member.id);const next=users.filter(u=>u.id!==member.id);setUsers(next);setParentUsers(next);showToast("Firestore profile deleted. The Auth login remains active.");}catch(e:any){showToast(e?.message||"Unable to delete user profile.");}
+    if(!confirm(`Delete ${member.email}? This will disable their SeekMY login and clean their app data from Firebase/Supabase.`))return;
+    try{await firebaseClient.auth.adminDeleteUser(member.id);const next=users.filter(u=>u.id!==member.id);setUsers(next);setParentUsers(next);showToast("User disabled and app data cleaned.");}catch(e:any){showToast(e?.message||"Unable to delete user profile.");}
   }
   async function deleteLocation(id:string|number){if(!confirm("Delete this location from Firebase?"))return;try{await firebaseClient.entities.Location.delete(String(id));setLocations(ls=>ls.filter(l=>String(l.id)!==String(id)));(window as any).__seekmyRefreshLocations?.();showToast("Location deleted from Firebase.");}catch(e:any){showToast(e?.message||"Unable to delete location.");}}
   function openEditLocation(loc:Location){
