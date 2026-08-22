@@ -41,6 +41,13 @@ const heroPhotos = [
   },
 ];
 
+function roundedCountLabel(count: number) {
+  if (count <= 0) return "0";
+  if (count < 10) return `${count}+`;
+  if (count < 100) return `${Math.floor(count / 10) * 10}+`;
+  return `${Math.floor(count / 100) * 100}+`;
+}
+
 export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookmarks, onBookmark, locations }:{
   setPage:(p:Page)=>void; setSelectedLocation:(l:Location)=>void;
   setSelectedState:(c:string)=>void; bookmarks:(number|string)[]; onBookmark:(id:number|string)=>void;
@@ -71,6 +78,14 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
 
   const hiddenGems = useMemo(() => locations.filter((l:any) => l.is_hidden_gem).slice(0,3), [locations]);
   const gem = hiddenGems[gemIndex] ?? hiddenGems[0] ?? null;
+  const heroStats = useMemo(() => {
+    const activityCount = new Set(locations.map(location => location.activity).filter(Boolean)).size || ACTIVITY_FILTERS.filter(activity => activity.id !== "all").length;
+    return [
+      { val: String(ALL_STATES.length), label: "States" },
+      { val: roundedCountLabel(activityCount), label: "Activities" },
+      { val: roundedCountLabel(locations.length), label: "Locations" },
+    ];
+  }, [locations]);
 
   useEffect(() => {
     if (hiddenGems.length <= 1) return;
@@ -160,7 +175,7 @@ export function HomePage({ setPage, setSelectedLocation, setSelectedState, bookm
             </div>
           </div>
           <div className="flex items-center justify-center gap-14">
-            {[{val:"16",label:"States"},{val:"9+",label:"Activities"},{val:"30+",label:"Locations"}].map(({val,label})=>(
+            {heroStats.map(({val,label})=>(
               <div key={label}>
                 <p className="text-2xl font-bold text-white" style={{fontFamily:F.display}}>{val}</p>
                 <p className="text-[11px] font-semibold" style={{color:"rgba(255,255,255,0.50)",fontFamily:F.body}}>{label}</p>
