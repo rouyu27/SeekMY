@@ -34,11 +34,11 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   const [selectedAnnouncement,setSelectedAnnouncement]=useState<UserAnnouncement|null>(null);
   async function refreshMine(){
     try{
-      const [subs,ownAnns,globalAnns]=await Promise.all([
+      const [subs,ownAnns]=await Promise.all([
         firebaseClient.entities.LocationSubmission.filter({created_by_id:user.id}),
         firebaseClient.entities.Announcement.filter({userId:user.id}),
-        firebaseClient.entities.Announcement.filter({userId:"all"}),
       ]);
+      const globalAnns = await firebaseClient.entities.Announcement.filter({userId:"all"}).catch(()=>[]);
       setMySubs((subs as LocationSubmission[]).sort((a,b)=>String(b.created_date||b.createdAt||"").localeCompare(String(a.created_date||a.createdAt||""))));
       const seen = new Set<string>();
       const nextAnnouncements = ([...(ownAnns as UserAnnouncement[]), ...(globalAnns as UserAnnouncement[])])
@@ -304,7 +304,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-bold" style={{fontFamily:F.body,color:C.text}}>My Suggestions</h2>
-              <button type="button" onClick={refreshMine} className="text-xs font-bold" style={{color:C.forest,fontFamily:F.body}}>Refresh</button>
+              <button type="button" onClick={refreshMine} className="text-xs font-bold" style={{color:C.forest,fontFamily:F.body}}>Sync latest</button>
             </div>
             {mySubs.length===0 ? (
               <div className="bg-white rounded-[18px] p-8 text-center" style={{boxShadow:`0 1px 3px rgba(27,67,50,0.08)`}}>

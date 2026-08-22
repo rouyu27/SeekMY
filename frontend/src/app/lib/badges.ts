@@ -73,6 +73,15 @@ export async function shareBadge(badge: BadgeStatus) {
   const text = `I earned the "${badge.name}" badge on SeekMY! ${badge.icon}\n${badge.desc}`;
   if (typeof navigator !== "undefined" && navigator.share) {
     try {
+      if (badge.image && navigator.canShare) {
+        const response = await fetch(badge.image);
+        const blob = await response.blob();
+        const file = new File([blob], `${badge.id}.png`, { type: blob.type || "image/png" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: "SeekMY Badge", text, files: [file] });
+          return;
+        }
+      }
       await navigator.share({ title: "SeekMY Badge", text });
       return;
     } catch {

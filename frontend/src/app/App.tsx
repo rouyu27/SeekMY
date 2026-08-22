@@ -197,7 +197,7 @@ export default function App() {
     try {
       const [ownRows, globalRows] = await Promise.all([
         firebaseClient.entities.Announcement.filter({ userId: currentUser.id }, undefined, 500),
-        firebaseClient.entities.Announcement.filter({ userId: "all" }, undefined, 500),
+        firebaseClient.entities.Announcement.filter({ userId: "all" }, undefined, 500).catch(()=>[]),
       ]);
       const seen = new Set<string>();
       const rows = [...ownRows, ...globalRows].filter((announcement:any)=>!announcement.dismissed && !seen.has(String(announcement.id)) && seen.add(String(announcement.id)));
