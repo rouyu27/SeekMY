@@ -60,6 +60,25 @@ export default function App() {
     return window.localStorage.getItem("seekmy-onboarding-complete") !== "true";
   });
 
+  function isVisibleLocation(location: Location) {
+    const status = String((location as any).status || "active").toLowerCase();
+    return status !== "unavailable" && status !== "deleted" && status !== "disabled";
+  }
+
+  async function prepareLocations(rows: Location[]) {
+    const visibleRows = rows.filter(isVisibleLocation);
+    const unavailableNames = new Set(
+      rows
+        .filter((location) => !isVisibleLocation(location))
+        .map((location) => `${location.name}|${location.state}`.toLowerCase())
+    );
+    const visibleStarters = STARTER_LOCATIONS.filter(
+      (location) => !unavailableNames.has(`${location.name}|${location.state}`.toLowerCase())
+    );
+    const sourceRows = visibleRows.length ? visibleRows : visibleStarters;
+    return attachReviewSummaries(mergeLocations(sourceRows, visibleStarters));
+  }
+
   const isAdmin = user?.role === "admin";
   async function attachReviewSummaries(locations: Location[]) {
     try {
@@ -105,7 +124,7 @@ export default function App() {
     if (!configured) return;
 
     firebaseClient.entities.Location.list("name")
-      .then(async (rows:any[]) => setAllLocations(mergeLocations(await attachReviewSummaries(rows as Location[]), STARTER_LOCATIONS)))
+      .then(async (rows:any[]) => setAllLocations(await prepareLocations(rows as Location[])))
       .catch((error:any) => {
         setAllLocations(STARTER_LOCATIONS);
         showToast(error?.message || "Unable to load locations from Firebase.", "err");
@@ -238,8 +257,14 @@ export default function App() {
     } catch (error:any) { showToast(error?.message || "Unable to update bookmark in Firebase.", "err"); }
   }
   function refreshLocations(extra?: Location) {
-    if (extra) setAllLocations((current)=>current.some((l)=>String(l.id)===String(extra.id))?current:[extra,...current]);
-    else firebaseClient.entities.Location.list("name").then(async (rows:any[])=>setAllLocations(mergeLocations(await attachReviewSummaries(rows as Location[]), STARTER_LOCATIONS))).catch(()=>setAllLocations(STARTER_LOCATIONS));
+    if (extra) {
+      if (!isVisibleLocation(extra)) {
+        setAllLocations((current)=>current.filter((l)=>String(l.id)!==String(extra.id) && `${l.name}|${l.state}`.toLowerCase()!==`${extra.name}|${extra.state}`.toLowerCase()));
+        return;
+      }
+      setAllLocations((current)=>current.some((l)=>String(l.id)===String(extra.id))?current.map((l)=>String(l.id)===String(extra.id)?extra:l):[extra,...current]);
+    }
+    else firebaseClient.entities.Location.list("name").then(async (rows:any[])=>setAllLocations(await prepareLocations(rows as Location[]))).catch(()=>setAllLocations(STARTER_LOCATIONS));
   }
   if (typeof window !== "undefined") (window as any).__seekmyRefreshLocations = (loc: Location) => refreshLocations(loc);
   function setBookmarksPersist(updater: BookmarkEntry[] | ((p: BookmarkEntry[]) => BookmarkEntry[])) {

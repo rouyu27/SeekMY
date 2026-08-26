@@ -85,6 +85,7 @@ export interface Location {
   budget: "Free"|"Low"|"Medium"|"High";
   activitySpecific?: ActivitySpecific;
   contributors?: Contributor[];
+  status?: "active" | "unavailable" | "deleted" | string;
 }
 
 export interface ActivityLog {

@@ -54,6 +54,11 @@ function displayPrice(location: any) {
   return typeof location.estimatedPrice === "number" ? `RM ${location.estimatedPrice.toFixed(2)}` : "";
 }
 
+function isAvailableLocation(location: Location) {
+  const status = String((location as any).status || "active").toLowerCase();
+  return status !== "unavailable" && status !== "deleted" && status !== "disabled";
+}
+
 function locationSearchQuery(form: typeof emptyLocation, suffix: string) {
   return encodeURIComponent([form.name, form.state, "Malaysia", suffix].filter(Boolean).join(" "));
 }
@@ -115,7 +120,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         firebaseClient.entities.LocationSubmission.list("-created_date",500),
       ]);
 
-      if(locationsResult.status==="fulfilled")setLocations(locationsResult.value as Location[]);
+      if(locationsResult.status==="fulfilled")setLocations((locationsResult.value as Location[]).filter(isAvailableLocation));
       if(contributorsResult.status==="fulfilled")setContributors(contributorsResult.value as ContributorApplication[]);
       if(reviewsResult.status==="fulfilled")setReviews(reviewsResult.value as StoredReview[]);
       if(submissionsResult.status==="fulfilled")setSubmissions(submissionsResult.value as LocationSubmission[]);
@@ -140,9 +145,9 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   const pendingSubs=submissions.filter(s=>s.status==="pending");
   const pendingContributors=contributors.filter(c=>c.status==="pending");
   const flaggedReviews=reviews.filter(r=>r.status==="flagged"||r.status==="pending");
-  const gemCount=locations.filter((l:any)=>l.is_hidden_gem).length;
+  const gemCount=locations.filter((l:any)=>isAvailableLocation(l) && l.is_hidden_gem).length;
   const filteredUsers=users.filter(u=>!search||`${u.displayName} ${u.email}`.toLowerCase().includes(search.toLowerCase()));
-  const filteredLocs=locations.filter(l=>!search||`${l.name} ${l.state} ${l.activity}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredLocs=locations.filter(l=>isAvailableLocation(l) && (!search||`${l.name} ${l.state} ${l.activity}`.toLowerCase().includes(search.toLowerCase())));
   const filteredPendingSubmissions=pendingSubs.filter(s=>!search||`${s.name} ${s.state} ${s.activity} ${s.contributorName} ${s.status} ${s.description}`.toLowerCase().includes(search.toLowerCase()));
   const filteredReviews=reviews.filter(r=>!search||`${r.userName||"Anonymous"} ${r.locationName} ${r.comment} ${r.status}`.toLowerCase().includes(search.toLowerCase()));
   const filteredContributors=contributors.filter(c=>!search||`${c.fullName} ${c.userEmail} ${c.area} ${c.contributionArea||c.services||""} ${c.status}`.toLowerCase().includes(search.toLowerCase()));
@@ -185,7 +190,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       showToast(status==="active"?"User restored.":"User restriction saved.");
     }catch(e:any){showToast(e?.message||"Unable to update user status.");}
   }
-  async function deleteLocation(id:string|number){if(!confirm("Delete this location from Firebase?"))return;try{await firebaseClient.entities.Location.delete(String(id));setLocations(ls=>ls.filter(l=>String(l.id)!==String(id)));(window as any).__seekmyRefreshLocations?.();showToast("Location deleted from Firebase.");}catch(e:any){showToast(e?.message||"Unable to delete location.");}}
+  async function deleteLocation(location:Location){if(!confirm(`Mark "${location.name}" as unavailable? The Firebase record will be kept for users who locked, saved, reviewed, or logged this place.`))return;try{const updated:any=await firebaseClient.entities.Location.update(String(location.id),{status:"unavailable",unavailableAt:new Date().toISOString()});setLocations(ls=>ls.filter(l=>String(l.id)!==String(location.id)));(window as any).__seekmyRefreshLocations?.(updated as Location);showToast("Location marked unavailable. Firebase record was kept.");}catch(e:any){showToast(e?.message||"Unable to mark location unavailable.");}}
   function openEditLocation(loc:Location){
     setEditingLocation(loc);
     const priceParts = splitPriceRange(loc as any);
@@ -531,11 +536,11 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     <Pencil size={15}/>
   </button>
   <button
-    onClick={()=>deleteLocation(l.id)}
+    onClick={()=>deleteLocation(l)}
     className="p-2 rounded-lg"
     style={{color:C.error}}
-    title="Delete location"
-    aria-label={`Delete ${l.name}`}
+    title="Mark unavailable"
+    aria-label={`Mark ${l.name} unavailable`}
   >
     <Trash2 size={15}/>
   </button>
