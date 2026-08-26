@@ -25,6 +25,11 @@ import type { StoredReview } from "../lib/communityTypes";
 import { locationMetadataFor } from "../lib/locationMetadata";
 
 const MAX_REVIEW_PHOTO_BYTES = 1 * 1024 * 1024;
+const MAX_REVIEW_WORDS = 300;
+
+function countReviewWords(value: string): number {
+  return value.match(/\S+/g)?.length ?? 0;
+}
 
 export function LocationPage({
   loc,
@@ -785,14 +790,23 @@ export function LocationPage({
                   </button>
                 ))}
               </div>
-              <textarea
-                value={rt}
-                onChange={(e) => setRt(e.target.value)}
-                placeholder="Share your experience…"
-                rows={3}
-                className="w-full rounded-xl px-4 py-3 text-sm outline-none border resize-none mb-3"
-                style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
-              />
+              <div className="mb-3">
+                <textarea
+                  value={rt}
+                  onChange={(e) => setRt(e.target.value)}
+                  placeholder="Share your experience…"
+                  rows={3}
+                  className="w-full rounded-xl px-4 py-3 text-sm outline-none border resize-none"
+                  style={{ borderColor: countReviewWords(rt) > MAX_REVIEW_WORDS ? C.error : C.border, fontFamily: F.body, color: C.text }}
+                />
+                <p
+                  className="mt-1 text-right text-xs"
+                  style={{ color: countReviewWords(rt) > MAX_REVIEW_WORDS ? C.error : C.textMuted, fontFamily: F.body }}
+                  aria-live="polite"
+                >
+                  {countReviewWords(rt)} / {MAX_REVIEW_WORDS} words
+                </p>
+              </div>
               <label
                 className="mb-3 flex cursor-pointer items-center gap-3 rounded-xl border p-3"
                 style={{ borderColor: C.border, fontFamily: F.body }}
@@ -829,6 +843,7 @@ export function LocationPage({
                   if(!visited){setReviewMsg("You can only review locations you have visited. Please log your activity first and try again.");return;}
                   if(rating===0){setReviewMsg("Please select a rating before submitting.");return;}
                   if(!rt.trim()){setReviewMsg("Please write a review comment.");return;}
+                  if(countReviewWords(rt)>MAX_REVIEW_WORDS){setReviewMsg(`Review comments are limited to ${MAX_REVIEW_WORDS} words.`);return;}
                   try{
                     const photoUrl = reviewPhotoFile ? await firebaseClient.storage.uploadReviewPhoto(reviewPhotoFile) : "";
                     const result=await firebaseClient.backend.submitReview({
@@ -903,19 +918,29 @@ export function LocationPage({
                   </div>
                   {editing ? (
                     <div className="space-y-2">
-                      <textarea
-                        value={editingReviewText}
-                        onChange={(event) => setEditingReviewText(event.target.value)}
-                        rows={3}
-                        className="w-full rounded-xl px-4 py-3 text-sm outline-none border resize-none"
-                        style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
-                      />
+                      <div>
+                        <textarea
+                          value={editingReviewText}
+                          onChange={(event) => setEditingReviewText(event.target.value)}
+                          rows={3}
+                          className="w-full rounded-xl px-4 py-3 text-sm outline-none border resize-none"
+                          style={{ borderColor: countReviewWords(editingReviewText) > MAX_REVIEW_WORDS ? C.error : C.border, fontFamily: F.body, color: C.text }}
+                        />
+                        <p
+                          className="mt-1 text-right text-xs"
+                          style={{ color: countReviewWords(editingReviewText) > MAX_REVIEW_WORDS ? C.error : C.textMuted, fontFamily: F.body }}
+                          aria-live="polite"
+                        >
+                          {countReviewWords(editingReviewText)} / {MAX_REVIEW_WORDS} words
+                        </p>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         <Pill
                           variant="filled"
                           small
                           onClick={async () => {
                             if (editingReviewRating === 0 || !editingReviewText.trim()) { setReviewMsg("A rating and review comment are required."); return; }
+                            if (countReviewWords(editingReviewText) > MAX_REVIEW_WORDS) { setReviewMsg(`Review comments are limited to ${MAX_REVIEW_WORDS} words.`); return; }
                             try {
                               const result = await firebaseClient.backend.updateReview(r.id,{rating:editingReviewRating,comment:editingReviewText.trim()});
                               setReviews(items=>{

@@ -28,7 +28,10 @@ create table if not exists public.seekmy_reviews (
   location_name text not null,
   user_name text not null default 'Explorer',
   rating smallint not null check (rating between 1 and 5),
-  comment text not null check (char_length(comment) between 1 and 2000),
+  comment text not null constraint seekmy_reviews_comment_check check (
+    btrim(comment) <> '' and
+    cardinality(regexp_split_to_array(btrim(comment), E'\\s+')) <= 300
+  ),
   photo_url text not null default '',
   status text not null default 'approved' check (status in ('approved','flagged','removed','rejected')),
   flag_reason text,
