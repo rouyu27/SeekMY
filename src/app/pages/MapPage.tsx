@@ -99,9 +99,9 @@ const weatherCopy: Record<Language, Record<string, string>> = {
 };
 
 const weatherPalette: Record<Exclude<WeatherKind, "all">, { bg: string; text: string; border: string }> = {
-  rain: { bg: "#6b7280", text: "#1f2937", border: "#4b5563" },
-  cloudy: { bg: "#1d4ed8", text: "#1e3a8a", border: "#1e40af" },
   sunny: { bg: "#f59e0b", text: "#78350f", border: "#d97706" },
+  cloudy: { bg: "#94a3b8", text: "#334155", border: "#64748b" },
+  rain: { bg: "#60a5fa", text: "#1e3a8a", border: "#2563eb" },
 };
 
 function wt(language: Language, key: string) {
