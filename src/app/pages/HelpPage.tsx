@@ -58,7 +58,7 @@ export function HelpPage({
       </div>
     </div>
     <div className="grid sm:grid-cols-3 gap-3 mb-6">{[
-      {icon:<CloudSun size={18}/>,title:t(language, "weather"),text:t(language, "helpWeatherText"),page:"explore" as Page},
+      {icon:<CloudSun size={18}/>,title:t(language, "weather"),text:t(language, "helpWeatherText"),page:"map" as Page},
       {icon:<MessageCircle size={18}/>,title:t(language, "aiGuide"),text:language==="ms"?"Keselamatan, peralatan dan bantuan lokasi":language==="zh"?"安全、装备和地点帮助":"Safety, gear and location help",page:"ai" as Page},
       {icon:<ShieldCheck size={18}/>,title:t(language, "contributors"),text:language==="ms"?"Sumbangan lokasi komuniti":language==="zh"?"社区地点提交":"Community location submissions",page:"contributor" as Page},
     ].map(c=><button key={c.title} onClick={()=>setPage(c.page)} className="bg-white rounded-[18px] p-4 text-left" style={{border:`1px solid ${C.border}`}}><span style={{color:C.jungle}}>{c.icon}</span><div className="text-sm font-bold mt-2" style={{color:C.text,fontFamily:F.body}}>{c.title}</div><div className="text-[11px] mt-1" style={{color:C.textMuted}}>{c.text}</div></button>)}</div>
