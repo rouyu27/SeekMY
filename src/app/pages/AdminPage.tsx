@@ -11,7 +11,7 @@ import { ALL_STATES } from "../lib/constants";
 import { firebaseClient } from "../api/firebaseClient";
 import { OutdoorImportPanel } from "../components/OutdoorImportPanel";
 import { LocationImageUploader } from "./LocationImageUploader";
-import { STARTER_LOCATIONS } from "../lib/seedLocations";
+import { STARTER_LOCATIONS, mergeLocations } from "../lib/seedLocations";
 import { geocodeMapLocation, reverseGeocodeLocation } from "../lib/mapGeocoding";
 
 const TEAM_ADMIN_EMAILS = [
@@ -57,6 +57,19 @@ function displayPrice(location: any) {
 function isAvailableLocation(location: Location) {
   const status = String((location as any).status || "active").toLowerCase();
   return status !== "unavailable" && status !== "deleted" && status !== "disabled";
+}
+
+function prepareAdminLocations(rows: Location[]) {
+  const unavailableNames = new Set(
+    rows
+      .filter((location) => !isAvailableLocation(location))
+      .map((location) => `${location.name}|${location.state}`.toLowerCase())
+  );
+  const visibleRows = rows.filter(isAvailableLocation);
+  const visibleStarters = STARTER_LOCATIONS.filter(
+    (location) => !unavailableNames.has(`${location.name}|${location.state}`.toLowerCase())
+  );
+  return mergeLocations(visibleRows.length ? visibleRows : visibleStarters, visibleStarters);
 }
 
 function locationSearchQuery(form: typeof emptyLocation, suffix: string) {
@@ -120,7 +133,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         firebaseClient.entities.LocationSubmission.list("-created_date",500),
       ]);
 
-      if(locationsResult.status==="fulfilled")setLocations((locationsResult.value as Location[]).filter(isAvailableLocation));
+      if(locationsResult.status==="fulfilled")setLocations(prepareAdminLocations(locationsResult.value as Location[]));
       if(contributorsResult.status==="fulfilled")setContributors(contributorsResult.value as ContributorApplication[]);
       if(reviewsResult.status==="fulfilled")setReviews(reviewsResult.value as StoredReview[]);
       if(submissionsResult.status==="fulfilled")setSubmissions(submissionsResult.value as LocationSubmission[]);
@@ -190,7 +203,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       showToast(status==="active"?"User restored.":"User restriction saved.");
     }catch(e:any){showToast(e?.message||"Unable to update user status.");}
   }
-  async function deleteLocation(location:Location){if(!confirm(`Mark "${location.name}" as unavailable? The Firebase record will be kept for users who locked, saved, reviewed, or logged this place.`))return;try{const updated:any=await firebaseClient.entities.Location.update(String(location.id),{status:"unavailable",unavailableAt:new Date().toISOString()});setLocations(ls=>ls.filter(l=>String(l.id)!==String(location.id)));(window as any).__seekmyRefreshLocations?.(updated as Location);showToast("Location marked unavailable. Firebase record was kept.");}catch(e:any){showToast(e?.message||"Unable to mark location unavailable.");}}
+  async function deleteLocation(location:Location){if(!confirm(`Mark "${location.name}" as unavailable? The Firebase record will be kept for users who locked, saved, reviewed, or logged this place.`))return;try{let updated:any;const unavailableData={status:"unavailable",unavailableAt:new Date().toISOString()};try{updated=await firebaseClient.entities.Location.update(String(location.id),unavailableData);}catch(error:any){if(error?.status!==404&&!String(error?.message||"").toLowerCase().includes("not found"))throw error;const {id, ...locationData}=location;updated=await firebaseClient.entities.Location.create({...locationData,...unavailableData});}setLocations(ls=>ls.filter(l=>String(l.id)!==String(location.id)&&`${l.name}|${l.state}`.toLowerCase()!==`${location.name}|${location.state}`.toLowerCase()));(window as any).__seekmyRefreshLocations?.(updated as Location);showToast("Location marked unavailable. Firebase record was kept.");}catch(e:any){showToast(e?.message||"Unable to mark location unavailable.");}}
   function openEditLocation(loc:Location){
     setEditingLocation(loc);
     const priceParts = splitPriceRange(loc as any);
