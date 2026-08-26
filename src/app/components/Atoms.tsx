@@ -41,11 +41,11 @@ export function AlertBanner({ type, message }:{type:"success"|"error"; message:s
 }
 
 // Password input with show/hide toggle
-export function PasswordInput({ value, onChange, placeholder }: {value:string; onChange:(v:string)=>void; placeholder:string}) {
+export function PasswordInput({ value, onChange, placeholder, onFocus }: {value:string; onChange:(v:string)=>void; placeholder:string; onFocus?:()=>void}) {
   const [show,setShow] = useState(false);
   return (
     <div className="relative">
-      <input value={value} onChange={e=>onChange(e.target.value)} type={show?"text":"password"} placeholder={placeholder}
+      <input value={value} onFocus={onFocus} onChange={e=>onChange(e.target.value)} type={show?"text":"password"} placeholder={placeholder}
         className="w-full px-4 py-3 pr-11 rounded-xl text-sm outline-none border" style={{borderColor:C.border,fontFamily:F.body,color:C.text}}/>
       <button type="button" onClick={()=>setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1" style={{color:C.textMuted}}>
         {show ? <EyeOff size={15}/> : <Eye size={15}/>}
@@ -53,4 +53,3 @@ export function PasswordInput({ value, onChange, placeholder }: {value:string; o
     </div>
   );
 }
-

@@ -58,6 +58,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   const [newPass,setNewPass]       = useState("");
   const [confPass,setConfPass]     = useState("");
   const [passAlert,setPassAlert]   = useState<{type:"success"|"error";msg:string}|null>(null);
+  const [showPasswordRequirements,setShowPasswordRequirements] = useState(false);
 
   // Delete account state
   const [showDeleteConfirm,setShowDeleteConfirm] = useState(false);
@@ -125,7 +126,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
     if(newPass===curPass){setPassAlert({type:"error",msg:"New password must be different from your current password."});return;}
     if(!isStrongPassword(newPass)){setPassAlert({type:"error",msg:PASSWORD_REQUIREMENT});return;}
     if(newPass!==confPass){setPassAlert({type:"error",msg:"New passwords do not match."});return;}
-    try{await firebaseClient.auth.changePassword({oldPassword:curPass,newPassword:newPass});setCurPass("");setNewPass("");setConfPass("");setPassAlert({type:"success",msg:"Password changed successfully in Firebase Authentication."});}
+    try{await firebaseClient.auth.changePassword({oldPassword:curPass,newPassword:newPass});setCurPass("");setNewPass("");setConfPass("");setShowPasswordRequirements(false);setPassAlert({type:"success",msg:"Password changed successfully in Firebase Authentication."});}
     catch(error:any){setPassAlert({type:"error",msg:error?.message||"Unable to change password."});}
   }
 
@@ -549,8 +550,8 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide mb-1.5 block" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "newPassword")}</label>
-                  <PasswordInput value={newPass} onChange={setNewPass} placeholder="Strong password"/>
-                  {newPass.length > 0 && (
+                  <PasswordInput value={newPass} onFocus={()=>setShowPasswordRequirements(true)} onChange={setNewPass} placeholder="Strong password"/>
+                  {showPasswordRequirements && (
                     <div className="mt-3 rounded-2xl border p-4" style={{borderColor:C.border}}>
                       <p className="mb-3 text-xs font-bold" style={{color:C.text,fontFamily:F.body}}>Password Requirements</p>
                       <div className="space-y-2.5">
