@@ -72,6 +72,11 @@ function prepareAdminLocations(rows: Location[]) {
   return mergeLocations(visibleRows.length ? visibleRows : visibleStarters, visibleStarters);
 }
 
+function isMissingFirestoreDocumentError(error: any) {
+  const message = String(error?.message || "").toLowerCase();
+  return error?.status === 404 || error?.code === "not-found" || message.includes("not found") || message.includes("no document to update");
+}
+
 function locationSearchQuery(form: typeof emptyLocation, suffix: string) {
   return encodeURIComponent([form.name, form.state, "Malaysia", suffix].filter(Boolean).join(" "));
 }
@@ -203,7 +208,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       showToast(status==="active"?"User restored.":"User restriction saved.");
     }catch(e:any){showToast(e?.message||"Unable to update user status.");}
   }
-  async function deleteLocation(location:Location){if(!confirm(`Mark "${location.name}" as unavailable? The Firebase record will be kept for users who locked, saved, reviewed, or logged this place.`))return;try{let updated:any;const unavailableData={status:"unavailable",unavailableAt:new Date().toISOString()};try{updated=await firebaseClient.entities.Location.update(String(location.id),unavailableData);}catch(error:any){if(error?.status!==404&&!String(error?.message||"").toLowerCase().includes("not found"))throw error;const {id, ...locationData}=location;updated=await firebaseClient.entities.Location.create({...locationData,...unavailableData});}setLocations(ls=>ls.filter(l=>String(l.id)!==String(location.id)&&`${l.name}|${l.state}`.toLowerCase()!==`${location.name}|${location.state}`.toLowerCase()));(window as any).__seekmyRefreshLocations?.(updated as Location);showToast("Location marked unavailable. Firebase record was kept.");}catch(e:any){showToast(e?.message||"Unable to mark location unavailable.");}}
+  async function deleteLocation(location:Location){if(!confirm(`Mark "${location.name}" as unavailable? The Firebase record will be kept for users who locked, saved, reviewed, or logged this place.`))return;try{let updated:any;const unavailableData={status:"unavailable",unavailableAt:new Date().toISOString()};try{updated=await firebaseClient.entities.Location.update(String(location.id),unavailableData);}catch(error:any){if(!isMissingFirestoreDocumentError(error))throw error;const {id, ...locationData}=location;updated=await firebaseClient.entities.Location.create({...locationData,...unavailableData});}setLocations(ls=>ls.filter(l=>String(l.id)!==String(location.id)&&`${l.name}|${l.state}`.toLowerCase()!==`${location.name}|${location.state}`.toLowerCase()));(window as any).__seekmyRefreshLocations?.(updated as Location);showToast("Location marked unavailable. Firebase record was kept.");}catch(e:any){showToast(e?.message||"Unable to mark location unavailable.");}}
   function openEditLocation(loc:Location){
     setEditingLocation(loc);
     const priceParts = splitPriceRange(loc as any);
