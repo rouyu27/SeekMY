@@ -533,7 +533,10 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide mb-1.5 block" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "newPassword")}</label>
-                  <PasswordInput value={newPass} onChange={setNewPass} placeholder="Minimum 6 characters"/>
+                  <PasswordInput value={newPass} onChange={setNewPass} placeholder="Strong password"/>
+                  <p className="mt-1.5 text-[11px] leading-4" style={{color:C.textMuted,fontFamily:F.body}}>
+                    {PASSWORD_REQUIREMENT}
+                  </p>
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide mb-1.5 block" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "confirmNewPassword")}</label>
