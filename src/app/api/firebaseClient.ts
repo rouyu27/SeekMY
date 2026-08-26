@@ -1106,6 +1106,18 @@ const backend = {
   getLocationReviewSummaries() {
     return this.call<{ summaries: Array<{ locationId: string; locationName?: string; count: number; rating: number }> }>("getLocationReviewSummaries");
   },
+  getSharedBookmarkFolder(token: string) {
+    return this.call<{ folder: { name: string; locations: Array<Record<string, any>> } }>("getSharedBookmarkFolder", { token });
+  },
+  getBookmarkFolderShareStatus(folderName: string) {
+    return this.call<{ active: boolean; updatedAt: string | null }>("getBookmarkFolderShareStatus", { folderName });
+  },
+  createBookmarkFolderShare(folderName: string, locationIds: Array<string | number>) {
+    return this.call<{ token: string; folderName: string; locationCount: number }>("createBookmarkFolderShare", { folderName, locationIds });
+  },
+  disableBookmarkFolderShare(folderName: string) {
+    return this.call<{ success: boolean }>("disableBookmarkFolderShare", { folderName });
+  },
   submitReview(payload: Record<string, any>) {
     return this.call<{ review: EntityRecord; newBadges: EntityRecord[] }>("submitReview", payload);
   },

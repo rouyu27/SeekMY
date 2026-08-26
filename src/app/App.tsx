@@ -25,6 +25,7 @@ import { AdminPage } from "./pages/AdminPage";
 import { ContributorPage } from "./pages/ContributorPage";
 import { InsightsPage } from "./pages/InsightsPage";
 import { HelpPage } from "./pages/HelpPage";
+import { SharedBookmarksPage } from "./pages/SharedBookmarksPage";
 import { firebaseClient } from "./api/firebaseClient";
 import { BADGE_DEFS, badgeAchievementMessage } from "./lib/badges";
 import type { BadgeDef } from "./lib/types";
@@ -33,6 +34,14 @@ import { OnboardingTour } from "./components/OnboardingTour";
 import { STARTER_LOCATIONS, mergeLocations } from "./lib/seedLocations";
 import type { Language } from "./lib/i18n";
 import { t } from "./lib/i18n";
+
+function routeSegment(prefix: string): string {
+  if (typeof window === "undefined") return "";
+  const path = window.location.pathname;
+  if (!path.startsWith(prefix)) return "";
+  try { return decodeURIComponent(path.slice(prefix.length).split("/")[0] || ""); }
+  catch { return ""; }
+}
 
 export default function App() {
   const [page, setPage]               = useState<Page>("home");
@@ -55,6 +64,8 @@ export default function App() {
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
   const [openMapWeather, setOpenMapWeather] = useState(false);
   const [language, setLanguageState] = useState<Language>("en");
+  const [sharedFolderToken] = useState(() => routeSegment("/shared/bookmarks/"));
+  const [initialPublicLocationId] = useState(() => routeSegment("/location/"));
   const [showOnboarding, setShowOnboarding] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("seekmy-onboarding-complete") !== "true";
@@ -124,9 +135,29 @@ export default function App() {
     if (!configured) return;
 
     firebaseClient.entities.Location.list("name")
-      .then(async (rows:any[]) => setAllLocations(await prepareLocations(rows as Location[])))
+      .then(async (rows:any[]) => {
+        const prepared = await prepareLocations(rows as Location[]);
+        setAllLocations(prepared);
+        if (initialPublicLocationId) {
+          const publicLocation = prepared.find((location) => String(location.id) === initialPublicLocationId);
+          if (publicLocation) {
+            setSelectedLocation(publicLocation);
+            setLocationInitialTab("overview");
+            setPage("location");
+          }
+        }
+      })
       .catch((error:any) => {
-        setAllLocations(STARTER_LOCATIONS);
+        const fallbackLocations = STARTER_LOCATIONS;
+        setAllLocations(fallbackLocations);
+        if (initialPublicLocationId) {
+          const publicLocation = fallbackLocations.find((location) => String(location.id) === initialPublicLocationId);
+          if (publicLocation) {
+            setSelectedLocation(publicLocation);
+            setLocationInitialTab("overview");
+            setPage("location");
+          }
+        }
         showToast(error?.message || "Unable to load locations from Firebase.", "err");
       });
 
@@ -409,6 +440,10 @@ export default function App() {
       showToast(error?.message || "Unable to load your Firebase data.", "err");
     }
     // Keep the current page after login so protected pages immediately show the user's data.
+  }
+
+  if (sharedFolderToken) {
+    return <SharedBookmarksPage token={sharedFolderToken}/>;
   }
 
   if (isAdmin) {

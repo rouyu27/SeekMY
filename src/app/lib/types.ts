@@ -127,3 +127,19 @@ export interface BookmarkEntry {
   folder: string;
   savedAt: string;
 }
+
+export interface SharedBookmarkLocation {
+  id: number | string;
+  name: string;
+  address?: string;
+  state: string;
+  activity: string;
+  difficulty?: string;
+  emoji?: string;
+  imageUrl?: string;
+}
+
+export interface SharedBookmarkFolder {
+  name: string;
+  locations: SharedBookmarkLocation[];
+}
