@@ -76,7 +76,6 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   const passwordRequirements = [
     { label: "Different from current password", met: Boolean(newPass && curPass && newPass !== curPass) },
     { label: "At least 8 characters", met: newPass.length >= 8 },
-    { label: "Different from email address", met: Boolean(newPass && newPass.toLowerCase() !== user.email.toLowerCase()) },
     { label: "Meet all 4 conditions", met: passwordConditionCount === 4 },
     { label: "At least one lowercase letter", met: /[a-z]/.test(newPass) },
     { label: "At least one uppercase letter", met: /[A-Z]/.test(newPass) },
@@ -124,7 +123,6 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
     setPassAlert(null);
     if(!curPass||!newPass||!confPass){setPassAlert({type:"error",msg:"All password fields are required."});return;}
     if(newPass===curPass){setPassAlert({type:"error",msg:"New password must be different from your current password."});return;}
-    if(newPass.toLowerCase()===user.email.toLowerCase()){setPassAlert({type:"error",msg:"New password must be different from your email address."});return;}
     if(!isStrongPassword(newPass)){setPassAlert({type:"error",msg:PASSWORD_REQUIREMENT});return;}
     if(newPass!==confPass){setPassAlert({type:"error",msg:"New passwords do not match."});return;}
     try{await firebaseClient.auth.changePassword({oldPassword:curPass,newPassword:newPass});setCurPass("");setNewPass("");setConfPass("");setPassAlert({type:"success",msg:"Password changed successfully in Firebase Authentication."});}
