@@ -20,6 +20,7 @@ import {
   type MetWarning,
 } from "../lib/metMalaysia";
 import { firebaseClient } from "../api/firebaseClient";
+import { badgeAchievementMessage } from "../lib/badges";
 import type { StoredReview } from "../lib/communityTypes";
 import { locationMetadataFor } from "../lib/locationMetadata";
 
@@ -846,7 +847,7 @@ export function LocationPage({
                       await Promise.all(result.newBadges.map((badge:any)=>firebaseClient.entities.Announcement.create({
                         userId:user.id,
                         title:`Achievement unlocked: ${badge.name}`,
-                        message:`Nice work. You earned the "${badge.name}" badge.\n\n${badge.desc || "Thanks for helping other explorers with your review."}`,
+                        message:badgeAchievementMessage({ name: badge.name, desc: badge.desc || "Thanks for helping other explorers with your review.", icon: badge.icon || "" }),
                         type:"achievement",
                         relatedPage:"badges",
                         submissionId:badge.key,

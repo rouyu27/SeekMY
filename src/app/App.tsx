@@ -26,7 +26,7 @@ import { ContributorPage } from "./pages/ContributorPage";
 import { InsightsPage } from "./pages/InsightsPage";
 import { HelpPage } from "./pages/HelpPage";
 import { firebaseClient } from "./api/firebaseClient";
-import { BADGE_DEFS } from "./lib/badges";
+import { BADGE_DEFS, badgeAchievementMessage } from "./lib/badges";
 import type { BadgeDef } from "./lib/types";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingTour } from "./components/OnboardingTour";
@@ -139,6 +139,8 @@ export default function App() {
         id:l.id, location:l.location||l.locationName||"Unknown", activity:l.activity||"Hiking",
         distance:Number(l.distance||0), duration:l.duration||"", date:l.date||l.created_date?.slice?.(0,10)||"",
         notes:l.notes||"", comment:l.comment||"", photoUrl:l.photoUrl||l.photo_url||"",
+        is_hidden_gem:l.is_hidden_gem===true || l.isHiddenGem===true,
+        isHiddenGem:l.is_hidden_gem===true || l.isHiddenGem===true,
         locationId:l.locationId??l.location_id, state:l.state||"",
       })));
       setEarnedBadgeIds(backendData.badges.map((badge:any)=>String(badge.key||badge.id).replace(`${current.id}_`,"")));
@@ -277,6 +279,8 @@ export default function App() {
       notes:l.notes || "",
       comment:l.comment || "",
       photoUrl:l.photoUrl || l.photo_url || "",
+      is_hidden_gem:l.is_hidden_gem===true || l.isHiddenGem===true,
+      isHiddenGem:l.is_hidden_gem===true || l.isHiddenGem===true,
       locationId:l.locationId ?? l.location_id,
       state:l.state || "",
       })));
@@ -294,7 +298,7 @@ export default function App() {
         await Promise.all(result.newBadges.map((badge:any)=>firebaseClient.entities.Announcement.create({
           userId:user.id,
           title:`Achievement unlocked: ${badge.name}`,
-          message:`Nice work. You earned the "${badge.name}" badge.\n\n${badge.desc || "Keep exploring Malaysia's outdoor places with SeekMY."}`,
+          message:badgeAchievementMessage({ name: badge.name, desc: badge.desc || "Keep exploring Malaysia's outdoor places with SeekMY.", icon: badge.icon || "" }),
           type:"achievement",
           relatedPage:"badges",
           submissionId:badge.key,

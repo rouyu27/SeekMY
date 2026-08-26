@@ -92,6 +92,8 @@ export interface ActivityLog {
   locationId?: number | string;
   location: string;
   activity: string;
+  is_hidden_gem?: boolean;
+  isHiddenGem?: boolean;
   distance: number;
   duration: string;
   date: string;

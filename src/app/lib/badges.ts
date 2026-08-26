@@ -10,6 +10,7 @@ const localStoryteller = new URL("../../assets/badges/local-storyteller.png", im
 const trustedContributor = new URL("../../assets/badges/trusted-contributor.png", import.meta.url).toString();
 const communityFavourite = new URL("../../assets/badges/community-favourite.png", import.meta.url).toString();
 const malaysiaInsider = new URL("../../assets/badges/malaysia-insider.png", import.meta.url).toString();
+const SEEKMY_APP_URL = "https://seekmy-integration.web.app/";
 
 export const BADGE_DEFS: BadgeDef[] = [
   { id: "first-footstep", icon: "🥾", image: firstFootstep, name: "First Footstep", desc: "Log your first outdoor activity", requirement: 1, metric: "activities" },
@@ -45,7 +46,7 @@ export function evaluateBadges(
   const cycleKm = logs
     .filter((l) => /cycl/i.test(l.activity))
     .reduce((s, l) => s + (l.distance || 0), 0);
-  const gems = logs.filter((l) => GEM_NAMES.has(l.location)).length;
+  const gems = logs.filter((l) => l.is_hidden_gem === true || l.isHiddenGem === true || GEM_NAMES.has(l.location)).length;
 
   const metrics: Record<BadgeDef["metric"], number> = {
     activities,
@@ -69,20 +70,19 @@ export function evaluateBadges(
   });
 }
 
+export function getSeekMyAppUrl() {
+  return SEEKMY_APP_URL;
+}
+
+export function badgeAchievementMessage(badge: Pick<BadgeDef, "name" | "desc" | "icon">) {
+  return `I earned the "${badge.name}" badge on SeekMY! ${badge.icon || ""}\n${badge.desc}\n\nOpen SeekMY and earn your own badges:\n${getSeekMyAppUrl()}`;
+}
+
 export async function shareBadge(badge: BadgeStatus) {
-  const text = `I earned the "${badge.name}" badge on SeekMY! ${badge.icon}\n${badge.desc}`;
+  const text = badgeAchievementMessage(badge);
   if (typeof navigator !== "undefined" && navigator.share) {
     try {
-      if (badge.image && navigator.canShare) {
-        const response = await fetch(badge.image);
-        const blob = await response.blob();
-        const file = new File([blob], `${badge.id}.png`, { type: blob.type || "image/png" });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ title: "SeekMY Badge", text, files: [file] });
-          return;
-        }
-      }
-      await navigator.share({ title: "SeekMY Badge", text });
+      await navigator.share({ title: `${badge.name} on SeekMY`, text });
       return;
     } catch {
       /* cancelled */

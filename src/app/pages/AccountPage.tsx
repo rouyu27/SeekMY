@@ -199,6 +199,13 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
     return { name: names[name]?.[language] || name, desc: descs[desc]?.[language] || desc };
   }
 
+  function badgeUnlockHint(id: string) {
+    if (id !== "hidden-gem-hunter") return "";
+    if (language === "zh") return "如何解锁：在活动日志中记录 3 个带有 Hidden Gem 标记的地点。";
+    if (language === "ms") return "Cara buka: rekod 3 lokasi bertanda Hidden Gem dalam Log Aktiviti.";
+    return "How to unlock: log activities at 3 locations marked Hidden Gem.";
+  }
+
   const tabStyle = (t:AccTab): React.CSSProperties => ({
     color:activeTab===t?C.jungle:C.textMuted,
     borderBottom:activeTab===t?`2px solid ${C.amber}`:"2px solid transparent",
@@ -442,6 +449,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
             {badges.map((b) => {
               const pct = Math.round((b.progress / b.requirement) * 100);
               const translated = badgeCopy(b.name, b.desc);
+              const unlockHint = badgeUnlockHint(b.id);
               return (
                 <div
                   key={b.id}
@@ -473,6 +481,9 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
                         </span>
                       </div>
                       <p className="text-[12px] mt-0.5" style={{color:C.textSub,fontFamily:F.body}}>{translated.desc}</p>
+                      {unlockHint && (
+                        <p className="text-[11px] mt-1 font-semibold" style={{color:C.forest,fontFamily:F.body}}>{unlockHint}</p>
+                      )}
                       <div className="mt-3">
                         <div className="flex justify-between text-[11px] mb-1" style={{fontFamily:F.body,color:C.textMuted}}>
                           <span>{b.progress} / {b.requirement}</span>
