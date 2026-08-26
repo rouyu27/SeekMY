@@ -1145,6 +1145,9 @@ const backend = {
   removeSharedBookmarkFolderMember(folderId: string, membershipId: string) {
     return this.call<{ success: boolean }>("removeSharedBookmarkFolderMember", { folderId, membershipId });
   },
+  cleanupAdminCollaborativeMemberships() {
+    return this.call<{ success: boolean; removedMemberships: number }>("cleanupAdminCollaborativeMemberships");
+  },
   submitReview(payload: Record<string, any>) {
     return this.call<{ review: EntityRecord; newBadges: EntityRecord[] }>("submitReview", payload);
   },

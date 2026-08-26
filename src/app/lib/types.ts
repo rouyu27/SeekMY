@@ -126,6 +126,8 @@ export interface BookmarkEntry {
   locationId: number | string;
   notes: string;
   folder: string;
+  folders?: string[];
+  sharedFolderId?: string | null;
   savedAt: string;
 }
 

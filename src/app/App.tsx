@@ -60,7 +60,9 @@ function dedupeBookmarkEntries(entries: BookmarkEntry[]): BookmarkEntry[] {
     byLocation.set(key, {
       ...current,
       notes: current.notes || entry.notes,
-      folder: current.folder !== "Uncategorized" ? current.folder : entry.folder,
+      folders: [...new Set([...(current.folders || []), ...(entry.folders || [])])],
+      folder: [...new Set([...(current.folders || []), ...(entry.folders || [])])][0] || "Uncategorized",
+      sharedFolderId: null,
       duplicateFirestoreIds: [...new Set(duplicateIds.filter((id) => id !== current.firestoreId))],
     });
   }
@@ -68,13 +70,22 @@ function dedupeBookmarkEntries(entries: BookmarkEntry[]): BookmarkEntry[] {
 }
 
 function normalizeBookmarkRows(rows: any[]): BookmarkEntry[] {
-  return dedupeBookmarkEntries(rows.map((bookmark: any) => ({
-    firestoreId: String(bookmark.id),
-    locationId: bookmark.locationId ?? bookmark.location_id,
-    notes: bookmark.notes || "",
-    folder: bookmark.folder || "Uncategorized",
-    savedAt: bookmark.savedAt || bookmark.created_date || new Date().toISOString(),
-  })));
+  return dedupeBookmarkEntries(rows.map((bookmark: any) => {
+    const legacyFolder = String(bookmark.folder || "Uncategorized");
+    const legacySharedFolderId = bookmark.sharedFolderId || bookmark.shared_folder_id || null;
+    const folders = Array.isArray(bookmark.folders)
+      ? [...new Set(bookmark.folders.map(String).map((name: string) => name.trim()).filter(Boolean))]
+      : (!legacySharedFolderId && legacyFolder !== "Uncategorized" ? [legacyFolder] : []);
+    return {
+      firestoreId: String(bookmark.id),
+      locationId: bookmark.locationId ?? bookmark.location_id,
+      notes: bookmark.notes || "",
+      folders,
+      folder: folders[0] || "Uncategorized",
+      sharedFolderId: null,
+      savedAt: bookmark.savedAt || bookmark.created_date || new Date().toISOString(),
+    };
+  }));
 }
 
 export default function App() {
@@ -126,6 +137,12 @@ export default function App() {
   }
 
   const isAdmin = user?.role === "admin";
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void firebaseClient.backend.cleanupAdminCollaborativeMemberships().catch(() => undefined);
+  }, [isAdmin, user?.id]);
+
   async function attachReviewSummaries(locations: Location[]) {
     try {
       const result = await firebaseClient.backend.getLocationReviewSummaries();
@@ -318,9 +335,9 @@ export default function App() {
       } else {
         const documentId = `bookmark_${encodeURIComponent(user.id)}_${encodeURIComponent(String(id))}`;
         const created:any = await firebaseClient.entities.Bookmark.createWithId(documentId, {
-          locationId:id, notes:"", folder:"Uncategorized", savedAt:new Date().toISOString(),
+          locationId:id, notes:"", folders:[], folder:"Uncategorized", sharedFolderId:null, savedAt:new Date().toISOString(),
         });
-        setBookmarks((p)=>dedupeBookmarkEntries([{firestoreId:String(created.id),locationId:id,notes:"",folder:"Uncategorized",savedAt:created.savedAt||created.created_date||new Date().toISOString()},...p]));
+        setBookmarks((p)=>dedupeBookmarkEntries([{firestoreId:String(created.id),locationId:id,notes:"",folders:[],folder:"Uncategorized",sharedFolderId:null,savedAt:created.savedAt||created.created_date||new Date().toISOString()},...p]));
       }
     } catch (error:any) { showToast(error?.message || "Unable to update bookmark in Firebase.", "err"); }
     finally { bookmarkRequests.current.delete(requestKey); }
@@ -344,12 +361,26 @@ export default function App() {
         .forEach((b)=>[b.firestoreId, ...(b.duplicateFirestoreIds || [])].filter(Boolean).forEach((documentId)=>firebaseClient.entities.Bookmark.delete(documentId!).catch(()=>{})));
       next.forEach((b)=>{
         const old = previous.find((x)=>String(x.locationId)===String(b.locationId));
-        if (old?.firestoreId && (old.notes!==b.notes || old.folder!==b.folder)) {
-          [old.firestoreId, ...(old.duplicateFirestoreIds || [])].forEach((documentId)=>firebaseClient.entities.Bookmark.update(documentId,{notes:b.notes,folder:b.folder}).catch(()=>{}));
+        if (old?.firestoreId && (old.notes!==b.notes || JSON.stringify(old.folders||[])!==JSON.stringify(b.folders||[]))) {
+          const folders = [...new Set(b.folders || [])];
+          [old.firestoreId, ...(old.duplicateFirestoreIds || [])].forEach((documentId)=>firebaseClient.entities.Bookmark.update(documentId,{notes:b.notes,folders,folder:folders[0]||"Uncategorized",sharedFolderId:null}).catch(()=>{}));
         }
       });
       return next;
     });
+  }
+
+  async function updateBookmarkFolders(locationId: string | number, requestedFolders: string[]) {
+    const bookmark = bookmarks.find((entry) => String(entry.locationId) === String(locationId));
+    if (!bookmark) throw new Error("Bookmark not found. Refresh the page and try again.");
+    const documentIds = [bookmark.firestoreId, ...(bookmark.duplicateFirestoreIds || [])].filter(Boolean) as string[];
+    if (!documentIds.length) throw new Error("Bookmark database record not found. Refresh the page and try again.");
+
+    const folders = [...new Set(requestedFolders.map((name) => name.trim()).filter(Boolean))];
+    await Promise.all(documentIds.map((documentId) => firebaseClient.entities.Bookmark.update(documentId, { folders, folder: folders[0] || "Uncategorized", sharedFolderId: null })));
+    setBookmarks((previous) => dedupeBookmarkEntries(previous.map((entry) => (
+      String(entry.locationId) === String(locationId) ? { ...entry, folders, folder: folders[0] || "Uncategorized", sharedFolderId: null } : entry
+    ))));
   }
 
   async function loadUserFirebaseData(current: AppUser) {
@@ -360,7 +391,12 @@ export default function App() {
       const logRows = backendData.activities;
       const badgeRows = backendData.badges;
 
-    setBookmarks(normalizeBookmarkRows(bookmarkRows));
+    const normalizedBookmarks = normalizeBookmarkRows(bookmarkRows);
+    setBookmarks(normalizedBookmarks);
+    void Promise.all(bookmarkRows.filter((row:any)=>!Array.isArray(row.folders)).map((row:any)=>{
+      const normalized = normalizedBookmarks.find((entry)=>String(entry.firestoreId)===String(row.id));
+      return normalized ? firebaseClient.entities.Bookmark.update(String(row.id), { folders: normalized.folders || [], folder: normalized.folder, sharedFolderId: null }) : Promise.resolve();
+    })).catch(()=>{});
 
       setActivityLogs(logRows.map((l:any)=>({
       id:l.id,
@@ -625,6 +661,7 @@ export default function App() {
         <BookmarksPage
           bookmarks={bookmarks}
           setBookmarks={setBookmarksPersist}
+          updateBookmarkFolders={updateBookmarkFolders}
           setPage={navigate}
           setSelectedLocation={selectLocation}
           onToast={showToast}

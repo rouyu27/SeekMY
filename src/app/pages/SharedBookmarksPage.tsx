@@ -6,6 +6,7 @@ import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
 
 export function SharedBookmarksPage({ token, user, onSignIn, onOpenBookmarks }: { token: string; user: AppUser | null; onSignIn: () => void; onOpenBookmarks: () => void }) {
+  const adminViewer = user?.role === "admin";
   const [folder, setFolder] = useState<SharedBookmarkFolder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -31,10 +32,14 @@ export function SharedBookmarksPage({ token, user, onSignIn, onOpenBookmarks }: 
   }, [token, user?.id]);
 
   useEffect(() => {
-    if (joinRequested && user && !folder?.viewerRole) setShowJoinConfirm(true);
-  }, [joinRequested, user, folder?.viewerRole]);
+    if (joinRequested && user && !adminViewer && !folder?.viewerRole) setShowJoinConfirm(true);
+  }, [joinRequested, user, adminViewer, folder?.viewerRole]);
 
   function requestJoin() {
+    if (adminViewer) {
+      setJoinError("Collaboration is available for user accounts only.");
+      return;
+    }
     if (folder?.viewerRole) {
       onOpenBookmarks();
       return;
@@ -46,6 +51,11 @@ export function SharedBookmarksPage({ token, user, onSignIn, onOpenBookmarks }: 
   }
 
   async function confirmJoin() {
+    if (adminViewer) {
+      setShowJoinConfirm(false);
+      setJoinError("Collaboration is available for user accounts only.");
+      return;
+    }
     setJoining(true);
     try {
       const result = await firebaseClient.backend.joinSharedBookmarkFolder(token);
@@ -104,9 +114,16 @@ export function SharedBookmarksPage({ token, user, onSignIn, onOpenBookmarks }: 
                 {folder.locations.length} saved location{folder.locations.length === 1 ? "" : "s"} · {folder.memberCount} member{folder.memberCount === 1 ? "" : "s"}
               </p>
               <div className="mt-5">
-                <Pill variant="filled" small onClick={requestJoin}>
-                  <Users size={14}/> {folder.viewerRole ? "Open in My Bookmarks" : "Join Shared Folder"}
-                </Pill>
+                {adminViewer ? (
+                  <div className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold" style={{ backgroundColor: C.muted, color: C.textMuted }}>
+                    <ShieldCheck size={14}/> Collaboration is available for user accounts only.
+                  </div>
+                ) : (
+                  <Pill variant="filled" small onClick={requestJoin}>
+                    <Users size={14}/> {folder.viewerRole ? "Open in My Bookmarks" : "Join Shared Folder"}
+                  </Pill>
+                )}
+                {joinError && !showJoinConfirm && <p className="mt-2 text-xs" style={{ color: C.error }}>{joinError}</p>}
               </div>
             </div>
 
@@ -159,7 +176,7 @@ export function SharedBookmarksPage({ token, user, onSignIn, onOpenBookmarks }: 
         )}
       </main>
 
-      {showJoinConfirm && folder && (
+      {showJoinConfirm && folder && !adminViewer && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center px-5" style={{ backgroundColor: "rgba(0,0,0,0.45)" }}>
           <div className="w-full max-w-sm rounded-[20px] bg-white p-6" role="dialog" aria-modal="true" aria-labelledby="join-folder-title" style={{ boxShadow: "0 18px 50px rgba(27,67,50,0.22)" }}>
             <div className="flex items-start justify-between gap-3">

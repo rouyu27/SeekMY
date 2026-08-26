@@ -14,6 +14,7 @@ const DEFAULT_FOLDERS = ["All", "Hiking Trails", "Beach Spots", "Family Friendly
 export function BookmarksPage({
   bookmarks,
   setBookmarks,
+  updateBookmarkFolders,
   setPage,
   setSelectedLocation,
   onToast,
@@ -24,6 +25,7 @@ export function BookmarksPage({
 }: {
   bookmarks: BookmarkEntry[];
   setBookmarks: (b: BookmarkEntry[] | ((p: BookmarkEntry[]) => BookmarkEntry[])) => void;
+  updateBookmarkFolders: (locationId: string | number, folders: string[]) => Promise<void>;
   setPage: (p: Page) => void;
   setSelectedLocation: (l: Location) => void;
   onToast: (msg: string, type?: "ok" | "err") => void;
@@ -37,8 +39,11 @@ export function BookmarksPage({
   const [showOrganize, setShowOrganize] = useState(false);
   const [editId, setEditId] = useState<string | number | null>(null);
   const [editNotes, setEditNotes] = useState("");
-  const [editFolder, setEditFolder] = useState("Uncategorized");
-  const [editMode, setEditMode] = useState<"move" | "note" | null>(null);
+  const [editMode, setEditMode] = useState<"note" | null>(null);
+  const [manageId, setManageId] = useState<string | number | null>(null);
+  const [managePersonalFolders, setManagePersonalFolders] = useState<string[]>([]);
+  const [manageSharedFolders, setManageSharedFolders] = useState<string[]>([]);
+  const [manageBusy, setManageBusy] = useState(false);
   const [deleteId, setDeleteId] = useState<string | number | null>(null);
   const [deleteSharedLocationFolderId, setDeleteSharedLocationFolderId] = useState<string | null>(null);
   const [actionMenuId, setActionMenuId] = useState<string | number | null>(null);
@@ -55,14 +60,15 @@ export function BookmarksPage({
   const [membersFolder, setMembersFolder] = useState<SharedBookmarkFolder | null>(null);
   const [members, setMembers] = useState<SharedBookmarkMember[]>([]);
   const [membersBusy, setMembersBusy] = useState(false);
+  const [shadowMembershipRepairs] = useState(() => new Set<string>());
   const [customFolders, setCustomFolders] = useState<string[]>(() => {
-    const fromData = Array.from(new Set(bookmarks.map((b) => b.folder).filter(Boolean)));
+    const fromData = Array.from(new Set(bookmarks.flatMap((b) => b.folders || [])));
     return fromData.filter((f) => !DEFAULT_FOLDERS.includes(f));
   });
 
   const folders = useMemo(() => {
     const set = new Set([...DEFAULT_FOLDERS.filter((f) => f !== "All"), ...customFolders]);
-    bookmarks.forEach((b) => b.folder && set.add(b.folder));
+    bookmarks.forEach((bookmark) => (bookmark.folders || []).forEach((folder) => set.add(folder)));
     const sharedNames = new Set(sharedFolders.map((folder) => folder.name.toLowerCase()));
     for (const folder of [...set]) if (sharedNames.has(folder.toLowerCase())) set.delete(folder);
     return ["All", ...Array.from(set)];
@@ -73,10 +79,34 @@ export function BookmarksPage({
     return sharedFolders.find((folder) => folder.id === folderFilter.slice(7)) || null;
   }, [folderFilter, sharedFolders]);
 
+  function sharedFoldersContaining(locationId: string | number) {
+    const byFolderId = new Map<string, SharedBookmarkFolder>();
+    for (const folder of sharedFolders) {
+      if (folder.locations.some((location) => String(location.id) === String(locationId))) byFolderId.set(folder.id, folder);
+    }
+    return [...byFolderId.values()];
+  }
+
+  function canonicalFolderMemberships(bookmark: BookmarkEntry) {
+    const shared = sharedFoldersContaining(bookmark.locationId);
+    const sharedNames = new Set(shared.map((folder) => folder.name.toLowerCase()));
+    const personal = [...new Set(bookmark.folders || [])].filter((folder) => !sharedNames.has(folder.toLowerCase()));
+    return { personal, shared };
+  }
+
+  function folderMembershipCount(bookmark: BookmarkEntry) {
+    const memberships = canonicalFolderMemberships(bookmark);
+    return memberships.personal.length + memberships.shared.length;
+  }
+
   const filtered = useMemo(() => {
     if (selectedSharedFolder) return [];
-    return bookmarks.filter((b) => folderFilter === "All" || b.folder === folderFilter);
-  }, [bookmarks, folderFilter, selectedSharedFolder]);
+    return bookmarks.filter((bookmark) => {
+      if (folderFilter === "All") return true;
+      if (folderFilter === "Uncategorized") return folderMembershipCount(bookmark) === 0;
+      return canonicalFolderMemberships(bookmark).personal.includes(folderFilter);
+    });
+  }, [bookmarks, folderFilter, selectedSharedFolder, sharedFolders]);
 
   const personalSavedLocs = filtered.map((b) => {
       const loc = locations.find((l) => String(l.id) === String(b.locationId));
@@ -87,10 +117,11 @@ export function BookmarksPage({
   const savedLocs = selectedSharedFolder
     ? selectedSharedFolder.locations.map((sharedLocation) => ({
         loc: locations.find((item) => String(item.id) === String(sharedLocation.id)) || { ...sharedLocation, image_url: sharedLocation.imageUrl } as Location,
-        entry: { locationId: sharedLocation.id, notes: "", folder: selectedSharedFolder.name, savedAt: "" } as BookmarkEntry,
+        entry: { locationId: sharedLocation.id, notes: "", folders: [], folder: "Uncategorized", savedAt: "" } as BookmarkEntry,
         sharedLocation,
       }))
     : personalSavedLocs.map((item) => ({ ...item, sharedLocation: undefined as SharedBookmarkLocation | undefined }));
+  const managedLocation = manageId == null ? null : locations.find((item) => String(item.id) === String(manageId)) || null;
 
   useEffect(() => {
     if (!user) {
@@ -107,10 +138,33 @@ export function BookmarksPage({
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  useEffect(() => {
+    const discovered = Array.from(new Set(bookmarks.flatMap((bookmark) => bookmark.folders || [])))
+      .filter((folder) => !DEFAULT_FOLDERS.includes(folder));
+    if (discovered.length) setCustomFolders((current) => [...new Set([...current, ...discovered])]);
+  }, [bookmarks]);
+
+  useEffect(() => {
+    if (sharedFoldersLoading || !sharedFolders.length) return;
+    for (const bookmark of bookmarks) {
+      const canonical = canonicalFolderMemberships(bookmark);
+      if (canonical.personal.length === (bookmark.folders || []).length) continue;
+      const repairKey = String(bookmark.locationId);
+      if (shadowMembershipRepairs.has(repairKey)) continue;
+      shadowMembershipRepairs.add(repairKey);
+      void updateBookmarkFolders(bookmark.locationId, canonical.personal).catch((error: any) => {
+        shadowMembershipRepairs.delete(repairKey);
+        onToast(error?.message || "Unable to repair duplicate folder membership.", "err");
+      });
+    }
+  }, [bookmarks, sharedFolders, sharedFoldersLoading]);
+
   async function refreshSharedFolders(preferredFolderId?: string) {
     const result = await firebaseClient.backend.getMyCollaborativeFolders();
-    setSharedFolders(result.folders as SharedBookmarkFolder[]);
+    const refreshedFolders = result.folders as SharedBookmarkFolder[];
+    setSharedFolders(refreshedFolders);
     if (preferredFolderId) setFolderFilter(`shared:${preferredFolderId}`);
+    return refreshedFolders;
   }
 
   if (!user) {
@@ -136,6 +190,7 @@ export function BookmarksPage({
       return;
     }
     setCustomFolders((p) => [...p, name]);
+    if (manageId != null) setManagePersonalFolders((current) => [...new Set([...current, name])]);
     setNewFolder("");
     setShowCreateFolderModal(false);
     onToast("Bookmarks organized successfully!");
@@ -143,15 +198,9 @@ export function BookmarksPage({
 
   async function saveEdit() {
     if (editId == null) return;
-    if (editMode === "move" && editFolder.startsWith("shared:")) {
-      await moveBookmark(editId, editFolder);
-      setEditId(null);
-      setEditMode(null);
-      return;
-    }
     setBookmarks((prev) =>
       prev.map((b) =>
-        String(b.locationId) === String(editId) ? { ...b, notes: editNotes, folder: editFolder || "Uncategorized" } : b
+        String(b.locationId) === String(editId) ? { ...b, notes: editNotes } : b
       )
     );
     setEditId(null);
@@ -159,23 +208,58 @@ export function BookmarksPage({
     onToast("Bookmark updated successfully.");
   }
 
-  async function moveBookmark(locationId: string | number, folder: string) {
-    if (folder.startsWith("shared:")) {
-      const sharedFolderId = folder.slice(7);
-      const loc = locations.find((item) => String(item.id) === String(locationId));
-      try {
-        await firebaseClient.backend.addSharedBookmarkLocation(sharedFolderId, locationId, loc as unknown as Record<string, any>);
-        await refreshSharedFolders(sharedFolderId);
-        onToast("Location added to the shared folder.");
-      } catch (error: any) {
-        onToast(error?.message || "Unable to add this location to the shared folder.", "err");
-      }
+  function openManageFolders(locationId: string | number) {
+    const bookmark = bookmarks.find((item) => String(item.locationId) === String(locationId));
+    if (!bookmark) return;
+    const canonical = canonicalFolderMemberships(bookmark);
+    setManageId(locationId);
+    setManagePersonalFolders(canonical.personal);
+    setManageSharedFolders(canonical.shared.map((folder) => folder.id));
+    setActionMenuId(null);
+  }
+
+  async function saveManagedFolders() {
+    if (manageId == null) return;
+    const location = locations.find((item) => String(item.id) === String(manageId));
+    const bookmark = bookmarks.find((item) => String(item.locationId) === String(manageId));
+    if (!bookmark) {
+      onToast("Bookmark not found. Refresh the page and try again.", "err");
       return;
     }
-    setBookmarks((prev) => prev.map((bookmark) => (
-      String(bookmark.locationId) === String(locationId) ? { ...bookmark, folder } : bookmark
-    )));
-    onToast(`Moved to ${folder}.`);
+    const originalPersonalFolders = canonicalFolderMemberships(bookmark).personal;
+    const currentShared = sharedFoldersContaining(manageId);
+    const currentSharedIds = new Set(currentShared.map((folder) => folder.id));
+    const desiredSharedIds = new Set(manageSharedFolders);
+    const desiredSharedNames = new Set(sharedFolders.filter((folder) => desiredSharedIds.has(folder.id)).map((folder) => folder.name.toLowerCase()));
+    const canonicalPersonalFolders = [...new Set(managePersonalFolders)].filter((folder) => !desiredSharedNames.has(folder.toLowerCase()));
+    const additions = sharedFolders.filter((folder) => desiredSharedIds.has(folder.id) && !currentSharedIds.has(folder.id));
+    const removals = currentShared.filter((folder) => !desiredSharedIds.has(folder.id));
+    const blockedRemoval = removals.find((folder) => !folder.locations.find((item) => String(item.id) === String(manageId))?.canRemove);
+    if (blockedRemoval) {
+      onToast(`You do not have permission to remove this location from ${blockedRemoval.name}.`, "err");
+      return;
+    }
+    setManageBusy(true);
+    try {
+      await updateBookmarkFolders(manageId, canonicalPersonalFolders);
+      await Promise.all([
+        ...additions.map((folder) => firebaseClient.backend.addSharedBookmarkLocation(folder.id, manageId, location as unknown as Record<string, any>)),
+        ...removals.map((folder) => firebaseClient.backend.removeSharedBookmarkLocation(folder.id, manageId)),
+      ]);
+      await refreshSharedFolders();
+      const membershipCount = canonicalPersonalFolders.length + desiredSharedIds.size;
+      const locationName = location?.name || "Location";
+      setManageId(null);
+      onToast(membershipCount ? `${locationName} folders updated.` : `${locationName} is now Uncategorized.`);
+    } catch (error: any) {
+      await updateBookmarkFolders(manageId, originalPersonalFolders).catch(() => undefined);
+      const refreshed = await refreshSharedFolders().catch(() => sharedFolders);
+      setManagePersonalFolders(originalPersonalFolders);
+      setManageSharedFolders(refreshed.filter((folder) => folder.locations.some((item) => String(item.id) === String(manageId))).map((folder) => folder.id));
+      onToast(error?.message || "Unable to update folder memberships.", "err");
+    } finally {
+      setManageBusy(false);
+    }
   }
 
   function viewLocation(loc: Location) {
@@ -206,9 +290,9 @@ export function BookmarksPage({
 
   function deleteFolder(name: string) {
     if (!customFolders.includes(name)) return;
-    const hasItems = bookmarks.some((b) => b.folder === name);
+    const hasItems = bookmarks.some((bookmark) => (bookmark.folders || []).includes(name));
     if (hasItems) {
-      onToast("This folder contains bookmarks. Move them to another folder first.", "err");
+      onToast("This folder contains bookmarks. Remove its folder memberships first.", "err");
       return;
     }
     setCustomFolders((p) => p.filter((f) => f !== name));
@@ -235,7 +319,9 @@ export function BookmarksPage({
 
     const previousName = renamingFolder;
     setBookmarks((prev) => prev.map((bookmark) => (
-      bookmark.folder === previousName ? { ...bookmark, folder: nextName } : bookmark
+      (bookmark.folders || []).includes(previousName)
+        ? { ...bookmark, folders: (bookmark.folders || []).map((folder) => folder === previousName ? nextName : folder), folder: bookmark.folder === previousName ? nextName : bookmark.folder }
+        : bookmark
     )));
     setCustomFolders((prev) => prev.map((folder) => folder === previousName ? nextName : folder));
     if (folderFilter === previousName) setFolderFilter(nextName);
@@ -272,7 +358,7 @@ export function BookmarksPage({
     if (!shareFolder) return;
     const locationIds = shareFolderId
       ? sharedFolders.find((folder) => folder.id === shareFolderId)?.locations.map((item) => item.id) || []
-      : bookmarks.filter((bookmark) => bookmark.folder === shareFolder).map((bookmark) => bookmark.locationId);
+      : bookmarks.filter((bookmark) => (bookmark.folders || []).includes(shareFolder)).map((bookmark) => bookmark.locationId);
     setShareBusy(true);
     try {
       const result = await firebaseClient.backend.createBookmarkFolderShare(shareFolder, locationIds);
@@ -360,7 +446,6 @@ export function BookmarksPage({
     if (!nextName) return;
     try {
       await firebaseClient.backend.renameSharedBookmarkFolder(folder.id, nextName);
-      setBookmarks((previous) => previous.map((bookmark) => bookmark.folder === folder.name ? { ...bookmark, folder: nextName } : bookmark));
       await refreshSharedFolders(folder.id);
       setRenamingFolder(null);
       setRenameFolderValue("");
@@ -373,7 +458,6 @@ export function BookmarksPage({
   async function deleteSharedFolder(folder: SharedBookmarkFolder) {
     try {
       await firebaseClient.backend.deleteSharedBookmarkFolder(folder.id);
-      setBookmarks((previous) => previous.map((bookmark) => bookmark.folder === folder.name ? { ...bookmark, folder: "Uncategorized" } : bookmark));
       setSharedFolders((current) => current.filter((item) => item.id !== folder.id));
       setFolderFilter("All");
       onToast("Shared folder deleted.");
@@ -470,7 +554,7 @@ export function BookmarksPage({
             <div className="flex flex-wrap items-center justify-between gap-4 p-5" style={{ backgroundColor: C.muted }}>
               <div>
                 <h2 className="text-xl font-bold" style={{ fontFamily: F.display, color: C.jungle }}>Organize Bookmarks</h2>
-                <p className="mt-1 text-sm" style={{ color: C.textSub, fontFamily: F.body }}>Create folders and move your saved locations into them.</p>
+                <p className="mt-1 text-sm" style={{ color: C.textSub, fontFamily: F.body }}>Create folders and manage where each saved location appears.</p>
               </div>
               <Pill variant="filled" small onClick={() => setShowCreateFolderModal(true)}>
                 <Plus size={14}/> Create New Folder
@@ -581,6 +665,13 @@ export function BookmarksPage({
               const imageUrl = loc.image_url || loc.image_urls?.[0];
               const menuOpen = String(actionMenuId) === String(loc.id);
               const editorOpen = String(editId) === String(loc.id);
+              const canonicalMemberships = canonicalFolderMemberships(entry);
+              const membershipBadges = selectedSharedFolder
+                ? [{ key: `shared:${selectedSharedFolder.id}`, label: selectedSharedFolder.name, shared: true }]
+                : [
+                    ...canonicalMemberships.shared.map((folder) => ({ key: `shared:${folder.id}`, label: folder.name, shared: true })),
+                    ...canonicalMemberships.personal.map((folder) => ({ key: `personal:${folder}`, label: folder, shared: false })),
+                  ];
               return (
                 <div
                   key={`${selectedSharedFolder ? `shared:${selectedSharedFolder.id}` : "personal"}:${String(loc.id)}`}
@@ -606,23 +697,15 @@ export function BookmarksPage({
                           {sharedLocation?.canRemove && <button type="button" onClick={() => { setDeleteId(loc.id); setDeleteSharedLocationFolderId(selectedSharedFolder.id); }} className="rounded-full px-2 py-1 text-[10px]" style={{ backgroundColor: C.errorBg, color: C.error }}>Remove from folder</button>}
                         </div>
                       ) : showOrganize ? (
-                        <label className="mt-2 flex max-w-xs items-center gap-2 text-xs font-bold" style={{ color: C.textSub, fontFamily: F.body }}>
-                          Folder:
-                          <select
-                            value={entry.folder || "Uncategorized"}
-                            onChange={(event) => moveBookmark(loc.id, event.target.value)}
-                            className="min-w-0 flex-1 rounded-lg border bg-white px-2 py-1.5 text-xs outline-none"
-                            style={{ borderColor: C.border, color: C.text, fontFamily: F.body }}
-                          >
-                            {folders.filter((folder) => folder !== "All").map((folder) => <option key={folder} value={folder}>{folder}</option>)}
-                            {sharedFolders.map((folder) => <option key={folder.id} value={`shared:${folder.id}`}>👥 {folder.name}</option>)}
-                          </select>
-                        </label>
+                        <button type="button" onClick={() => openManageFolders(loc.id)} className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold" style={{ borderColor: C.border, color: C.forest, fontFamily: F.body }}><FolderInput size={13}/> Manage folders</button>
                       ) : (
-                        <div className="mt-1.5 flex min-w-0 items-center gap-2">
-                          <span className="max-w-[180px] truncate rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: C.muted, color: C.forest, fontFamily: F.body }}>
-                            {selectedSharedFolder ? `Shared · ${selectedSharedFolder.name}` : entry.folder || "Uncategorized"}
-                          </span>
+                        <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
+                          {(membershipBadges.length ? membershipBadges.slice(0, 2) : [{ key: "uncategorized", label: "Uncategorized", shared: false }]).map((badge) => (
+                            <span key={badge.key} className="max-w-[150px] truncate rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: badge.shared ? "#e8f1ec" : C.muted, color: C.forest, fontFamily: F.body }}>
+                              {badge.shared && <Users size={9} className="mr-1 inline"/>}{badge.label}
+                            </span>
+                          ))}
+                          {membershipBadges.length > 2 && <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: C.muted, color: C.textSub }}>+{membershipBadges.length - 2}</span>}
                           {entry.notes && <span className="truncate text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>Note: {entry.notes}</span>}
                         </div>
                       )}
@@ -647,8 +730,8 @@ export function BookmarksPage({
                     <button type="button" className="fixed inset-0 z-10 cursor-default" onClick={() => setActionMenuId(null)} aria-label="Close bookmark actions"/>
                     <div className="absolute right-3 top-12 z-20 w-48 overflow-hidden rounded-xl border bg-white py-1" style={{ borderColor: C.border, boxShadow: "0 12px 30px rgba(27,67,50,0.16)" }}>
                       <button type="button" onClick={() => viewLocation(loc)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs hover:bg-black/[0.03]" style={{ color: C.text, fontFamily: F.body }}><Eye size={14}/> View details</button>
-                      {!selectedSharedFolder && <button type="button" onClick={() => { setEditId(loc.id); setEditMode("move"); setEditFolder(entry.folder || "Uncategorized"); setEditNotes(entry.notes || ""); setActionMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs hover:bg-black/[0.03]" style={{ color: C.text, fontFamily: F.body }}><FolderInput size={14}/> Move to folder</button>}
-                      {!selectedSharedFolder && <button type="button" onClick={() => { setEditId(loc.id); setEditMode("note"); setEditFolder(entry.folder || "Uncategorized"); setEditNotes(entry.notes || ""); setActionMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs hover:bg-black/[0.03]" style={{ color: C.text, fontFamily: F.body }}><Edit3 size={14}/> Edit note</button>}
+                      {bookmarks.some((bookmark) => String(bookmark.locationId) === String(loc.id)) && <button type="button" onClick={() => openManageFolders(loc.id)} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs hover:bg-black/[0.03]" style={{ color: C.text, fontFamily: F.body }}><FolderInput size={14}/> Manage folders</button>}
+                      {!selectedSharedFolder && <button type="button" onClick={() => { setEditId(loc.id); setEditMode("note"); setEditNotes(entry.notes || ""); setActionMenuId(null); }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs hover:bg-black/[0.03]" style={{ color: C.text, fontFamily: F.body }}><Edit3 size={14}/> Edit note</button>}
                       {(!selectedSharedFolder || sharedLocation?.canRemove) && <button type="button" onClick={() => { setDeleteId(loc.id); setDeleteSharedLocationFolderId(selectedSharedFolder?.id || null); setActionMenuId(null); }} className="flex w-full items-center gap-2.5 border-t px-3 py-2 text-left text-xs hover:bg-black/[0.03]" style={{ borderColor: C.border, color: C.error, fontFamily: F.body }}><Trash2 size={14}/> {selectedSharedFolder ? "Remove from shared folder" : "Remove bookmark"}</button>}
                     </div>
                     </>
@@ -656,14 +739,7 @@ export function BookmarksPage({
 
                   {editorOpen && !showOrganize && !selectedSharedFolder && (
                     <div className="mt-3 border-t pt-3" style={{ borderColor: C.border }}>
-                      {editMode === "note" ? (
-                        <textarea value={editNotes} onChange={(event) => setEditNotes(event.target.value)} rows={2} placeholder="Add a personal note…" className="w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: C.border, color: C.text, fontFamily: F.body }}/>
-                      ) : (
-                        <select value={editFolder} onChange={(event) => setEditFolder(event.target.value)} className="w-full rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: C.border, color: C.text, fontFamily: F.body }}>
-                          {folders.filter((folder) => folder !== "All").map((folder) => <option key={folder} value={folder}>{folder}</option>)}
-                          {sharedFolders.map((folder) => <option key={folder.id} value={`shared:${folder.id}`}>👥 {folder.name}</option>)}
-                        </select>
-                      )}
+                      <textarea value={editNotes} onChange={(event) => setEditNotes(event.target.value)} rows={2} placeholder="Add a personal note…" className="w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: C.border, color: C.text, fontFamily: F.body }}/>
                       <div className="mt-2 flex gap-2">
                         <Pill variant="filled" small onClick={saveEdit}><Check size={12}/> Save</Pill>
                         <Pill variant="outline" small onClick={() => { setEditId(null); setEditMode(null); }}><X size={12}/> Cancel</Pill>
@@ -677,8 +753,56 @@ export function BookmarksPage({
         </div>
       </div>
 
-      {showCreateFolderModal && (
+      {manageId != null && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center px-5" style={{ backgroundColor: "rgba(0,0,0,0.45)" }}>
+          <div className="w-full max-w-md rounded-[20px] bg-white p-6" role="dialog" aria-modal="true" aria-labelledby="manage-folders-title" style={{ boxShadow: "0 18px 50px rgba(27,67,50,0.22)" }}>
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div>
+                <h2 id="manage-folders-title" className="text-xl font-bold" style={{ color: C.text, fontFamily: F.display }}>Manage folders</h2>
+                <p className="mt-1 text-sm font-bold" style={{ color: C.textSub, fontFamily: F.body }}>{managedLocation?.name || "Saved location"}</p>
+              </div>
+              <button type="button" disabled={manageBusy} onClick={() => setManageId(null)} className="rounded-full p-2" style={{ backgroundColor: C.muted, color: C.textSub }} aria-label="Close manage folders dialog"><X size={15}/></button>
+            </div>
+
+            <div className="max-h-[46vh] space-y-2 overflow-y-auto pr-1">
+              <p className="pb-1 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: C.textMuted }}>Personal folders</p>
+              {folders.filter((folder) => folder !== "All" && folder !== "Uncategorized").map((folder) => {
+                const checked = managePersonalFolders.includes(folder);
+                return (
+                  <label key={folder} className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5" style={{ backgroundColor: checked ? C.muted : C.cream }}>
+                    <input type="checkbox" checked={checked} disabled={manageBusy} onChange={() => setManagePersonalFolders((current) => checked ? current.filter((name) => name !== folder) : [...current, folder])} className="h-4 w-4 accent-[#174f3a]"/>
+                    <span className="text-sm font-bold" style={{ color: C.text, fontFamily: F.body }}>{folder}</span>
+                  </label>
+                );
+              })}
+
+              {sharedFolders.length > 0 && <p className="pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: C.textMuted }}>Shared folders</p>}
+              {sharedFolders.map((folder) => {
+                const checked = manageSharedFolders.includes(folder.id);
+                const existingLocation = folder.locations.find((item) => String(item.id) === String(manageId));
+                const disabled = manageBusy || Boolean(checked && existingLocation && !existingLocation.canRemove);
+                return (
+                  <label key={folder.id} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`} style={{ backgroundColor: checked ? "#e8f1ec" : C.cream }}>
+                    <input type="checkbox" checked={checked} disabled={disabled} onChange={() => setManageSharedFolders((current) => checked ? current.filter((id) => id !== folder.id) : [...current, folder.id])} className="h-4 w-4 accent-[#174f3a]"/>
+                    <Users size={14} style={{ color: C.forest }}/>
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold" style={{ color: C.text, fontFamily: F.body }}>{folder.name}</span>
+                    <span className="text-[10px] font-bold" style={{ color: C.textMuted }}>Shared</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <button type="button" disabled={manageBusy} onClick={() => setShowCreateFolderModal(true)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold" style={{ color: C.jungle, fontFamily: F.body }}><Plus size={14}/> Create new folder</button>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" disabled={manageBusy} onClick={() => setManageId(null)} className="rounded-full border px-4 py-2 text-xs font-bold disabled:opacity-50" style={{ borderColor: C.border, color: C.textSub, fontFamily: F.body }}>Cancel</button>
+              <button type="button" disabled={manageBusy} onClick={saveManagedFolders} className="rounded-full px-4 py-2 text-xs font-bold text-white disabled:opacity-50" style={{ backgroundColor: C.jungle, fontFamily: F.body }}>{manageBusy ? "Saving…" : "Done"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCreateFolderModal && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center px-5" style={{ backgroundColor: "rgba(0,0,0,0.45)" }}>
           <div className="w-full max-w-sm rounded-[20px] bg-white p-6" style={{ boxShadow: "0 18px 50px rgba(27,67,50,0.22)" }} role="dialog" aria-modal="true" aria-labelledby="create-folder-title">
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
