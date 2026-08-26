@@ -69,6 +69,7 @@ export function LocationPage({
   const [flagId, setFlagId] = useState<string | null>(null);
   const [flagReason, setFlagReason] = useState("Offensive language");
   const [reviewMsg, setReviewMsg] = useState<string | null>(null);
+  const [showReviewForm, setShowReviewForm] = useState(false);
   const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
   const [editingReviewText, setEditingReviewText] = useState("");
   const [editingReviewRating, setEditingReviewRating] = useState(0);
@@ -86,6 +87,7 @@ export function LocationPage({
     if (!loc) return;
     if (initialTab) setTab(initialTab);
     setActiveLocationImage(0);
+    setShowReviewForm(false);
     let cancelled=false;
     firebaseClient.backend.getReviews(String(loc.id)).then(({reviews:rows})=>{
       if(cancelled) return;
@@ -179,6 +181,13 @@ export function LocationPage({
     const created = new Date(review.created_date || "").getTime();
     return Boolean(user && review.userId === user.id && Number.isFinite(created) && Date.now() - created <= 24 * 60 * 60 * 1000);
   };
+  const isOwnReview = (review: StoredReview) => Boolean(user && String(review.userId) === String(user.id));
+  const hasOwnReview = reviews.some(isOwnReview);
+  const reviewsForDisplay = [...reviews].sort((a, b) => {
+    const ownReviewOrder = Number(isOwnReview(b)) - Number(isOwnReview(a));
+    if (ownReviewOrder !== 0) return ownReviewOrder;
+    return String(b.created_date || b.date || "").localeCompare(String(a.created_date || a.date || ""));
+  });
   const reviewDate = (review: StoredReview) => {
     const created = new Date(review.created_date || "");
     return Number.isFinite(created.getTime())
@@ -781,6 +790,23 @@ export function LocationPage({
         {/* ==================== LimTzeXin Part - User Review & Rating Module ==================== */}
         {tab === "reviews" && (
           <div className="space-y-4">
+            {!hasOwnReview && (
+              <div className="flex justify-end py-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewMsg(null);
+                    setShowReviewForm((visible) => !visible);
+                  }}
+                  className="rounded-full border bg-white px-6 py-2.5 text-sm font-semibold transition-colors hover:bg-slate-50"
+                  style={{ borderColor: C.forest, color: C.forest, fontFamily: F.body }}
+                  aria-expanded={showReviewForm}
+                >
+                  {showReviewForm ? "Cancel review" : "Write a review"}
+                </button>
+              </div>
+            )}
+            {showReviewForm && !hasOwnReview && (
             <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
               <h2 className="font-bold mb-4 text-base" style={{ fontFamily: F.body, color: C.text }}>Write a review</h2>
               <div className="flex gap-1 mb-3">
@@ -876,7 +902,7 @@ export function LocationPage({
                       publishReviewSummary(nextReviews);
                       return nextReviews;
                     });
-                    setRt(""); setRating(0); chooseReviewPhoto(null); onToast?.("Your review has been submitted successfully!");
+                    setRt(""); setRating(0); chooseReviewPhoto(null); setShowReviewForm(false); onToast?.("Your review has been submitted successfully!");
                   }catch(error:any){setReviewMsg(error?.message||"Unable to submit review to Firebase.");}
                 }}
               >
@@ -886,16 +912,17 @@ export function LocationPage({
                 <p className="text-sm mt-3 font-semibold" style={{ color: C.error, fontFamily: F.body }}>{reviewMsg}</p>
               )}
             </div>
+            )}
             {reviews.length === 0 ? (
               <p className="text-center py-8 text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>
                 Be the first to review this location!
               </p>
             ) : (
-              reviews.map((r, i) => {
+              reviewsForDisplay.map((r) => {
                 const editing = editingReviewId === r.id;
                 const changeAllowed = canChangeReview(r);
                 return (
-                <div key={i} className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
+                <div key={r.id} className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: C.forest }}>
