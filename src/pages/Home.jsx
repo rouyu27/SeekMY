@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { MALAYSIA_STATES, ACTIVITY_TYPES } from "@/lib/malaysia-data";
 import { Search, MapPin, Sparkles, TrendingUp } from "lucide-react";
 import StateFlag from "@/components/StateFlag";
@@ -39,9 +39,9 @@ export default function Home() {
   const [stats, setStats] = useState({ locations: 0, activities: 0, states: 16 });
 
   useEffect(() => {
-    base44.entities.Location.filter({ is_hidden_gem: true, status: "active" }, "-created_date", 1)
+    firebaseClient.entities.Location.filter({ is_hidden_gem: true, status: "active" }, "-created_date", 1)
       .then(r => r.length > 0 && setHiddenGem(r[0]));
-    base44.entities.Location.list("-created_date", 1)
+    firebaseClient.entities.Location.list("-created_date", 1)
       .then(r => setStats(s => ({ ...s, locations: r.length > 0 ? "50+" : "0" })));
   }, []);
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { ACTIVITY_TYPES, BADGES_DEFINITION } from "@/lib/malaysia-data";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Plus, X, Activity, Map, Route, Clock, Trophy, TrendingUp, Pencil, Trash2, Camera } from "lucide-react";
@@ -23,8 +23,8 @@ export default function ActivityLog() {
   useEffect(() => {
     if (!user?.id) return;
     Promise.all([
-      base44.entities.ActivityLog.filter({ created_by_id: user.id }, "-created_date"),
-      base44.entities.Badge.filter({ created_by_id: user.id })
+      firebaseClient.entities.ActivityLog.filter({ created_by_id: user.id }, "-created_date"),
+      firebaseClient.entities.Badge.filter({ created_by_id: user.id })
     ]).then(([l, b]) => { setLogs(l); setBadges(b); setLoading(false); })
       .catch(() => { setFormError("We could not load your activity data. Please refresh and try again."); setLoading(false); });
   }, [user?.id]);
@@ -69,8 +69,8 @@ export default function ActivityLog() {
       duration_minutes: Number.parseInt(form.duration_minutes, 10)
     };
     const log = editingId
-      ? await base44.entities.ActivityLog.update(editingId, activityData)
-      : await base44.entities.ActivityLog.create(activityData);
+      ? await firebaseClient.entities.ActivityLog.update(editingId, activityData)
+      : await firebaseClient.entities.ActivityLog.create(activityData);
     const newLogs = editingId ? logs.map(item => item.id === editingId ? log : item) : [log, ...logs];
     setLogs(newLogs);
 
@@ -84,7 +84,7 @@ export default function ActivityLog() {
     const existingKeys = badges.map(b => b.badge_key);
     for (const def of BADGES_DEFINITION) {
       if (!existingKeys.includes(def.key) && def.condition(newStats)) {
-        const nb = await base44.entities.Badge.create({ badge_key: def.key, name: def.name, description: def.description, icon: def.icon, color: def.color, earned_date: new Date().toISOString().split("T")[0] });
+        const nb = await firebaseClient.entities.Badge.create({ badge_key: def.key, name: def.name, description: def.description, icon: def.icon, color: def.color, earned_date: new Date().toISOString().split("T")[0] });
         setBadges(b => [nb, ...b]);
       }
     }
@@ -103,7 +103,7 @@ export default function ActivityLog() {
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this activity? This cannot be undone.")) return;
-    await base44.entities.ActivityLog.delete(id);
+    await firebaseClient.entities.ActivityLog.delete(id);
     setLogs(current => current.filter(log => log.id !== id));
   };
 
@@ -114,7 +114,7 @@ export default function ActivityLog() {
     if (file.size > 1_500_000) { setFormError("Please choose a photo smaller than 1.5 MB."); return; }
     try {
       setFormError("");
-      const photoUrl = await base44.storage.uploadActivityPhoto(file);
+      const photoUrl = await firebaseClient.storage.uploadActivityPhoto(file);
       setForm(current => ({ ...current, photo_url: photoUrl }));
     } catch {
       setFormError("Photo upload failed. Please try again.");

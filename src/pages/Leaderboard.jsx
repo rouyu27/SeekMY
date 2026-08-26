@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { Trophy, Map, Activity, Route } from "lucide-react";
 
 export default function Leaderboard() {
@@ -9,7 +9,7 @@ export default function Leaderboard() {
   const [period, setPeriod] = useState("all");
 
   useEffect(() => {
-    base44.entities.ActivityLog.list("-created_date", 500).then(l => { setLogs(l); setLoading(false); });
+    firebaseClient.entities.ActivityLog.list("-created_date", 500).then(l => { setLogs(l); setLoading(false); });
   }, []);
 
   const filterByPeriod = (logs) => {

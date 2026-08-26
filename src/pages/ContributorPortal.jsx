@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { MALAYSIA_STATES } from "@/lib/malaysia-data";
 import { Users, Plus, X, CheckCircle, Clock, MapPin, Mail, Phone } from "lucide-react";
 
@@ -15,13 +15,13 @@ export default function ContributorPortal() {
   const [filterType, setFilterType] = useState("");
 
   useEffect(() => {
-    base44.entities.Contributor.filter({ status: "verified" }).then(c => { setContributors(c); setLoading(false); });
+    firebaseClient.entities.Contributor.filter({ status: "verified" }).then(c => { setContributors(c); setLoading(false); });
   }, []);
 
   const handleSubmit = async () => {
     if (!form.name || !form.email || !form.type) return;
     setSubmitting(true);
-    await base44.entities.Contributor.create({ ...form, status: "pending" });
+    await firebaseClient.entities.Contributor.create({ ...form, status: "pending" });
     setSubmitting(false);
     setShowForm(false);
     setSubmitted(true);

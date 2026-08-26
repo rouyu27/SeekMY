@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { ACTIVITY_TYPES } from "@/lib/malaysia-data";
 import { TrendingUp, TrendingDown, Minus, MapPin, Sparkles, Lightbulb, Activity, Loader2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -21,9 +21,9 @@ export default function Insights() {
 
   useEffect(() => {
     Promise.all([
-      base44.entities.Location.filter({ status: "active" }),
-      base44.entities.ActivityLog.list("-created_date", 500),
-      base44.entities.Bookmark.list("-created_date", 500),
+      firebaseClient.entities.Location.filter({ status: "active" }),
+      firebaseClient.entities.ActivityLog.list("-created_date", 500),
+      firebaseClient.entities.Bookmark.list("-created_date", 500),
     ]).then(([locs, l, b]) => {
       setLocations(locs); setLogs(l); setBookmarks(b); setLoading(false);
     }).catch(() => setLoading(false));
@@ -125,7 +125,7 @@ Available locations:
 ${candidates.slice(0, 30).map(l => `- ${l.name} (${l.state}): activities=[${(l.activity_types || []).join(", ")}], difficulty=${l.difficulty || "N/A"}, hidden_gem=${l.is_hidden_gem}`).join("\n")}
 
 Return the 3 best recommendations as JSON with location name, state, and a personalized reason explaining why it matches their interests.`;
-      const response = await base44.integrations.Core.InvokeLLM({
+      const response = await firebaseClient.integrations.Core.InvokeLLM({
         prompt,
         response_json_schema: {
           type: "object",

@@ -1,58 +1,39 @@
 # SeekMY
 
-Progressive web app to discover outdoor activities across Malaysia (Visit Malaysia 2026).
-
-**This version runs fully offline / without Base44.** Data and auth use browser `localStorage`.
+SeekMY is a React/Vite outdoor-discovery app for Malaysia, aligned with the Visit Malaysia 2026 proposal. Firebase provides authentication, Firestore data, and activity-photo storage; OpenWeatherMap provides live weather data.
 
 ## Quick start
 
-```bash
-npm install
-npm run dev
-```
+1. Copy `.env.example` to `.env.local` and add the Firebase web configuration and OpenWeatherMap API key.
+2. Follow `FIREBASE_SETUP.md` to enable Firebase Authentication, create Firestore and Storage, and publish the documented rules.
+3. Run `npm install` and `npm run dev`, then open <http://localhost:5173>.
 
-Open http://localhost:5173
+`.env.local` is ignored by Git and must not be committed.
 
-## Demo accounts
+## Initial data
 
-| Email | Password | Role |
-|-------|----------|------|
-| `admin@seekmy.local` | `admin123` | Admin |
-| `demo@seekmy.local` | `demo123` | User |
-
-Register also works: use OTP **`123456`** when prompted.
+Firestore starts empty. Register or sign in with `shanyuew416@gmail.com`, open `/admin`, and select **Import Starter Locations**. This explicit, idempotent action creates missing `Location` documents in Firestore; the app does not auto-seed data or use browser storage as a database.
 
 ## Features
 
-- Activity discovery by state / type / difficulty
-- Map view, location detail, weather (mock)
-- Bookmarks, activity log, badges, leaderboard
-- Contributor portal & admin panel
-- AI insights (local heuristic recommendations)
+- Firebase email/password and Google authentication, email verification, and password reset
+- Activity discovery by state, type, difficulty, and accessibility filters
+- Map view, location detail, and live OpenWeatherMap conditions/forecast
+- Firestore-backed bookmarks, reviews, activity logs, badges, contributors, users, and leaderboard
+- Firebase Storage uploads for activity photos
+- Administrator tools for locations, contributors, reviews, and user roles
+
+The AI chatbot and Google Calendar integration remain unavailable until secure Firebase Cloud Functions and server-managed secrets are added.
+
+## PWA status
+
+The project includes a web app manifest, but no service worker yet. It is not fully offline-capable.
 
 ## Tech
 
-- React 18 + Vite + Tailwind + Radix UI
-- React Router, TanStack Query
-- Local mock API (`src/api/base44Client.js`) replacing Base44 SDK
+- React 18, Vite, Tailwind CSS, Radix UI
+- React Router and TanStack Query
+- Firebase Authentication, Cloud Firestore, and Cloud Storage
+- OpenWeatherMap API
 
-## Reset local data
-
-In the browser console:
-
-```js
-Object.keys(localStorage).filter(k => k.startsWith('seekmy_')).forEach(k => localStorage.removeItem(k));
-location.reload();
-```
-
-## Custom images
-
-Put your photos in **`public/images/`**.
-
-| Use | Filenames |
-|-----|-----------|
-| Home hero slider | `hero-1.jpg` … `hero-6.jpg` |
-| Logo | `logo.png` |
-| Locations | see `public/images/README.txt` |
-
-Code references them as `/images/filename.jpg` (Vite serves `public/` at the site root).
+Project-owned images belong in `public/images/` and are served at `/images/filename.jpg`.

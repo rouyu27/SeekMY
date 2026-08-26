@@ -1,4 +1,4 @@
-/** Seed outdoor locations across Malaysia for local mode (no Base44). */
+/** Curated starter locations for the explicit Firestore import in the Admin Panel. */
 
 export const SEED_LOCATIONS = [
   {
@@ -384,17 +384,6 @@ export const SEED_LOCATIONS = [
     avg_rating: 4.3,
     review_count: 380,
     status: "active",
-  },
-];
-
-export const SEED_USERS = [
-  {
-    id: "user-demo",
-    email: "demo@seekmy.local",
-    password: "demo123",
-    full_name: "Demo Explorer",
-    role: "user",
-    created_date: new Date().toISOString(),
   },
 ];
 

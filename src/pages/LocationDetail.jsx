@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { ACTIVITY_TYPES, DIFFICULTY_COLORS } from "@/lib/malaysia-data";
 import { ArrowLeft, Star, MapPin, Clock, Route, Bookmark, BookmarkCheck, Send, Wind, Droplets } from "lucide-react";
 import { Image } from "@/components/ui/image";
@@ -26,10 +26,10 @@ export default function LocationDetail() {
 
   useEffect(() => {
     Promise.all([
-      base44.entities.Location.get(id),
-      base44.entities.Review.filter({ location_id: id, status: "active" }, "-created_date"),
-      base44.entities.Bookmark.filter({ location_id: id }),
-      base44.entities.Contributor.filter({ status: "verified" })
+      firebaseClient.entities.Location.get(id),
+      firebaseClient.entities.Review.filter({ location_id: id, status: "active" }, "-created_date"),
+      firebaseClient.entities.Bookmark.filter({ location_id: id }),
+      firebaseClient.entities.Contributor.filter({ status: "verified" })
     ]).then(([loc, revs, bks, contribs]) => {
       setLocation(loc);
       setReviews(revs);
@@ -39,7 +39,7 @@ export default function LocationDetail() {
 
       // Fetch weather if we have coords
       if (loc?.latitude && loc?.longitude) {
-        base44.functions.invoke('getWeather', { lat: loc.latitude, lon: loc.longitude })
+        firebaseClient.functions.invoke('getWeather', { lat: loc.latitude, lon: loc.longitude })
           .then(res => {
             if (res.data?.current) {
               setWeather({
@@ -59,11 +59,11 @@ export default function LocationDetail() {
 
   const handleBookmark = async () => {
     if (bookmarked) {
-      const bks = await base44.entities.Bookmark.filter({ location_id: id });
-      for (const b of bks) await base44.entities.Bookmark.delete(b.id);
+      const bks = await firebaseClient.entities.Bookmark.filter({ location_id: id });
+      for (const b of bks) await firebaseClient.entities.Bookmark.delete(b.id);
       setBookmarked(false);
     } else {
-      await base44.entities.Bookmark.create({
+      await firebaseClient.entities.Bookmark.create({
         location_id: id,
         location_name: location.name,
         location_state: location.state,
@@ -77,7 +77,7 @@ export default function LocationDetail() {
   const handleReview = async () => {
     if (!newReview.comment.trim()) return;
     setSubmittingReview(true);
-    const rev = await base44.entities.Review.create({
+    const rev = await firebaseClient.entities.Review.create({
       location_id: id,
       location_name: location.name,
       rating: newReview.rating,
@@ -87,7 +87,7 @@ export default function LocationDetail() {
     // Update avg rating
     const allRatings = [...reviews, rev];
     const avg = allRatings.reduce((s, r) => s + r.rating, 0) / allRatings.length;
-    await base44.entities.Location.update(id, { avg_rating: Math.round(avg * 10) / 10, review_count: allRatings.length });
+    await firebaseClient.entities.Location.update(id, { avg_rating: Math.round(avg * 10) / 10, review_count: allRatings.length });
     setReviews([rev, ...reviews]);
     setNewReview({ rating: 5, comment: "" });
     setSubmittingReview(false);

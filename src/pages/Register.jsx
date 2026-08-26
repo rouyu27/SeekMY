@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,7 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await base44.auth.register({ email, password });
+      await firebaseClient.auth.register({ email, password });
       setShowOtp(true);
     } catch (err) {
       setError(err.message || "Registration failed");
@@ -39,7 +39,7 @@ export default function Register() {
     setError("");
     setLoading(true);
     try {
-      await base44.auth.verifyOtp();
+      await firebaseClient.auth.verifyOtp();
       window.location.href = "/";
     } catch (err) {
       setError(err.message || "Unable to confirm email verification");
@@ -51,7 +51,7 @@ export default function Register() {
   const handleResend = async () => {
     setError("");
     try {
-      await base44.auth.resendOtp(email);
+      await firebaseClient.auth.resendOtp(email);
       toast({
         title: "Code sent",
         description: "Check your email for the new code.",
@@ -62,7 +62,7 @@ export default function Register() {
   };
 
   const handleGoogle = () => {
-    base44.auth.loginWithProvider("google", "/");
+    firebaseClient.auth.loginWithProvider("google", "/");
   };
 
   if (showOtp) {

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { Send, Bot, User, Loader2 } from "lucide-react";
 
 const QUICK_PROMPTS = [
@@ -45,7 +45,7 @@ export default function Chatbot() {
 
     const history = messages.slice(-10).map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
 
-    const response = await base44.integrations.Core.InvokeLLM({
+    const response = await firebaseClient.integrations.Core.InvokeLLM({
       prompt: `${SYSTEM_PROMPT}\n\nConversation history:\n${history}\n\nUser: ${q}\n\nAssistant:`,
       model: "gemini_3_flash"
     });

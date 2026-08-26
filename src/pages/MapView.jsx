@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { ACTIVITY_TYPES } from "@/lib/malaysia-data";
 import { Map, MapPin } from "lucide-react";
 import "leaflet/dist/leaflet.css";
@@ -20,7 +20,7 @@ export default function MapView() {
   const [filterActivity, setFilterActivity] = useState("");
 
   useEffect(() => {
-    base44.entities.Location.filter({ status: "active" }).then(l => {
+    firebaseClient.entities.Location.filter({ status: "active" }).then(l => {
       setLocations(l.filter(loc => loc.latitude && loc.longitude));
       setLoading(false);
     });

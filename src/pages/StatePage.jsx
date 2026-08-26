@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { ACTIVITY_TYPES, DIFFICULTY_COLORS } from "@/lib/malaysia-data";
 import { ArrowLeft, MapPin, Star, Clock, Route, Filter, Search } from "lucide-react";
 import StateFlag from "@/components/StateFlag";
@@ -36,7 +36,7 @@ export default function StatePage() {
 
   useEffect(() => {
     setLoading(true);
-    base44.entities.Location.filter({ state: decodedState, status: "active" })
+    firebaseClient.entities.Location.filter({ state: decodedState, status: "active" })
       .then(r => { setLocations(r); setLoading(false); })
       .catch(() => setLoading(false));
   }, [decodedState]);

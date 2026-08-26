@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
+import { SEED_LOCATIONS } from "@/api/seedData";
 import { MALAYSIA_STATES, ACTIVITY_TYPES } from "@/lib/malaysia-data";
-import { Shield, Plus, Check, X, MapPin, Users, Flag, Trash2, UserCog } from "lucide-react";
+import { Shield, Plus, Check, X, MapPin, Users, Flag, Trash2, UserCog, Database } from "lucide-react";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -22,35 +23,36 @@ export default function AdminPanel() {
   const [showAddLocation, setShowAddLocation] = useState(false);
   const [locationForm, setLocationForm] = useState(emptyLocation);
   const [saving, setSaving] = useState(false);
+  const [importMessage, setImportMessage] = useState("");
 
   useEffect(() => {
     Promise.all([
-      base44.entities.Location.list("-created_date"),
-      base44.entities.Contributor.list("-created_date"),
-      base44.entities.Review.list("-created_date"),
-      base44.entities.User.list("full_name")
+      firebaseClient.entities.Location.list("-created_date"),
+      firebaseClient.entities.Contributor.list("-created_date"),
+      firebaseClient.entities.Review.list("-created_date"),
+      firebaseClient.entities.User.list("full_name")
     ]).then(([l, c, r, u]) => { setLocations(l); setContributors(c); setReviews(r); setUsers(u); setLoading(false); });
   }, []);
 
   const handleVerifyContributor = async (id, status) => {
-    await base44.entities.Contributor.update(id, { status });
+    await firebaseClient.entities.Contributor.update(id, { status });
     setContributors(cs => cs.map(c => c.id === id ? {...c, status} : c));
   };
 
   const handleReviewAction = async (id, status) => {
-    await base44.entities.Review.update(id, { status });
+    await firebaseClient.entities.Review.update(id, { status });
     setReviews(rs => rs.map(r => r.id === id ? {...r, status} : r));
   };
 
   const handleDeleteLocation = async (id) => {
     if (!confirm("Delete this location?")) return;
-    await base44.entities.Location.delete(id);
+    await firebaseClient.entities.Location.delete(id);
     setLocations(ls => ls.filter(l => l.id !== id));
   };
 
   const handleRoleChange = async (member, role) => {
     if (member.email.toLowerCase() === "shanyuew416@gmail.com" && role !== "admin") return;
-    const updated = await base44.entities.User.update(member.id, { role });
+    const updated = await firebaseClient.entities.User.update(member.id, { role });
     setUsers(current => current.map(item => item.id === member.id ? updated : item));
   };
 
@@ -81,11 +83,30 @@ export default function AdminPanel() {
       longitude: parseFloat(locationForm.longitude) || undefined,
       entry_fee: parseFloat(locationForm.entry_fee) || undefined,
     };
-    const loc = await base44.entities.Location.create(data);
+    const loc = await firebaseClient.entities.Location.create(data);
     setLocations(ls => [loc, ...ls]);
     setShowAddLocation(false);
     setLocationForm(emptyLocation);
     setSaving(false);
+  };
+
+  const handleImportLocations = async () => {
+    setSaving(true);
+    setImportMessage("");
+    try {
+      const existingNames = new Set(locations.map((location) => location.name.toLowerCase()));
+      const missingLocations = SEED_LOCATIONS.filter((location) => !existingNames.has(location.name.toLowerCase()));
+      const imported = [];
+      for (const { id: _legacyId, ...location } of missingLocations) {
+        imported.push(await firebaseClient.entities.Location.create(location));
+      }
+      setLocations((current) => [...imported, ...current]);
+      setImportMessage(imported.length ? `Imported ${imported.length} locations into Firestore.` : "All starter locations are already in Firestore.");
+    } catch (error) {
+      setImportMessage(error.message || "Location import failed.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const pending = contributors.filter(c => c.status === "pending");
@@ -131,13 +152,20 @@ export default function AdminPanel() {
             {/* Locations */}
             {tab === "locations" && (
               <div>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
                   <p className="text-sm text-gray-500">{locations.length} locations</p>
-                  <button onClick={() => setShowAddLocation(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors">
-                    <Plus className="w-4 h-4" /> Add Location
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={handleImportLocations} disabled={saving}
+                      className="flex items-center gap-2 px-4 py-2 border border-green-200 text-green-700 rounded-xl text-sm font-semibold hover:bg-green-50 transition-colors disabled:opacity-50">
+                      <Database className="w-4 h-4" /> Import Starter Locations
+                    </button>
+                    <button onClick={() => setShowAddLocation(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 transition-colors">
+                      <Plus className="w-4 h-4" /> Add Location
+                    </button>
+                  </div>
                 </div>
+                {importMessage && <div className="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">{importMessage}</div>}
                 <div className="space-y-2">
                   {locations.map(loc => (
                     <div key={loc.id} className="bg-white rounded-xl border border-gray-100 p-4 flex items-center gap-4 hover:shadow-sm transition-shadow">

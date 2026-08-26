@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { ACTIVITY_TYPES } from "@/lib/malaysia-data";
 import { BookmarkIcon, Trash2, MapPin, Filter, Calendar, X, Check, Loader2 } from "lucide-react";
 
@@ -21,7 +21,7 @@ export default function Bookmarks() {
 
   const checkGcalConnection = async () => {
     try {
-      const res = await base44.functions.invoke('addToGoogleCalendar', { checkOnly: true });
+      const res = await firebaseClient.functions.invoke('addToGoogleCalendar', { checkOnly: true });
       setGcalConnected(res.data?.connected || false);
     } catch {
       setGcalConnected(false);
@@ -29,14 +29,14 @@ export default function Bookmarks() {
   };
 
   useEffect(() => {
-    base44.entities.Bookmark.list("-created_date").then(b => { setBookmarks(b); setLoading(false); });
-    base44.auth.isAuthenticated().then(async (authed) => {
+    firebaseClient.entities.Bookmark.list("-created_date").then(b => { setBookmarks(b); setLoading(false); });
+    firebaseClient.auth.isAuthenticated().then(async (authed) => {
       if (authed) await checkGcalConnection();
     });
   }, []);
 
   const handleConnectGcal = async () => {
-    const url = await base44.connectors.connectAppUser(GCAL_CONNECTOR_ID);
+    const url = await firebaseClient.connectors.connectAppUser(GCAL_CONNECTOR_ID);
     const popup = window.open(url, "_blank");
     const timer = setInterval(() => {
       if (!popup || popup.closed) {
@@ -51,7 +51,7 @@ export default function Bookmarks() {
     setAddingToCal(true);
     setCalMsg(null);
     try {
-      await base44.functions.invoke('addToGoogleCalendar', {
+      await firebaseClient.functions.invoke('addToGoogleCalendar', {
         title: calTarget.location_name,
         description: `Outdoor activity at ${calTarget.location_name}${calTarget.location_state ? ', ' + calTarget.location_state : ''}`,
         date: selectedDate,
@@ -66,7 +66,7 @@ export default function Bookmarks() {
   };
 
   const handleRemove = async (id) => {
-    await base44.entities.Bookmark.delete(id);
+    await firebaseClient.entities.Bookmark.delete(id);
     setBookmarks(b => b.filter(bk => bk.id !== id));
   };
 

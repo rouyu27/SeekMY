@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { base44 } from "@/api/firebaseClient";
+import { firebaseClient } from "@/api/firebaseClient";
 import { Search, MapPin, Star, Loader2, Compass, Globe, ExternalLink } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -29,7 +29,7 @@ export default function Discover() {
     setSearched(true);
     setError(null);
     try {
-      const response = await base44.functions.invoke('searchGooglePlaces', { query: searchTerm });
+      const response = await firebaseClient.functions.invoke('searchGooglePlaces', { query: searchTerm });
       setResults(response.data?.places || []);
     } catch (e) {
       setError(e.response?.data?.error || e.message || 'Failed to search');

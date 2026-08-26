@@ -74,7 +74,7 @@ const auth = {
   redirectToLogin() { window.location.href = "/login"; },
 };
 
-export const base44 = {
+export const firebaseClient = {
   entities: Object.fromEntries(["Location", "Review", "Bookmark", "ActivityLog", "Badge", "Contributor", "User"].map((name) => [name, entity(name)])), auth,
   functions: { async invoke(name, payload = {}) {
     if (name === "getWeather") {
