@@ -67,6 +67,22 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   const uniqueStates = new Set(logs.map(l=>l.state)).size + user.states;
   const badges = evaluateBadges(logs, 0, earnedBadgeIds);
   const earnedCount = badges.filter(b => b.earned).length;
+  const passwordConditionCount = [
+    /[a-z]/.test(newPass),
+    /[A-Z]/.test(newPass),
+    /\d/.test(newPass),
+    /[^A-Za-z0-9]/.test(newPass),
+  ].filter(Boolean).length;
+  const passwordRequirements = [
+    { label: "Different from current password", met: Boolean(newPass && curPass && newPass !== curPass) },
+    { label: "At least 8 characters", met: newPass.length >= 8 },
+    { label: "Different from email address", met: Boolean(newPass && newPass.toLowerCase() !== user.email.toLowerCase()) },
+    { label: "Meet all 4 conditions", met: passwordConditionCount === 4 },
+    { label: "At least one lowercase letter", met: /[a-z]/.test(newPass) },
+    { label: "At least one uppercase letter", met: /[A-Z]/.test(newPass) },
+    { label: "At least one number", met: /\d/.test(newPass) },
+    { label: "At least one special character", met: /[^A-Za-z0-9]/.test(newPass) },
+  ];
 
   const initials = user.displayName.split(" ").map(n=>n[0]).join("").slice(0,2);
 
@@ -107,6 +123,8 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   async function changePassword(){
     setPassAlert(null);
     if(!curPass||!newPass||!confPass){setPassAlert({type:"error",msg:"All password fields are required."});return;}
+    if(newPass===curPass){setPassAlert({type:"error",msg:"New password must be different from your current password."});return;}
+    if(newPass.toLowerCase()===user.email.toLowerCase()){setPassAlert({type:"error",msg:"New password must be different from your email address."});return;}
     if(!isStrongPassword(newPass)){setPassAlert({type:"error",msg:PASSWORD_REQUIREMENT});return;}
     if(newPass!==confPass){setPassAlert({type:"error",msg:"New passwords do not match."});return;}
     try{await firebaseClient.auth.changePassword({oldPassword:curPass,newPassword:newPass});setCurPass("");setNewPass("");setConfPass("");setPassAlert({type:"success",msg:"Password changed successfully in Firebase Authentication."});}
@@ -534,9 +552,25 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide mb-1.5 block" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "newPassword")}</label>
                   <PasswordInput value={newPass} onChange={setNewPass} placeholder="Strong password"/>
-                  <p className="mt-1.5 text-[11px] leading-4" style={{color:C.textMuted,fontFamily:F.body}}>
-                    {PASSWORD_REQUIREMENT}
-                  </p>
+                  <div className="mt-3 rounded-2xl border p-4" style={{borderColor:C.border}}>
+                    <p className="mb-3 text-xs font-bold" style={{color:C.text,fontFamily:F.body}}>Password Requirements</p>
+                    <div className="space-y-2.5">
+                      {passwordRequirements.map((requirement) => (
+                        <div key={requirement.label} className="flex items-center gap-2.5">
+                          <span
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full"
+                            style={{
+                              backgroundColor: requirement.met ? C.successBg : C.muted,
+                              color: requirement.met ? C.success : C.textMuted,
+                            }}
+                          >
+                            {requirement.met ? <Check size={13}/> : <span className="h-2 w-2 rounded-full" style={{backgroundColor:C.textMuted}}/>}
+                          </span>
+                          <span className="text-xs" style={{color:C.textSub,fontFamily:F.body}}>{requirement.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide mb-1.5 block" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "confirmNewPassword")}</label>
