@@ -550,25 +550,27 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide mb-1.5 block" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "newPassword")}</label>
                   <PasswordInput value={newPass} onChange={setNewPass} placeholder="Strong password"/>
-                  <div className="mt-3 rounded-2xl border p-4" style={{borderColor:C.border}}>
-                    <p className="mb-3 text-xs font-bold" style={{color:C.text,fontFamily:F.body}}>Password Requirements</p>
-                    <div className="space-y-2.5">
-                      {passwordRequirements.map((requirement) => (
-                        <div key={requirement.label} className="flex items-center gap-2.5">
-                          <span
-                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full"
-                            style={{
-                              backgroundColor: requirement.met ? C.successBg : C.muted,
-                              color: requirement.met ? C.success : C.textMuted,
-                            }}
-                          >
-                            {requirement.met ? <Check size={13}/> : <span className="h-2 w-2 rounded-full" style={{backgroundColor:C.textMuted}}/>}
-                          </span>
-                          <span className="text-xs" style={{color:C.textSub,fontFamily:F.body}}>{requirement.label}</span>
-                        </div>
-                      ))}
+                  {newPass.length > 0 && (
+                    <div className="mt-3 rounded-2xl border p-4" style={{borderColor:C.border}}>
+                      <p className="mb-3 text-xs font-bold" style={{color:C.text,fontFamily:F.body}}>Password Requirements</p>
+                      <div className="space-y-2.5">
+                        {passwordRequirements.map((requirement) => (
+                          <div key={requirement.label} className="flex items-center gap-2.5">
+                            <span
+                              className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full"
+                              style={{
+                                backgroundColor: requirement.met ? C.successBg : C.muted,
+                                color: requirement.met ? C.success : C.textMuted,
+                              }}
+                            >
+                              {requirement.met ? <Check size={13}/> : <span className="h-2 w-2 rounded-full" style={{backgroundColor:C.textMuted}}/>}
+                            </span>
+                            <span className="text-xs" style={{color:C.textSub,fontFamily:F.body}}>{requirement.label}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wide mb-1.5 block" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "confirmNewPassword")}</label>
