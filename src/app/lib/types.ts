@@ -122,6 +122,7 @@ export interface BadgeStatus extends BadgeDef {
 
 export interface BookmarkEntry {
   firestoreId?: string;
+  duplicateFirestoreIds?: string[];
   locationId: number | string;
   notes: string;
   folder: string;
@@ -137,9 +138,22 @@ export interface SharedBookmarkLocation {
   difficulty?: string;
   emoji?: string;
   imageUrl?: string;
+  addedByMe?: boolean;
+  canRemove?: boolean;
 }
 
 export interface SharedBookmarkFolder {
+  id: string;
   name: string;
+  sharingEnabled: boolean;
+  memberCount: number;
+  viewerRole: "owner" | "member" | null;
   locations: SharedBookmarkLocation[];
+}
+
+export interface SharedBookmarkMember {
+  id: string;
+  display_name: string;
+  role: "owner" | "member";
+  joined_at: string;
 }

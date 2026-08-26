@@ -1,6 +1,6 @@
 // Shared integration file for all SeekMY modules.
 // Module-specific route comments below identify the responsible member.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UserCircle, LogOut } from "lucide-react";
 import { ImageWithFallback } from "./components/ui/ImageWithFallback";
 const seekMyLogo = new URL("../imports/logo.png", import.meta.url).toString();
@@ -43,8 +43,42 @@ function routeSegment(prefix: string): string {
   catch { return ""; }
 }
 
+function dedupeBookmarkEntries(entries: BookmarkEntry[]): BookmarkEntry[] {
+  const byLocation = new Map<string, BookmarkEntry>();
+  for (const entry of entries) {
+    const key = String(entry.locationId);
+    const current = byLocation.get(key);
+    if (!current) {
+      byLocation.set(key, { ...entry, duplicateFirestoreIds: [...new Set(entry.duplicateFirestoreIds || [])] });
+      continue;
+    }
+    const duplicateIds = [
+      ...(current.duplicateFirestoreIds || []),
+      ...(entry.firestoreId && entry.firestoreId !== current.firestoreId ? [entry.firestoreId] : []),
+      ...(entry.duplicateFirestoreIds || []),
+    ];
+    byLocation.set(key, {
+      ...current,
+      notes: current.notes || entry.notes,
+      folder: current.folder !== "Uncategorized" ? current.folder : entry.folder,
+      duplicateFirestoreIds: [...new Set(duplicateIds.filter((id) => id !== current.firestoreId))],
+    });
+  }
+  return [...byLocation.values()];
+}
+
+function normalizeBookmarkRows(rows: any[]): BookmarkEntry[] {
+  return dedupeBookmarkEntries(rows.map((bookmark: any) => ({
+    firestoreId: String(bookmark.id),
+    locationId: bookmark.locationId ?? bookmark.location_id,
+    notes: bookmark.notes || "",
+    folder: bookmark.folder || "Uncategorized",
+    savedAt: bookmark.savedAt || bookmark.created_date || new Date().toISOString(),
+  })));
+}
+
 export default function App() {
-  const [page, setPage]               = useState<Page>("home");
+  const [page, setPage]               = useState<Page>(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("page") === "bookmarks" ? "bookmarks" : "home");
   const [prevPage, setPrevPage]       = useState<Page>("home");
   const [mobileOpen, setMobileOpen]   = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<Location|null>(null);
@@ -52,6 +86,7 @@ export default function App() {
   const [logLocation, setLogLocation] = useState<Location|null>(null);
   const [selectedState, setSelectedState]       = useState("");
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
+  const bookmarkRequests = useRef(new Set<string>());
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [users, setUsers]       = useState<AppUser[]>([]);
@@ -182,10 +217,7 @@ export default function App() {
         firebaseClient.entities.User.list("full_name", 500),
       ]);
       const logRows = backendData.activities;
-      setBookmarks(bookmarkRows.map((b:any)=>({
-        firestoreId:String(b.id), locationId:b.locationId ?? b.location_id,
-        notes:b.notes||"", folder:b.folder||"Uncategorized", savedAt:b.savedAt||b.created_date||new Date().toISOString(),
-      })));
+      setBookmarks(normalizeBookmarkRows(bookmarkRows));
       setActivityLogs(logRows.map((l:any)=>({
         id:l.id, location:l.location||l.locationName||"Unknown", activity:l.activity||"Hiking",
         distance:Number(l.distance||0), duration:l.duration||"", date:l.date||l.created_date?.slice?.(0,10)||"",
@@ -274,18 +306,24 @@ export default function App() {
   }
   async function toggleBookmark(id: number | string) {
     if (!user) { setShowAuth(true); return; }
+    const requestKey = String(id);
+    if (bookmarkRequests.current.has(requestKey)) return;
+    bookmarkRequests.current.add(requestKey);
     const existing = bookmarks.find((b) => String(b.locationId) === String(id));
     try {
       if (existing) {
-        if (existing.firestoreId) await firebaseClient.entities.Bookmark.delete(existing.firestoreId);
+        const documentIds = [existing.firestoreId, ...(existing.duplicateFirestoreIds || [])].filter(Boolean) as string[];
+        await Promise.all(documentIds.map((documentId) => firebaseClient.entities.Bookmark.delete(documentId)));
         setBookmarks((p)=>p.filter((b)=>String(b.locationId)!==String(id)));
       } else {
-        const created:any = await firebaseClient.entities.Bookmark.create({
+        const documentId = `bookmark_${encodeURIComponent(user.id)}_${encodeURIComponent(String(id))}`;
+        const created:any = await firebaseClient.entities.Bookmark.createWithId(documentId, {
           locationId:id, notes:"", folder:"Uncategorized", savedAt:new Date().toISOString(),
         });
-        setBookmarks((p)=>[{firestoreId:String(created.id),locationId:id,notes:"",folder:"Uncategorized",savedAt:created.savedAt||created.created_date||new Date().toISOString()},...p]);
+        setBookmarks((p)=>dedupeBookmarkEntries([{firestoreId:String(created.id),locationId:id,notes:"",folder:"Uncategorized",savedAt:created.savedAt||created.created_date||new Date().toISOString()},...p]));
       }
     } catch (error:any) { showToast(error?.message || "Unable to update bookmark in Firebase.", "err"); }
+    finally { bookmarkRequests.current.delete(requestKey); }
   }
   function refreshLocations(extra?: Location) {
     if (extra) {
@@ -300,14 +338,14 @@ export default function App() {
   if (typeof window !== "undefined") (window as any).__seekmyRefreshLocations = (loc: Location) => refreshLocations(loc);
   function setBookmarksPersist(updater: BookmarkEntry[] | ((p: BookmarkEntry[]) => BookmarkEntry[])) {
     setBookmarks((previous) => {
-      const next = typeof updater === "function" ? updater(previous) : updater;
+      const next = dedupeBookmarkEntries(typeof updater === "function" ? updater(previous) : updater);
       const nextIds = new Set(next.map((b)=>String(b.locationId)));
-      previous.filter((b)=>!nextIds.has(String(b.locationId)) && b.firestoreId)
-        .forEach((b)=>firebaseClient.entities.Bookmark.delete(b.firestoreId!).catch(()=>{}));
+      previous.filter((b)=>!nextIds.has(String(b.locationId)))
+        .forEach((b)=>[b.firestoreId, ...(b.duplicateFirestoreIds || [])].filter(Boolean).forEach((documentId)=>firebaseClient.entities.Bookmark.delete(documentId!).catch(()=>{})));
       next.forEach((b)=>{
         const old = previous.find((x)=>String(x.locationId)===String(b.locationId));
         if (old?.firestoreId && (old.notes!==b.notes || old.folder!==b.folder)) {
-          firebaseClient.entities.Bookmark.update(old.firestoreId,{notes:b.notes,folder:b.folder}).catch(()=>{});
+          [old.firestoreId, ...(old.duplicateFirestoreIds || [])].forEach((documentId)=>firebaseClient.entities.Bookmark.update(documentId,{notes:b.notes,folder:b.folder}).catch(()=>{}));
         }
       });
       return next;
@@ -322,13 +360,7 @@ export default function App() {
       const logRows = backendData.activities;
       const badgeRows = backendData.badges;
 
-    setBookmarks(bookmarkRows.map((b:any)=>({
-      firestoreId:String(b.id),
-      locationId:b.locationId ?? b.location_id,
-      notes:b.notes || "",
-      folder:b.folder || "Uncategorized",
-      savedAt:b.savedAt || b.created_date || new Date().toISOString(),
-    })));
+    setBookmarks(normalizeBookmarkRows(bookmarkRows));
 
       setActivityLogs(logRows.map((l:any)=>({
       id:l.id,
@@ -443,7 +475,22 @@ export default function App() {
   }
 
   if (sharedFolderToken) {
-    return <SharedBookmarksPage token={sharedFolderToken}/>;
+    return (
+      <>
+        <SharedBookmarksPage
+          token={sharedFolderToken}
+          user={user}
+          onSignIn={() => setShowAuth(true)}
+          onOpenBookmarks={() => { window.location.href = "/?page=bookmarks"; }}
+        />
+        {showAuth && <AuthModal onClose={() => setShowAuth(false)} onLogin={handleLogin} language={language}/>}
+        {toast && (
+          <div className="fixed bottom-6 left-1/2 z-[120] max-w-[90vw] -translate-x-1/2 rounded-full px-5 py-3 text-center text-sm font-bold text-white shadow-lg" style={{ backgroundColor: toast.type === "err" ? C.error : C.jungle, fontFamily: F.body }}>
+            {toast.msg}
+          </div>
+        )}
+      </>
+    );
   }
 
   if (isAdmin) {

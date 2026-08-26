@@ -1107,16 +1107,43 @@ const backend = {
     return this.call<{ summaries: Array<{ locationId: string; locationName?: string; count: number; rating: number }> }>("getLocationReviewSummaries");
   },
   getSharedBookmarkFolder(token: string) {
-    return this.call<{ folder: { name: string; locations: Array<Record<string, any>> } }>("getSharedBookmarkFolder", { token });
+    return this.call<{ folder: { id: string; name: string; sharingEnabled: boolean; memberCount: number; viewerRole: "owner" | "member" | null; locations: Array<Record<string, any>> } }>("getSharedBookmarkFolder", { token });
   },
   getBookmarkFolderShareStatus(folderName: string) {
-    return this.call<{ active: boolean; updatedAt: string | null }>("getBookmarkFolderShareStatus", { folderName });
+    return this.call<{ active: boolean; folderId: string | null; updatedAt: string | null }>("getBookmarkFolderShareStatus", { folderName });
   },
   createBookmarkFolderShare(folderName: string, locationIds: Array<string | number>) {
-    return this.call<{ token: string; folderName: string; locationCount: number }>("createBookmarkFolderShare", { folderName, locationIds });
+    return this.call<{ token: string; folderId: string; folderName: string; locationCount: number }>("createBookmarkFolderShare", { folderName, locationIds });
   },
-  disableBookmarkFolderShare(folderName: string) {
-    return this.call<{ success: boolean }>("disableBookmarkFolderShare", { folderName });
+  disableBookmarkFolderShare(folderName: string, folderId?: string) {
+    return this.call<{ success: boolean }>("disableBookmarkFolderShare", { folderName, folderId });
+  },
+  getMyCollaborativeFolders() {
+    return this.call<{ folders: Array<Record<string, any>> }>("getMyCollaborativeFolders");
+  },
+  joinSharedBookmarkFolder(token: string) {
+    return this.call<{ folderId: string; folderName: string; role: "owner" | "member"; alreadyJoined: boolean }>("joinSharedBookmarkFolder", { token });
+  },
+  addSharedBookmarkLocation(folderId: string, locationId: string | number, locationSnapshot?: Record<string, any>) {
+    return this.call<{ location: Record<string, any> }>("addSharedBookmarkLocation", { folderId, locationId, locationSnapshot });
+  },
+  removeSharedBookmarkLocation(folderId: string, locationId: string | number) {
+    return this.call<{ success: boolean }>("removeSharedBookmarkLocation", { folderId, locationId });
+  },
+  renameSharedBookmarkFolder(folderId: string, folderName: string) {
+    return this.call<{ success: boolean; folderName: string }>("renameSharedBookmarkFolder", { folderId, folderName });
+  },
+  deleteSharedBookmarkFolder(folderId: string) {
+    return this.call<{ success: boolean }>("deleteSharedBookmarkFolder", { folderId });
+  },
+  leaveSharedBookmarkFolder(folderId: string) {
+    return this.call<{ success: boolean }>("leaveSharedBookmarkFolder", { folderId });
+  },
+  getSharedBookmarkFolderMembers(folderId: string) {
+    return this.call<{ viewerRole: "owner" | "member"; members: Array<Record<string, any>> }>("getSharedBookmarkFolderMembers", { folderId });
+  },
+  removeSharedBookmarkFolderMember(folderId: string, membershipId: string) {
+    return this.call<{ success: boolean }>("removeSharedBookmarkFolderMember", { folderId, membershipId });
   },
   submitReview(payload: Record<string, any>) {
     return this.call<{ review: EntityRecord; newBadges: EntityRecord[] }>("submitReview", payload);

@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, FolderOpen, Loader2, MapPin, ShieldCheck } from "lucide-react";
+import { ExternalLink, FolderOpen, Loader2, MapPin, ShieldCheck, Users, X } from "lucide-react";
 import { firebaseClient } from "../api/firebaseClient";
-import type { SharedBookmarkFolder } from "../lib/types";
+import type { AppUser, SharedBookmarkFolder } from "../lib/types";
 import { C, F } from "../lib/tokens";
+import { Pill } from "../components/Atoms";
 
-export function SharedBookmarksPage({ token }: { token: string }) {
+export function SharedBookmarksPage({ token, user, onSignIn, onOpenBookmarks }: { token: string; user: AppUser | null; onSignIn: () => void; onOpenBookmarks: () => void }) {
   const [folder, setFolder] = useState<SharedBookmarkFolder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [joinRequested, setJoinRequested] = useState(false);
+  const [showJoinConfirm, setShowJoinConfirm] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -23,7 +28,36 @@ export function SharedBookmarksPage({ token }: { token: string }) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [token]);
+  }, [token, user?.id]);
+
+  useEffect(() => {
+    if (joinRequested && user && !folder?.viewerRole) setShowJoinConfirm(true);
+  }, [joinRequested, user, folder?.viewerRole]);
+
+  function requestJoin() {
+    if (folder?.viewerRole) {
+      onOpenBookmarks();
+      return;
+    }
+    setJoinError("");
+    setJoinRequested(true);
+    if (!user) onSignIn();
+    else setShowJoinConfirm(true);
+  }
+
+  async function confirmJoin() {
+    setJoining(true);
+    try {
+      const result = await firebaseClient.backend.joinSharedBookmarkFolder(token);
+      setFolder((current) => current ? { ...current, viewerRole: result.role, memberCount: current.memberCount + (result.alreadyJoined ? 0 : 1) } : current);
+      setShowJoinConfirm(false);
+      setJoinRequested(false);
+    } catch (reason: any) {
+      setJoinError(reason?.message || "Unable to join this shared folder.");
+    } finally {
+      setJoining(false);
+    }
+  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: C.cream, color: C.text, fontFamily: F.body }}>
@@ -63,12 +97,17 @@ export function SharedBookmarksPage({ token }: { token: string }) {
           <>
             <div className="mb-7">
               <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide" style={{ color: C.forest }}>
-                <FolderOpen size={15}/> Shared bookmark folder
+                <FolderOpen size={15}/> Shared via SeekMY
               </div>
               <h1 className="text-3xl font-normal sm:text-4xl" style={{ color: C.jungle, fontFamily: F.display }}>{folder.name}</h1>
               <p className="mt-2 text-sm" style={{ color: C.textMuted }}>
-                {folder.locations.length} saved location{folder.locations.length === 1 ? "" : "s"} · Shared as view-only
+                {folder.locations.length} saved location{folder.locations.length === 1 ? "" : "s"} · {folder.memberCount} member{folder.memberCount === 1 ? "" : "s"}
               </p>
+              <div className="mt-5">
+                <Pill variant="filled" small onClick={requestJoin}>
+                  <Users size={14}/> {folder.viewerRole ? "Open in My Bookmarks" : "Join Shared Folder"}
+                </Pill>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -114,11 +153,30 @@ export function SharedBookmarksPage({ token }: { token: string }) {
             </div>
 
             <div className="mt-8 rounded-xl p-4 text-center text-xs leading-relaxed" style={{ backgroundColor: C.muted, color: C.textMuted }}>
-              This public page is view-only. Personal notes and account information are never included.
+              Viewing is public and does not require an account. Join only if you want this collaborative folder in My Bookmarks.
             </div>
           </>
         )}
       </main>
+
+      {showJoinConfirm && folder && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-5" style={{ backgroundColor: "rgba(0,0,0,0.45)" }}>
+          <div className="w-full max-w-sm rounded-[20px] bg-white p-6" role="dialog" aria-modal="true" aria-labelledby="join-folder-title" style={{ boxShadow: "0 18px 50px rgba(27,67,50,0.22)" }}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="join-folder-title" className="text-xl font-bold" style={{ color: C.text, fontFamily: F.display }}>Join “{folder.name}”?</h2>
+                <p className="mt-2 text-sm leading-relaxed" style={{ color: C.textMuted }}>Save this shared folder to your SeekMY account and collaborate on places together.</p>
+              </div>
+              <button type="button" onClick={() => setShowJoinConfirm(false)} className="rounded-full p-2" style={{ backgroundColor: C.muted, color: C.textSub }} aria-label="Close join dialog"><X size={15}/></button>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              {joinError && <p className="mr-auto self-center text-xs" style={{ color: C.error }}>{joinError}</p>}
+              <Pill variant="outline" small onClick={() => setShowJoinConfirm(false)}>Cancel</Pill>
+              <Pill variant="filled" small onClick={confirmJoin} disabled={joining}>{joining ? "Joining..." : "Join Folder"}</Pill>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
