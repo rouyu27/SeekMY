@@ -53,6 +53,7 @@ export default function App() {
   const [badgeToast, setBadgeToast] = useState<BadgeDef | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
+  const [openMapWeather, setOpenMapWeather] = useState(false);
   const [language, setLanguageState] = useState<Language>("en");
   const [showOnboarding, setShowOnboarding] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -167,6 +168,10 @@ export default function App() {
     setPage(p);
     setMobileOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function openWeatherMap() {
+    setOpenMapWeather(true);
+    navigate("map");
   }
   function selectLocation(l: Location) {
     setSelectedLocation(l);
@@ -449,7 +454,14 @@ export default function App() {
 
       {/* ==================== LimRouYu Part - Map Module ==================== */}
       {page === "map" && (
-        <MapPage setPage={navigate} setSelectedLocation={selectLocation} locations={allLocations} language={language} />
+        <MapPage
+          setPage={navigate}
+          setSelectedLocation={selectLocation}
+          locations={allLocations}
+          language={language}
+          openWeather={openMapWeather}
+          onWeatherOpened={() => setOpenMapWeather(false)}
+        />
       )}
       {/* ==================== LimRouYu END - Map Module ==================== */}
 
@@ -529,7 +541,7 @@ export default function App() {
       )}
       {/* ==================== FongXinTong END - Personal Stats Dashboard ==================== */}
 
-      {page === "help" && <HelpPage setPage={navigate} onStartTour={() => setShowOnboarding(true)} language={language} />}
+      {page === "help" && <HelpPage setPage={navigate} onOpenWeatherMap={openWeatherMap} onStartTour={() => setShowOnboarding(true)} language={language} />}
       {/* ==================== WilsonChoongWeiShan Part - Account Module ==================== */}
       {page === "account" && user && (
         <AccountPage

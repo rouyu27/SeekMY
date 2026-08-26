@@ -183,11 +183,15 @@ export function MapPage({
   setSelectedLocation,
   locations,
   language = "en",
+  openWeather = false,
+  onWeatherOpened,
 }: {
   setPage: (p: Page) => void;
   setSelectedLocation: (l: Location) => void;
   locations: Location[];
   language?: Language;
+  openWeather?: boolean;
+  onWeatherOpened?: () => void;
 }) {
   const [activity, setActivity] = useState("all");
   const [difficulty, setDifficulty] = useState("All");
@@ -201,6 +205,12 @@ export function MapPage({
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [stateBoundaries, setStateBoundaries] = useState<MalaysiaStateGeoJson | null>(null);
   const [showPlacePins, setShowPlacePins] = useState(true);
+
+  useEffect(() => {
+    if (!openWeather) return;
+    setShowWeather(true);
+    onWeatherOpened?.();
+  }, [openWeather, onWeatherOpened]);
 
   const filteredLocations = useMemo(
     () =>
