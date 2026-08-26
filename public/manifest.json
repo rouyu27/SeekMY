@@ -1,17 +1,30 @@
 {
-  "name": "SeekMY — Malaysia Outdoor Discovery",
+  "name": "SeekMY - Malaysia Outdoor Discovery",
   "short_name": "SeekMY",
-  "description": "Discover outdoor activities across all Malaysian states",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#16a34a",
-  "lang": "en",
+  "background_color": "#f7f4ea",
+  "theme_color": "#1b4332",
+  "description": "Discover outdoor activities across Malaysia.",
   "icons": [
     {
-      "src": "/images/logo.png",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

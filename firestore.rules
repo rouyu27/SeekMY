@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function primaryAdmin() { return signedIn() && request.auth.token.email == 'shanyuew416@gmail.com'; }
+    function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/User/$(request.auth.uid)) && get(/databases/$(database)/documents/User/$(request.auth.uid)).data.role == 'admin'; }
+    function ownsExisting() { return signedIn() && resource.data.created_by_id == request.auth.uid; }
+    function createsOwn() { return signedIn() && request.resource.data.created_by_id == request.auth.uid; }
+    function approvedContributor() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/User/$(request.auth.uid))
+        && get(/databases/$(database)/documents/User/$(request.auth.uid)).data.contributorStatus in ['approved', 'verified'];
+    }
+
+    match /User/{userId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && userId == request.auth.uid && (request.resource.data.role == 'user' || (primaryAdmin() && request.resource.data.role == 'admin'));
+      allow update: if isAdmin() || (userId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'email','full_name','username','photo_url','bio','auth_provider','last_login','updated_date'
+        ])
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.get('contributorStatus', null) == resource.data.get('contributorStatus', null));
+      allow delete: if isAdmin() || userId == request.auth.uid;
+    }
+    match /Location/{id} { allow read: if true; allow create, update, delete: if isAdmin(); }
+    match /LocationImportCandidate/{id} { allow read, create, update, delete: if isAdmin(); }
+    match /Review/{id} {
+      allow read: if true;
+      allow create: if false; // submitReview callable validates visits and duplicates.
+      allow delete: if isAdmin() || ownsExisting();
+      allow update: if isAdmin() || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','flagReason','flaggedBy','updated_date']) && request.resource.data.status == 'flagged');
+    }
+    match /Bookmark/{id} { allow read: if isAdmin() || ownsExisting(); allow create: if createsOwn(); allow update, delete: if isAdmin() || ownsExisting(); }
+    match /ActivityLog/{id} { allow read: if isAdmin() || ownsExisting(); allow create: if false; allow update, delete: if isAdmin(); }
+    match /Badge/{id} { allow read: if isAdmin() || ownsExisting(); allow create, update, delete: if false; }
+    match /Contributor/{id} {
+      allow read: if isAdmin() || ownsExisting();
+      allow create: if createsOwn() && id == request.auth.uid && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (ownsExisting()
+        && resource.data.status == 'rejected'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'fullName','phone','area','contributionArea','localKnowledgeExperience',
+          'services','experience','docName','docUrl','status','rejectReason','resubmittedAt','updated_date'
+        ])) || (ownsExisting()
+          && resource.data.status in ['approved', 'verified']
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'phone','contributionArea','services','serviceDescription','availability',
+            'languages','publicContact','websiteUrl','updated_date'
+          ]));
+      allow delete: if isAdmin();
+    }
+    match /LocationSubmission/{id} {
+      allow read: if isAdmin() || ownsExisting();
+      allow create: if createsOwn() && approvedContributor() && request.resource.data.status == 'pending';
+      allow update: if isAdmin() || (ownsExisting()
+        && resource.data.status in ['pending', 'rejected']
+        && request.resource.data.status == 'pending'
+        && request.resource.data.created_by_id == resource.data.created_by_id
+        && request.resource.data.contributorId == resource.data.contributorId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'contributorName','name','address','state','activity','difficulty','description',
+          'facilities','accessibility','estimatedPrice','budget','safetyNotes','bestTime',
+          'contributorTip','sourceUrl','photoName','photoUrl','status','rejectReason','updatedAt','updated_date'
+        ]));
+      allow delete: if isAdmin();
+    }
+    match /Announcement/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+      allow update: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read','updated_date']));
+    }
+  }
+}

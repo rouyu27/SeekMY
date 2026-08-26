@@ -1,58 +1,32 @@
-# Firebase and API setup
+# Firebase setup
 
-1. Create a Firebase project and register a Web app. Copy its configuration values into a new `.env.local` file based on `.env.example`.
-2. In **Authentication > Sign-in method**, enable **Email/Password** and **Google**. Add your deployed domain and `localhost` to **Authentication > Settings > Authorized domains**.
-3. Create a **Cloud Firestore** database and a **Storage** bucket. Use the rules below before testing with real users.
-4. Create an OpenWeatherMap API key, add it as `VITE_OPENWEATHER_API_KEY`, and restrict it to your development/deployed site in the OpenWeatherMap dashboard.
-5. Restart `npm run dev` after changing `.env.local`.
-6. Sign in as the primary administrator, open `/admin`, and select **Import Starter Locations**. This explicit action writes missing curated records to Firestore; the app never seeds them automatically.
+SeekMY now uses the Firebase adapter at `src/app/api/firebaseClient.ts`.
 
-## Firestore rules
+## Connected browser features
+- Email/password sign in
+- Registration with Firebase Authentication
+- Verification email after registration
+- Password reset email
+- Session restoration when the app reloads
+- Sign out
+- Firestore entity adapter for `Location`, `Review`, `Bookmark`, `ActivityLog`, `Badge`, `Contributor`, and `User`
+- Firebase Storage helper for activity-photo uploads
 
-Paste these in **Firestore Database > Rules**. The primary administrator is `shanyuew416@gmail.com`; they can promote other user profiles in the Admin Panel.
+The Firebase values from the supplied `SEEKMY (3)` project are preserved in `.env.local`. `.env.local` is listed in `.gitignore`; do not commit it to a public repository.
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function admin() {
-      return signedIn() && get(/databases/$(database)/documents/User/$(request.auth.uid)).data.role == 'admin';
-    }
-    function owner() { return signedIn() && resource.data.created_by_id == request.auth.uid; }
-    function primaryAdmin() { return signedIn() && request.auth.token.email == 'shanyuew416@gmail.com'; }
-
-    match /User/{userId} {
-      allow read: if signedIn();
-      allow create: if signedIn() && userId == request.auth.uid && (request.resource.data.role == 'user' || (primaryAdmin() && request.resource.data.role == 'admin'));
-      allow update: if admin() || (userId == request.auth.uid && request.resource.data.role == resource.data.role);
-      allow delete: if admin() || userId == request.auth.uid;
-    }
-    match /Location/{id} { allow read: if true; allow write: if admin(); }
-    match /Review/{id}, /Bookmark/{id}, /ActivityLog/{id}, /Badge/{id}, /Contributor/{id} {
-      allow read: if true;
-      allow create: if signedIn() && request.resource.data.created_by_id == request.auth.uid;
-      allow update, delete: if admin() || owner();
-    }
-  }
-}
-```
-
-## Storage rules
-
-Use paths like `activity-photos/{uid}/{fileName}` when you add Firebase Storage uploads. Only a signed-in owner should read/write their own folder.
+If you need to configure another Firebase project, copy `.env.example` to `.env.local` and fill in:
 
 ```
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /activity-photos/{userId}/{allPaths=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-  }
-}
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+VITE_OPENWEATHER_API_KEY=
 ```
 
-## Keep secrets server-side
+Enable Email/Password (and Google if you later expose Google sign-in in the mockup), create Firestore, and create Firebase Storage in the Firebase console.
 
-Do not put an OpenAI/AI provider key or Google Calendar OAuth client secret in `.env.local`: Vite exposes `VITE_*` variables to the browser. Implement those features with Firebase Cloud Functions and store secrets using Firebase/Google Cloud secret management.
+## Important
+The mockup keeps its existing local sample data for screens that have not yet been migrated to Firestore. The reusable Firebase entity adapter is included so those pages can be migrated incrementally without changing the design.

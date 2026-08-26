@@ -1,0 +1,175 @@
+.seekmy-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 50% 33%, rgba(244, 196, 48, 0.2), transparent 30%),
+    radial-gradient(circle at 50% 46%, rgba(27, 138, 118, 0.12), transparent 34%),
+    linear-gradient(135deg, #f4fbfb 0%, #ffffff 58%, #fffaf0 100%);
+  overflow: hidden;
+}
+
+.seekmy-splash--fade-out {
+  animation: seekmySplashFadeOut 0.5s ease-out forwards;
+}
+
+.seekmy-splash__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.seekmy-splash__logo-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 20px 48px rgba(13, 70, 68, 0.14);
+  filter: drop-shadow(0 12px 24px rgba(13, 70, 68, 0.1));
+  animation: seekmyLogoNatureEntrance 0.95s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.seekmy-splash__logo {
+  width: 130px;
+  height: 130px;
+  object-fit: contain;
+}
+
+.seekmy-splash__title {
+  margin: 20px 0 0;
+  color: #1b4332;
+  font-family: "DM Serif Display", Georgia, serif;
+  font-size: 2.65rem;
+  font-weight: 400;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: seekmyFadeInUpBlur 0.6s ease-out 0.35s forwards;
+}
+
+.seekmy-splash__title span {
+  color: #11998e;
+}
+
+.seekmy-splash__divider {
+  width: 0;
+  height: 3px;
+  margin: 11px 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #11998e, #e9c46a);
+  animation: seekmyDividerExpand 0.5s ease-out 0.58s forwards;
+}
+
+.seekmy-splash__subtitle {
+  max-width: 280px;
+  margin: 10px 0 0;
+  color: #2d6a4f;
+  font-family: "Outfit", sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.45;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: seekmyFadeInUpBlur 0.6s ease-out 0.72s forwards;
+}
+
+.seekmy-splash__loader {
+  display: flex;
+  gap: 7px;
+  margin-top: 24px;
+  opacity: 0;
+  animation: seekmyFadeIn 0.35s ease-out 0.85s forwards;
+}
+
+.seekmy-splash__loader span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e9c46a;
+  animation: seekmyLoaderPulse 0.9s ease-in-out infinite;
+}
+
+.seekmy-splash__loader span:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.seekmy-splash__loader span:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+@keyframes seekmyLogoNatureEntrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.45) rotate(-38deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes seekmyFadeInUpBlur {
+  0% {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes seekmyDividerExpand {
+  to {
+    width: 82px;
+  }
+}
+
+@keyframes seekmyFadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes seekmyLoaderPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes seekmySplashFadeOut {
+  to {
+    opacity: 0;
+    transform: scale(1.03);
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seekmy-splash,
+  .seekmy-splash *,
+  .seekmy-splash *::before,
+  .seekmy-splash *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
