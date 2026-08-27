@@ -400,6 +400,7 @@ export function MapPage({
   const [weatherDate, setWeatherDate] = useState(todayInputValue);
   const [weatherTime, setWeatherTime] = useState("12:00");
   const [weatherFilter, setWeatherFilter] = useState<WeatherKind>("all");
+  const [weatherBundlesByPlace, setWeatherBundlesByPlace] = useState<Record<string, WeatherBundle>>({});
   const [weatherByPlace, setWeatherByPlace] = useState<Record<string, WeatherSnapshot>>({});
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [malaysiaBoundary, setMalaysiaBoundary] = useState<MalaysiaStateGeoJson | null>(null);
@@ -481,8 +482,8 @@ export function MapPage({
 
     async function loadWeather() {
       setWeatherLoading(true);
-      setWeatherByPlace({});
-      const next: Record<string, WeatherSnapshot> = {};
+      setWeatherBundlesByPlace({});
+      const next: Record<string, WeatherBundle> = {};
       const concurrency = 4;
 
       for (let start = 0; start < points.length; start += concurrency) {
@@ -495,24 +496,17 @@ export function MapPage({
                 lat: point.lat,
                 lng: point.lng,
               });
-              return [placeId, weatherSnapshot(bundle, weatherDate, weatherTime)] as const;
+              return [placeId, bundle] as const;
             } catch {
-              return [
-                placeId,
-                {
-                  kind: "cloudy",
-                  condition: "No forecast data",
-                  icon: "",
-                  available: false,
-                  message: "No record found. Please try again later.",
-                },
-              ] as const;
+              return null;
             }
           })
         );
 
-        for (const [id, weather] of resolved) next[id] = weather;
-        if (!cancelled) setWeatherByPlace((current) => ({ ...current, ...next }));
+        for (const result of resolved) {
+          if (result) next[result[0]] = result[1];
+        }
+        if (!cancelled) setWeatherBundlesByPlace((current) => ({ ...current, ...next }));
       }
 
       if (!cancelled) setWeatherLoading(false);
@@ -522,7 +516,29 @@ export function MapPage({
     return () => {
       cancelled = true;
     };
-  }, [showWeather, loadingMap, weatherDate, weatherTime, weatherPlaceKey, language, points]);
+  }, [showWeather, loadingMap, weatherPlaceKey, points]);
+
+  useEffect(() => {
+    if (!showWeather) {
+      setWeatherByPlace({});
+      return;
+    }
+    const next: Record<string, WeatherSnapshot> = {};
+    for (const point of points) {
+      const placeId = String(point.location.id);
+      const bundle = weatherBundlesByPlace[placeId];
+      next[placeId] = bundle
+        ? weatherSnapshot(bundle, weatherDate, weatherTime)
+        : {
+            kind: "cloudy",
+            condition: "No forecast data",
+            icon: "",
+            available: false,
+            message: "No record found. Please try again later.",
+          };
+    }
+    setWeatherByPlace(next);
+  }, [showWeather, points, weatherBundlesByPlace, weatherDate, weatherTime]);
 
   const visiblePoints = useMemo(
     () => {
@@ -581,7 +597,7 @@ export function MapPage({
             </h1>
             <p className="text-sm" style={{ color: "rgba(255,255,255,0.65)", fontFamily: F.body }}>
               {visiblePoints.length} {t(language, "markers")}
-              {loadingMap ? ` Â· ${t(language, "locating")}...` : ""}
+              {loadingMap ? ` · ${t(language, "locating")}...` : ""}
             </p>
           </div>
         </div>
@@ -759,7 +775,7 @@ export function MapPage({
                     <div style={{ minWidth: 190, fontFamily: F.body }}>
                       <p style={{ fontWeight: 700, marginBottom: 4 }}>{location.name}</p>
                       <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
-                        ðŸ“ {location.state} Â· {activityLabel(language, location.activity)}
+                        Location - {location.state} - {activityLabel(language, location.activity)}
                       </p>
                       {showWeather && (
                         <p
@@ -802,7 +818,7 @@ export function MapPage({
                           marginRight: 12,
                         }}
                       >
-                        {t(language, "viewDetails")} â†’
+                        {`${t(language, "viewDetails")} ->`}
                       </button>
                       <a
                         href={directionsUrl(location)}
@@ -810,7 +826,7 @@ export function MapPage({
                         rel="noreferrer"
                         style={{ fontSize: 12, fontWeight: 700, color: C.jungle }}
                       >
-                        {t(language, "getDirections")} â†’
+                        {`${t(language, "getDirections")} ->`}
                       </a>
                     </div>
                   </Popup>
