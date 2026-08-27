@@ -145,14 +145,14 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         firebaseClient.backend.getAdminReviews().then(result=>result.reviews),
         firebaseClient.entities.User.list("full_name",500),
         firebaseClient.entities.LocationSubmission.list("-created_date",500),
-        firebaseClient.entities.Announcement.filter({adminLog:true}, "-createdAt", 50),
+        firebaseClient.entities.Announcement.filter({adminLog:true}, undefined, 50),
       ]);
 
       if(locationsResult.status==="fulfilled")setLocations(prepareAdminLocations(locationsResult.value as Location[]));
       if(contributorsResult.status==="fulfilled")setContributors(contributorsResult.value as ContributorApplication[]);
       if(reviewsResult.status==="fulfilled")setReviews(reviewsResult.value as StoredReview[]);
       if(submissionsResult.status==="fulfilled")setSubmissions(submissionsResult.value as LocationSubmission[]);
-      if(announcementLogsResult.status==="fulfilled")setAnnouncementLogs(announcementLogsResult.value as AdminAnnouncementLog[]);
+      if(announcementLogsResult.status==="fulfilled")setAnnouncementLogs((announcementLogsResult.value as AdminAnnouncementLog[]).sort((a,b)=>String(b.createdAt||b.created_date||"").localeCompare(String(a.createdAt||a.created_date||""))));
 
       if(usersResult.status==="fulfilled"){
         setUserLoadError("");
