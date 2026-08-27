@@ -367,7 +367,7 @@ async function fetchLive(
   const forecast: ForecastDay[] =
     Array.from(grouped.entries())
       .filter(([date]) => date > todayMalaysia)
-      .slice(0, 3)
+      .slice(0, 5)
       .map(([date, items]) => {
         const temps =
           items.map(

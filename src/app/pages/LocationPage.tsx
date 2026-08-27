@@ -294,7 +294,7 @@ export function LocationPage({
     getRecommendations: language === "zh" ? "获取建议" : language === "ms" ? "Dapatkan cadangan" : "Get Recommendations",
     weatherAlerts: language === "zh" ? "天气警报" : language === "ms" ? "Amaran cuaca" : "Weather alerts",
     noWeatherAlerts: language === "zh" ? "此地点暂无严重天气警报。祝你户外活动愉快！" : language === "ms" ? "Tiada amaran cuaca buruk untuk lokasi ini. Selamat beraktiviti!" : "No severe weather alerts for this location. Enjoy your outdoor activity!",
-    next7Days: language === "zh" ? "未来 7 天" : language === "ms" ? "7 hari seterusnya" : "Next 7 days",
+    next5Days: language === "zh" ? "未来 5 天" : language === "ms" ? "5 hari seterusnya" : "Next 5 days",
     rain: language === "zh" ? "降雨" : language === "ms" ? "Hujan" : "Rain",
     weatherRecommendations: language === "zh" ? "基于天气的建议" : language === "ms" ? "Cadangan berdasarkan cuaca" : "Weather-based recommendations",
     metForecast: language === "zh" ? "马来西亚气象局官方预报" : language === "ms" ? "Ramalan rasmi MET Malaysia" : "Official MET Malaysia forecast",
@@ -852,22 +852,9 @@ export function LocationPage({
 
                 {showForecast && (
                   <div className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10)` }}>
-                    <h3 className="font-bold text-sm mb-3" style={{ fontFamily: F.body, color: C.text }}>{locCopy.next7Days}</h3>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                      {metForecast.length > 0 ? metForecast.map((day) => (
-                        <div key={`weekly-${day.location.location_id}-${day.date}`} className="p-3 rounded-xl" style={{ backgroundColor: C.muted }}>
-                          <p className="text-[11px] font-bold" style={{ color: C.textMuted, fontFamily: F.body }}>
-                            {new Date(`${day.date}T12:00:00+08:00`).toLocaleDateString(language === "zh" ? "zh-CN" : language === "ms" ? "ms-MY" : "en-MY", { weekday: "short", day: "numeric", month: "short" })}
-                          </p>
-                          <p className="text-sm font-bold mt-2" style={{ color: C.text, fontFamily: F.body }}>{day.summary_forecast}</p>
-                          <p className="text-sm mt-1" style={{ color: C.forest, fontFamily: F.body }}>{day.min_temp}°C - {day.max_temp}°C</p>
-                          <div className="text-[11px] mt-3 space-y-1" style={{ color: C.textSub, fontFamily: F.body }}>
-                            <p>{locCopy.morning}: {day.morning_forecast}</p>
-                            <p>{locCopy.afternoon}: {day.afternoon_forecast}</p>
-                            <p>{locCopy.night}: {day.night_forecast}</p>
-                          </div>
-                        </div>
-                      )) : weather.forecast.map((f) => (
+                    <h3 className="font-bold text-sm mb-3" style={{ fontFamily: F.body, color: C.text }}>{locCopy.next5Days}</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      {weather.forecast.map((f) => (
                         <div key={f.date} className="text-center p-3 rounded-xl" style={{ backgroundColor: C.muted }}>
                           <p className="text-[11px] font-bold" style={{ color: C.textMuted, fontFamily: F.body }}>{f.date}</p>
                           <p className="text-2xl my-1">{f.icon}</p>
