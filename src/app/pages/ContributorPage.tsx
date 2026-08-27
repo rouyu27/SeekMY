@@ -334,8 +334,11 @@ export function ContributorPage({
     if (locSafety.trim().length < 10) { setMsg({type:"err",text:"Please add at least one useful safety note for visitors."}); return; }
     if (subs.some(s=>s.id!==editingSubmissionId&&s.name.toLowerCase()===locName.trim().toLowerCase() && s.state===locState)) { setMsg({type:"err",text:"This location already exists in your submissions."}); return; }
     setLoading(true);
+    let step = "submit";
     try {
-      const photoUrl = photoFile ? await firebaseClient.storage.uploadLocationPhoto(photoFile) : undefined;
+      const photoUrl = photoFile ? await firebaseClient.storage.uploadLocationPhoto(photoFile).catch((error:any) => {
+        throw new Error(error?.message ? `Photo upload failed: ${error.message}` : "Photo upload failed.");
+      }) : undefined;
       const payload = {
         contributorId:user!.id,contributorName:myApp?.fullName||user!.displayName,name:locName.trim(),address:locAddress.trim(),state:locState,activity:locActivity,difficulty:locDiff,
         lat,lng,locationConfirmed:true,description:locDesc.trim(),facilities:locFac.trim(),accessibility:locAccess.trim(),estimatedPrice:numericPrice,estimatedPriceRange:priceRange.label,budget,
@@ -346,6 +349,7 @@ export function ContributorPage({
       if (editingSubmissionId) {
         const current = subs.find(s=>s.id===editingSubmissionId);
         if (current?.status === "approved") { setMsg({type:"err",text:"Approved locations cannot be edited here."}); return; }
+        step = "update";
         const updated:any = await firebaseClient.entities.LocationSubmission.update(editingSubmissionId,payload);
         await createOwnAnnouncement({
           userId:user!.id,
@@ -361,6 +365,7 @@ export function ContributorPage({
         setSubs(items=>items.map(item=>item.id===editingSubmissionId?updated as LocationSubmission:item));
         setMsg({type:"ok",text:"Location update resubmitted successfully. Awaiting admin approval."});
       } else {
+        step = "create";
         const created:any = await firebaseClient.entities.LocationSubmission.create({...payload,createdAt:new Date().toISOString()});
         await createOwnAnnouncement({
           userId:user!.id,
@@ -377,7 +382,7 @@ export function ContributorPage({
         setMsg({type:"ok",text:"Location submitted successfully. Awaiting admin approval."});
       }
       resetLocationForm();
-    } catch(error:any) { setMsg({type:"err",text:error?.message||"Unable to submit location to Firebase."}); }
+    } catch(error:any) { setMsg({type:"err",text:error?.message ? `Location ${step} failed: ${error.message}` : "Unable to submit location to Firebase."}); }
     finally { setLoading(false); }
   }
 
