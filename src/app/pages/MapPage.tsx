@@ -88,16 +88,18 @@ const weatherCopy: Record<Language, Record<string, string>> = {
     showPlaces: "Tunjuk tempat",
   },
   zh: {
-    show: "æ˜¾ç¤ºå¤©æ°”",
-    hide: "éšè—å¤©æ°”",
-    loading: "æ­£åœ¨åŠ è½½å¤©æ°”",
-    date: "æ—¥æœŸ",
-    time: "æ—¶é—´",
-    all: "å…¨éƒ¨å¤©æ°”",
-    sunny: "æ™´å¤©",
-    cloudy: "å¤šäº‘",
-    rain: "ä¸‹é›¨",
-    unavailable: "å¤©æ°”æš‚æ—¶ä¸å¯ç”¨",
+    show: "显示天气",
+    hide: "隐藏天气",
+    loading: "正在加载天气",
+    date: "日期",
+    time: "时间",
+    all: "全部天气",
+    sunny: "晴天",
+    cloudy: "多云",
+    rain: "下雨",
+    unavailable: "天气暂时不可用",
+    hidePlaces: "隐藏地点",
+    showPlaces: "显示地点",
   },
 };
 
@@ -108,8 +110,6 @@ const weatherPalette: Record<Exclude<WeatherKind, "all">, { bg: string; text: st
 };
 
 function wt(language: Language, key: string) {
-  if (language === "zh" && key === "hidePlaces") return "\u9690\u85cf\u5730\u70b9";
-  if (language === "zh" && key === "showPlaces") return "\u663e\u793a\u5730\u70b9";
   return weatherCopy[language]?.[key] ?? weatherCopy.en[key] ?? key;
 }
 
@@ -149,17 +149,30 @@ function formatWeatherDate(date: string) {
   });
 }
 
-function forecastRangeMessage(bundle: WeatherBundle) {
+function forecastRangeMessage(bundle: WeatherBundle, language: Language) {
   const dates = Array.from(new Set((bundle.hourly ?? []).map((item) => item.date))).sort();
-  if (!dates.length) return "No record found. Please try again later.";
-  if (dates.length === 1) return `No record found. Weather data is only available on ${formatWeatherDate(dates[0])}.`;
-  return `No record found. Please select a date from ${formatWeatherDate(dates[0])} to ${formatWeatherDate(dates[dates.length - 1])}.`;
+  if (!dates.length) {
+    return language === "zh" ? "没有找到记录。请稍后再试。" : language === "ms" ? "Tiada rekod dijumpai. Sila cuba lagi kemudian." : "No record found. Please try again later.";
+  }
+  if (dates.length === 1) {
+    return language === "zh"
+      ? `没有找到记录。天气资料只适用于 ${formatWeatherDate(dates[0])}。`
+      : language === "ms"
+        ? `Tiada rekod dijumpai. Data cuaca hanya tersedia pada ${formatWeatherDate(dates[0])}.`
+        : `No record found. Weather data is only available on ${formatWeatherDate(dates[0])}.`;
+  }
+  return language === "zh"
+    ? `没有找到记录。请选择 ${formatWeatherDate(dates[0])} 至 ${formatWeatherDate(dates[dates.length - 1])} 之间的日期。`
+    : language === "ms"
+      ? `Tiada rekod dijumpai. Sila pilih tarikh dari ${formatWeatherDate(dates[0])} hingga ${formatWeatherDate(dates[dates.length - 1])}.`
+      : `No record found. Please select a date from ${formatWeatherDate(dates[0])} to ${formatWeatherDate(dates[dates.length - 1])}.`;
 }
 
 function weatherSnapshot(
   bundle: WeatherBundle,
   selectedDate: string,
-  selectedTime: string
+  selectedTime: string,
+  language: Language
 ): WeatherSnapshot {
   const forecast = nearestForecastHour(bundle, selectedDate, selectedTime);
   const todayMalaysia = new Intl.DateTimeFormat("en-CA", {
@@ -179,10 +192,10 @@ function weatherSnapshot(
   if (!forecast && !canUseCurrentWeather) {
     return {
       kind: "cloudy",
-      condition: "No forecast data",
+      condition: language === "zh" ? "暂无预报资料" : language === "ms" ? "Tiada data ramalan" : "No forecast data",
       icon: "",
       available: false,
-      message: forecastRangeMessage(bundle),
+      message: forecastRangeMessage(bundle, language),
     };
   }
 
@@ -563,17 +576,17 @@ export function MapPage({
       const placeId = String(point.location.id);
       const bundle = weatherBundlesByPlace[placeId];
       next[placeId] = bundle
-        ? weatherSnapshot(bundle, weatherDate, weatherTime)
+          ? weatherSnapshot(bundle, weatherDate, weatherTime, language)
         : {
             kind: "cloudy",
-            condition: "No forecast data",
+            condition: language === "zh" ? "暂无预报资料" : language === "ms" ? "Tiada data ramalan" : "No forecast data",
             icon: "",
             available: false,
-            message: "No record found. Please try again later.",
+            message: language === "zh" ? "没有找到记录。请稍后再试。" : language === "ms" ? "Tiada rekod dijumpai. Sila cuba lagi kemudian." : "No record found. Please try again later.",
           };
     }
     setWeatherByPlace(next);
-  }, [showWeather, points, weatherBundlesByPlace, weatherDate, weatherTime]);
+  }, [showWeather, points, weatherBundlesByPlace, weatherDate, weatherTime, language]);
 
   const visiblePoints = useMemo(
     () => {
@@ -853,7 +866,7 @@ export function MapPage({
                       )}
                       {approximate && (
                         <p style={{ fontSize: 10, color: "#8a6d1d", marginBottom: 8 }}>
-                          Approximate map position
+                          {language === "zh" ? "地图位置为估算" : language === "ms" ? "Kedudukan peta adalah anggaran" : "Approximate map position"}
                         </p>
                       )}
                       {facilities.length > 0 && (
