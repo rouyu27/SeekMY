@@ -8,8 +8,12 @@ service cloud.firestore {
     function createsOwn() { return signedIn() && request.resource.data.created_by_id == request.auth.uid; }
     function approvedContributor() {
       return signedIn()
-        && exists(/databases/$(database)/documents/User/$(request.auth.uid))
-        && get(/databases/$(database)/documents/User/$(request.auth.uid)).data.contributorStatus in ['approved', 'verified'];
+        && (
+          (exists(/databases/$(database)/documents/User/$(request.auth.uid))
+            && get(/databases/$(database)/documents/User/$(request.auth.uid)).data.contributorStatus in ['approved', 'verified'])
+          || (exists(/databases/$(database)/documents/Contributor/$(request.auth.uid))
+            && get(/databases/$(database)/documents/Contributor/$(request.auth.uid)).data.status in ['approved', 'verified'])
+        );
     }
 
     match /User/{userId} {

@@ -315,6 +315,14 @@ export function ContributorPage({
     setMsg({type:"ok",text:"Map location applied to the form."});
   }
 
+  async function createOwnAnnouncement(data: Record<string, any>) {
+    try {
+      await firebaseClient.entities.Announcement.create(data);
+    } catch (error) {
+      console.warn("Unable to create contributor confirmation announcement.", error);
+    }
+  }
+
   async function submitLocation() {
     setMsg(null);
     if (!approved) { setMsg({type:"err",text:"Only approved contributors can submit locations."}); return; }
@@ -339,7 +347,7 @@ export function ContributorPage({
         const current = subs.find(s=>s.id===editingSubmissionId);
         if (current?.status === "approved") { setMsg({type:"err",text:"Approved locations cannot be edited here."}); return; }
         const updated:any = await firebaseClient.entities.LocationSubmission.update(editingSubmissionId,payload);
-        await firebaseClient.entities.Announcement.create({
+        await createOwnAnnouncement({
           userId:user!.id,
           title:"Location update received",
           message:`Thanks for updating "${locName.trim()}". We received the changes and an administrator will review them soon.`,
@@ -354,7 +362,7 @@ export function ContributorPage({
         setMsg({type:"ok",text:"Location update resubmitted successfully. Awaiting admin approval."});
       } else {
         const created:any = await firebaseClient.entities.LocationSubmission.create({...payload,createdAt:new Date().toISOString()});
-        await firebaseClient.entities.Announcement.create({
+        await createOwnAnnouncement({
           userId:user!.id,
           title:"Location suggestion received",
           message:`Thanks for suggesting "${locName.trim()}". We received it and an administrator will review it soon.`,
