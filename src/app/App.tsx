@@ -778,6 +778,7 @@ export default function App() {
           onToast={showToast}
           onReviewSummaryChange={updateLocationReviewSummary}
           initialTab={locationInitialTab}
+          language={language}
         />
       )}
       {/* ==================== WilsonChoongWeiShan Part - AI Outdoor Assistant Chatbot ==================== */}

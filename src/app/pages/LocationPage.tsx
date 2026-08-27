@@ -23,6 +23,8 @@ import { firebaseClient } from "../api/firebaseClient";
 import { badgeAchievementMessage } from "../lib/badges";
 import type { StoredReview } from "../lib/communityTypes";
 import { locationMetadataFor } from "../lib/locationMetadata";
+import type { Language } from "../lib/i18n";
+import { activityLabel, difficultyLabel, t } from "../lib/i18n";
 
 const MAX_REVIEW_PHOTO_BYTES = 1 * 1024 * 1024;
 const MAX_REVIEW_WORDS = 300;
@@ -43,6 +45,7 @@ export function LocationPage({
   onToast,
   onReviewSummaryChange,
   initialTab,
+  language = "en",
 }: {
   loc: Location | null;
   onBack: () => void;
@@ -55,6 +58,7 @@ export function LocationPage({
   onToast?: (msg: string, type?: "ok" | "err") => void;
   onReviewSummaryChange?: (locationId: number | string, rating: number, reviews: number) => void;
   initialTab?: "overview" | "weather" | "reviews";
+  language?: Language;
 }) {
   const [tab, setTab] = useState<"overview" | "weather" | "reviews">("overview");
   //==================== LimTzeXin Part - User Review & Rating Module ====================
@@ -243,6 +247,36 @@ export function LocationPage({
   const officialUrl = metadata?.officialUrl || loc.officialUrl || (loc as any).official_url || loc.sourceUrl;
   const photoSourceUrl = loc.photo?.sourcePageUrl;
   const photoCredit = loc.photoAttribution || (loc.photo ? `${loc.photo.author} - ${loc.photo.license}` : "");
+  const locCopy = {
+    back: language === "zh" ? "返回" : language === "ms" ? "Kembali" : "Back",
+    distance: language === "zh" ? "距离" : language === "ms" ? "Jarak" : "Distance",
+    duration: language === "zh" ? "时长" : language === "ms" ? "Tempoh" : "Duration",
+    hours: language === "zh" ? "开放时间" : language === "ms" ? "Waktu" : "Hours",
+    source: language === "zh" ? "来源" : language === "ms" ? "Sumber" : "Source",
+    bestSeason: language === "zh" ? "最佳季节" : language === "ms" ? "Musim terbaik" : "Best season",
+    overview: language === "zh" ? "概览" : language === "ms" ? "Gambaran" : "Overview",
+    weather: t(language, "weather"),
+    reviews: language === "zh" ? "评价" : language === "ms" ? "Ulasan" : "Reviews",
+    photoSource: language === "zh" ? "图片来源" : language === "ms" ? "Sumber foto" : "Photo source",
+    photoSourceAvailable: language === "zh" ? "图片来源可查看" : language === "ms" ? "Sumber foto tersedia" : "Photo source available",
+    about: language === "zh" ? "关于这个地点" : language === "ms" ? "Tentang lokasi ini" : "About this location",
+    noDetails: language === "zh" ? "此活动类型暂无更多详情。" : language === "ms" ? "Butiran tambahan belum tersedia untuk aktiviti ini." : "Additional details not available for this activity type.",
+    estimatedCost: language === "zh" ? "预计费用" : language === "ms" ? "Anggaran kos" : "Estimated cost",
+    costNote: language === "zh" ? "实际价格可能因运营商、配套、租借、导游或季节而不同。" : language === "ms" ? "Harga sebenar mungkin berbeza mengikut operator, pakej, sewaan, panduan atau musim." : "Actual prices may vary by operator, package, rental, guide, or season.",
+    facilities: t(language, "facilities"),
+    noFacilities: language === "zh" ? "暂无设施资料。" : language === "ms" ? "Maklumat kemudahan belum disediakan." : "No facility information provided.",
+    nearby: language === "zh" ? "查找附近设施" : language === "ms" ? "Cari kemudahan berhampiran" : "Find nearby facilities",
+    nearbyNote: language === "zh" ? "在此目的地附近打开 Google 地图。" : language === "ms" ? "Buka Google Maps sekitar destinasi ini." : "Opens Google Maps around this destination.",
+    accessibility: language === "zh" ? "无障碍信息" : language === "ms" ? "Kebolehcapaian" : "Accessibility",
+    noAccessibility: language === "zh" ? "暂无无障碍资料。" : language === "ms" ? "Maklumat kebolehcapaian belum disediakan." : "No accessibility information provided.",
+    verifiedContributors: language === "zh" ? "已验证本地贡献者" : language === "ms" ? "Penyumbang tempatan disahkan" : "Verified local contributors",
+    verified: language === "zh" ? "已验证" : language === "ms" ? "Disahkan" : "Verified",
+    noContributor: language === "zh" ? "此地点暂无已验证贡献者。" : language === "ms" ? "Tiada penyumbang disahkan untuk lokasi ini." : "No verified contributor for this location.",
+    logActivity: language === "zh" ? "记录此活动" : language === "ms" ? "Log aktiviti ini" : "Log this activity",
+    save: language === "zh" ? "收藏" : language === "ms" ? "Simpan" : "Save",
+    saved: language === "zh" ? "已收藏" : language === "ms" ? "Disimpan" : "Saved",
+    getDirections: t(language, "getDirections"),
+  };
   const locationImages = (Array.isArray(loc.image_urls) && loc.image_urls.length ? loc.image_urls : (loc.image_url ? [loc.image_url] : [])).filter(Boolean);
   const activeImage = locationImages[Math.min(activeLocationImage, Math.max(locationImages.length - 1, 0))];
   const estimatedCostLabel = loc.estimatedPriceRange
@@ -271,13 +305,13 @@ export function LocationPage({
       <div className="px-5 py-8" style={{ backgroundColor: loc.color }}>
         <div className="max-w-3xl mx-auto">
           <button onClick={onBack} className="flex items-center gap-1.5 text-sm mb-5" style={{ color: "rgba(255,255,255,0.65)", fontFamily: F.body }}>
-            <ChevronLeft size={15} /> Back
+            <ChevronLeft size={15} /> {locCopy.back}
           </button>
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-2.5 flex-wrap">
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.18)", color: "#fff", fontFamily: F.body }}>{loc.activity}</span>
-                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: d.bg, color: d.color, fontFamily: F.body }}>{loc.difficulty}</span>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.18)", color: "#fff", fontFamily: F.body }}>{activityLabel(language, loc.activity)}</span>
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: d.bg, color: d.color, fontFamily: F.body }}>{difficultyLabel(language, loc.difficulty)}</span>
                 {loc.badge && (
                   <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full" style={{ backgroundColor: C.amber, color: C.jungle, fontFamily: F.body }}>{loc.badge}</span>
                 )}
@@ -304,14 +338,14 @@ export function LocationPage({
           <div className="flex flex-wrap gap-5 mt-5">
             {hasTrail && (
               <div className="flex items-center gap-1.5 text-sm" title="Distance" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-                <Navigation size={12} />Distance: {loc.distance}
+                <Navigation size={12} />{locCopy.distance}: {loc.distance}
               </div>
             )}
             <div className="flex items-center gap-1.5 text-sm" title="Estimated activity duration" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-              <Clock size={12} />Duration: {loc.duration}
+              <Clock size={12} />{locCopy.duration}: {loc.duration}
             </div>
             <div className="flex items-center gap-1.5 text-sm" title="Opening hours" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-              <CalendarClock size={12} />Hours: {openingHours}
+              <CalendarClock size={12} />{locCopy.hours}: {openingHours}
               {officialUrl && (
                 <a
                   href={officialUrl}
@@ -320,12 +354,12 @@ export function LocationPage({
                   className="inline-flex items-center gap-1 font-bold underline decoration-white/30 underline-offset-2"
                   style={{ color: "rgba(255,255,255,0.88)" }}
                 >
-                  Source <ExternalLink size={10} />
+                  {locCopy.source} <ExternalLink size={10} />
                 </a>
               )}
             </div>
             <div className="flex items-center gap-1.5 text-sm" title="Best season to visit" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-              <Sun size={12} />Best season: {loc.bestMonths}
+              <Sun size={12} />{locCopy.bestSeason}: {loc.bestMonths}
             </div>
           </div>
         </div>
@@ -344,7 +378,7 @@ export function LocationPage({
                 fontFamily: F.body,
               }}
             >
-              {t}
+              {locCopy[t]}
             </button>
           ))}
         </div>
@@ -391,10 +425,10 @@ export function LocationPage({
                 </div>
                 {(photoCredit || photoSourceUrl) && (
                   <figcaption className="flex flex-col gap-1 px-4 py-3 text-[11px] sm:flex-row sm:items-center sm:justify-between" style={{ color: C.textMuted, fontFamily: F.body }}>
-                    <span>{photoCredit || "Photo source available"}</span>
+                    <span>{photoCredit || locCopy.photoSourceAvailable}</span>
                     {photoSourceUrl && (
                       <a href={photoSourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold" style={{ color: C.forest }}>
-                        Photo source <ExternalLink size={11}/>
+                        {locCopy.photoSource} <ExternalLink size={11}/>
                       </a>
                     )}
                   </figcaption>
@@ -403,27 +437,27 @@ export function LocationPage({
             )}
 
             <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-              <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>About this location</h2>
+              <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>{locCopy.about}</h2>
               <p className="text-sm leading-relaxed" style={{ color: C.textSub, fontFamily: F.body }}>
-                {loc.description || "Additional details not available for this activity type."}
+                {loc.description || locCopy.noDetails}
               </p>
             </div>
 
             {estimatedCostLabel && (
               <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-                <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>Estimated cost</h2>
+                <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>{locCopy.estimatedCost}</h2>
                 <div className="inline-flex rounded-full px-4 py-2 text-sm font-bold" style={{ backgroundColor: C.muted, color: C.jungle, fontFamily: F.body }}>
                   {estimatedCostLabel}
                 </div>
                 <p className="mt-2 text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>
-                  Actual prices may vary by operator, package, rental, guide, or season.
+                  {locCopy.costNote}
                 </p>
               </div>
             )}
 
             {loc.activitySpecific && (
               <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-                <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>{loc.activity} details</h2>
+                <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>{activityLabel(language, loc.activity)} details</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {loc.activitySpecific.certification && (
                     <div className="p-3 rounded-xl" style={{ backgroundColor: C.muted }}>
@@ -460,7 +494,7 @@ export function LocationPage({
             )}
 
             <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-              <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>Facilities</h2>
+              <h2 className="font-bold mb-3 text-base" style={{ fontFamily: F.body, color: C.text }}>{locCopy.facilities}</h2>
               {loc.facilities?.length > 0 ? (
                 <div className="grid grid-cols-2 gap-2">
                   {loc.facilities.map((f) => (
@@ -470,16 +504,16 @@ export function LocationPage({
                   ))}
                 </div>
               ) : (
-                <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>No facility information provided.</p>
+                <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>{locCopy.noFacilities}</p>
               )}
             </div>
 
             <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <h2 className="font-bold text-base" style={{ fontFamily: F.body, color: C.text }}>Find nearby facilities</h2>
+                  <h2 className="font-bold text-base" style={{ fontFamily: F.body, color: C.text }}>{locCopy.nearby}</h2>
                   <p className="text-[12px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
-                    Opens Google Maps around this destination.
+                    {locCopy.nearbyNote}
                   </p>
                 </div>
                 <a
@@ -510,15 +544,15 @@ export function LocationPage({
             </div>
 
             <div className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-              <h2 className="font-bold mb-2 text-base" style={{ fontFamily: F.body, color: C.text }}>Accessibility</h2>
+              <h2 className="font-bold mb-2 text-base" style={{ fontFamily: F.body, color: C.text }}>{locCopy.accessibility}</h2>
               <p className="text-sm" style={{ color: C.textSub, fontFamily: F.body }}>
-                {loc.accessibility || "No accessibility information provided."}
+                {loc.accessibility || locCopy.noAccessibility}
               </p>
             </div>
 
             <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
               <h2 className="font-bold mb-3 text-base flex items-center gap-2" style={{ fontFamily: F.body, color: C.text }}>
-                <Users size={16} style={{ color: C.forest }} /> Verified local contributors
+                <Users size={16} style={{ color: C.forest }} /> {locCopy.verifiedContributors}
               </h2>
               {loc.contributors && loc.contributors.length > 0 ? (
                 <div className="space-y-3">
@@ -533,27 +567,27 @@ export function LocationPage({
                       </div>
                       {c.verified && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: C.successBg, color: C.success, fontFamily: F.body }}>
-                          Verified
+                          {locCopy.verified}
                         </span>
                       )}
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>No verified contributor for this location.</p>
+                <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>{locCopy.noContributor}</p>
               )}
             </div>
 
             <div className="flex flex-wrap gap-3">
               {/* ==================== FongXinTong Part - Activity Log Module ==================== */}
               <Pill variant="filled" onClick={() => onLogActivity(loc)}>
-                <Activity size={14} /> Log this activity
+                <Activity size={14} /> {locCopy.logActivity}
               </Pill>
               {/* ==================== FongXinTong END - Activity Log Module ==================== */}
 
               {/* ==================== LimTzeXin Part - Bookmark Module ==================== */}
               <Pill variant="outline" onClick={onBookmark}>
-                {bookmarked ? (<><BookmarkCheck size={13} /> Saved</>) : (<><Bookmark size={13} /> Save</>)}
+                {bookmarked ? (<><BookmarkCheck size={13} /> {locCopy.saved}</>) : (<><Bookmark size={13} /> {locCopy.save}</>)}
               </Pill>
               {/* ==================== LimTzeXin END - Bookmark Module ==================== */}              <a
                 href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${loc.name}, ${loc.state}, Malaysia`)}`}
@@ -562,7 +596,7 @@ export function LocationPage({
                 className="inline-flex items-center gap-2 h-[50px] px-6 rounded-full text-sm font-bold"
                 style={{ backgroundColor: C.jungle, color: "#fff", fontFamily: F.body }}
               >
-                <Navigation size={14} /> Get Directions <ExternalLink size={12} />
+                <Navigation size={14} /> {locCopy.getDirections} <ExternalLink size={12} />
               </a>
             </div>
           </div>
