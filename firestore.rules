@@ -70,14 +70,19 @@ service cloud.firestore {
         && request.resource.data.contributorId == resource.data.contributorId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'contributorName','name','address','state','activity','difficulty','description',
-          'facilities','accessibility','estimatedPrice','budget','safetyNotes','bestTime',
+          'lat','lng','locationConfirmed','facilities','accessibility','estimatedPrice','estimatedPriceRange','budget','safetyNotes','bestTime',
           'contributorTip','sourceUrl','photoName','photoUrl','status','rejectReason','updatedAt','updated_date'
         ]));
       allow delete: if isAdmin();
     }
     match /Announcement/{id} {
       allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin();
+      allow create: if isAdmin() || (signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.read == false
+        && request.resource.data.keys().hasOnly([
+          'userId','title','message','type','relatedPage','submissionId','read','dismissed','createdAt','created_by_id','created_date','updated_date'
+        ]));
       allow delete: if isAdmin();
       allow update: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read','dismissed','updated_date']));
     }
