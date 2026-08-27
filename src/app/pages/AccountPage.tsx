@@ -442,6 +442,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{backgroundColor:tone.bg,color:tone.color,fontFamily:F.body}}>{tone.label}</span>
                         {!a.read && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{backgroundColor:C.amber,color:C.jungle,fontFamily:F.body}}>NEW</span>}
                       </div>
+                      {a.photoUrl && <img src={a.photoUrl} alt={`Poster for ${display.title}`} className="mt-3 max-h-44 w-full rounded-xl object-cover" />}
                       <p className="text-[12px] mt-1 line-clamp-2" style={{color:C.textSub,fontFamily:F.body}}>{display.message}</p>
                       <p className="text-[10px] mt-2" style={{color:C.textMuted,fontFamily:F.body}}>{new Date(a.createdAt || a.created_date || "").toLocaleString()}</p>
                     </button>
@@ -663,6 +664,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
                 <X size={15}/>
               </button>
             </div>
+            {selectedAnnouncement.photoUrl && <img src={selectedAnnouncement.photoUrl} alt={`Poster for ${selectedAnnouncement.title}`} className="mt-4 max-h-72 w-full rounded-xl object-cover" />}
             <p className="mt-4 text-sm leading-relaxed whitespace-pre-line" style={{color:C.textSub,fontFamily:F.body}}>{selectedAnnouncement.message}</p>
             <div className="mt-5 flex flex-wrap gap-2">
               {selectedAnnouncement.relatedPage && <Pill variant="filled" small onClick={()=>goToAnnouncementRelated(selectedAnnouncement)}>View related</Pill>}

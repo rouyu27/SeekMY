@@ -26,5 +26,5 @@ export interface LocationSubmission {
 }
 export interface UserAnnouncement {
   id: string; userId: string; title: string; message: string; type: "approved"|"rejected"|"info"|"achievement"|"notice";
-  submissionId?: string; relatedPage?: string; read: boolean; dismissed?: boolean; createdAt: string; created_by_id?: string; created_date?: string;
+  photoUrl?: string; submissionId?: string; relatedPage?: string; read: boolean; dismissed?: boolean; createdAt: string; created_by_id?: string; created_date?: string;
 }

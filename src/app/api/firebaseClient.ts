@@ -1227,6 +1227,13 @@ const storage = {
     return this.uploadFile("review-photos", file, onProgress);
   },
 
+  async uploadAnnouncementPhoto(
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<string> {
+    return this.uploadFile("announcement-posters", file, onProgress);
+  },
+
   async uploadLocationPhoto(
     file: File,
     onProgress?: (percent: number) => void
