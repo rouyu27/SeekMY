@@ -5,7 +5,7 @@ import { UserCircle, LogOut } from "lucide-react";
 import { ImageWithFallback } from "./components/ui/ImageWithFallback";
 const seekMyLogo = new URL("../imports/logo.png", import.meta.url).toString();
 import type { Page, AppUser, Location, ActivityLog } from "./lib/types";
-import type { BookmarkEntry } from "./lib/types";
+import type { BookmarkEntry, PersonalBookmarkFolder } from "./lib/types";
 import { C, F } from "./lib/tokens";
 import { NavBar } from "./components/NavBar";
 import { AuthModal } from "./components/AuthModal";
@@ -60,6 +60,7 @@ function dedupeBookmarkEntries(entries: BookmarkEntry[]): BookmarkEntry[] {
     byLocation.set(key, {
       ...current,
       notes: current.notes || entry.notes,
+      folderIds: [...new Set([...(current.folderIds || []), ...(entry.folderIds || [])])],
       folders: [...new Set([...(current.folders || []), ...(entry.folders || [])])],
       folder: [...new Set([...(current.folders || []), ...(entry.folders || [])])][0] || "Uncategorized",
       sharedFolderId: null,
@@ -69,17 +70,49 @@ function dedupeBookmarkEntries(entries: BookmarkEntry[]): BookmarkEntry[] {
   return [...byLocation.values()];
 }
 
-function normalizeBookmarkRows(rows: any[]): BookmarkEntry[] {
+function normalizedFolderName(value: unknown): string {
+  return String(value || "").trim().toLocaleLowerCase();
+}
+
+function isReservedPersonalFolderName(value: unknown): boolean {
+  const name = normalizedFolderName(value);
+  return name === "all" || name === "uncategorized";
+}
+
+function legacyPersonalFolderId(uid: string, name: string): string {
+  return `bookmark_folder_${encodeURIComponent(uid)}_${encodeURIComponent(normalizedFolderName(name))}`;
+}
+
+function normalizePersonalFolder(row: any): PersonalBookmarkFolder {
+  return {
+    id: String(row.id),
+    ownerUid: String(row.ownerUid || row.created_by_id || ""),
+    name: String(row.name || "").trim(),
+    isDefault: row.isDefault === true,
+    createdAt: row.createdAt || row.created_date || new Date().toISOString(),
+    updatedAt: row.updatedAt || row.updated_date || row.createdAt || row.created_date || new Date().toISOString(),
+  };
+}
+
+function normalizeBookmarkRows(rows: any[], personalFolders: PersonalBookmarkFolder[]): BookmarkEntry[] {
+  const foldersById = new Map(personalFolders.map((folder) => [folder.id, folder]));
+  const foldersByName = new Map(personalFolders.map((folder) => [normalizedFolderName(folder.name), folder]));
   return dedupeBookmarkEntries(rows.map((bookmark: any) => {
     const legacyFolder = String(bookmark.folder || "Uncategorized");
     const legacySharedFolderId = bookmark.sharedFolderId || bookmark.shared_folder_id || null;
-    const folders = Array.isArray(bookmark.folders)
+    const legacyNames = Array.isArray(bookmark.folders)
       ? [...new Set(bookmark.folders.map(String).map((name: string) => name.trim()).filter(Boolean))]
       : (!legacySharedFolderId && legacyFolder !== "Uncategorized" ? [legacyFolder] : []);
+    const folderIds = [...new Set([
+      ...(Array.isArray(bookmark.folderIds) ? bookmark.folderIds.map(String) : []),
+      ...legacyNames.map((name) => foldersByName.get(normalizedFolderName(name))?.id).filter(Boolean),
+    ])].filter((id) => foldersById.has(id as string)) as string[];
+    const folders = folderIds.map((id) => foldersById.get(id)?.name).filter(Boolean) as string[];
     return {
       firestoreId: String(bookmark.id),
       locationId: bookmark.locationId ?? bookmark.location_id,
       notes: bookmark.notes || "",
+      folderIds,
       folders,
       folder: folders[0] || "Uncategorized",
       sharedFolderId: null,
@@ -97,6 +130,7 @@ export default function App() {
   const [logLocation, setLogLocation] = useState<Location|null>(null);
   const [selectedState, setSelectedState]       = useState("");
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
+  const [personalFolders, setPersonalFolders] = useState<PersonalBookmarkFolder[]>([]);
   const bookmarkRequests = useRef(new Set<string>());
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -228,22 +262,8 @@ export default function App() {
       };
       setUser(current);
 
-      const [bookmarkRows, backendData, userRows] = await Promise.all([
-        firebaseClient.entities.Bookmark.filter({ created_by_id: current.id }, "-created_date", 500),
-        firebaseClient.backend.getMyData(),
-        firebaseClient.entities.User.list("full_name", 500),
-      ]);
-      const logRows = backendData.activities;
-      setBookmarks(normalizeBookmarkRows(bookmarkRows));
-      setActivityLogs(logRows.map((l:any)=>({
-        id:l.id, location:l.location||l.locationName||"Unknown", activity:l.activity||"Hiking",
-        distance:Number(l.distance||0), duration:l.duration||"", date:l.date||l.created_date?.slice?.(0,10)||"",
-        notes:l.notes||"", comment:l.comment||"", photoUrl:l.photoUrl||l.photo_url||"",
-        is_hidden_gem:l.is_hidden_gem===true || l.isHiddenGem===true,
-        isHiddenGem:l.is_hidden_gem===true || l.isHiddenGem===true,
-        locationId:l.locationId??l.location_id, state:l.state||"",
-      })));
-      setEarnedBadgeIds(backendData.badges.map((badge:any)=>String(badge.key||badge.id).replace(`${current.id}_`,"")));
+      const userRows = await firebaseClient.entities.User.list("full_name", 500);
+      await loadUserFirebaseData(current);
       setUsers(userRows.map((u:any)=>({
         id:String(u.id), username:u.username||u.email?.split("@")[0]||"explorer",
         displayName:u.full_name||u.displayName||u.email||"Explorer", email:u.email||"", password:"", photoUrl:u.photo_url||u.photoUrl||"", bio:u.bio||"",
@@ -335,9 +355,9 @@ export default function App() {
       } else {
         const documentId = `bookmark_${encodeURIComponent(user.id)}_${encodeURIComponent(String(id))}`;
         const created:any = await firebaseClient.entities.Bookmark.createWithId(documentId, {
-          locationId:id, notes:"", folders:[], folder:"Uncategorized", sharedFolderId:null, savedAt:new Date().toISOString(),
+          locationId:id, notes:"", folderIds:[], folders:[], folder:"Uncategorized", sharedFolderId:null, savedAt:new Date().toISOString(),
         });
-        setBookmarks((p)=>dedupeBookmarkEntries([{firestoreId:String(created.id),locationId:id,notes:"",folders:[],folder:"Uncategorized",sharedFolderId:null,savedAt:created.savedAt||created.created_date||new Date().toISOString()},...p]));
+        setBookmarks((p)=>dedupeBookmarkEntries([{firestoreId:String(created.id),locationId:id,notes:"",folderIds:[],folders:[],folder:"Uncategorized",sharedFolderId:null,savedAt:created.savedAt||created.created_date||new Date().toISOString()},...p]));
       }
     } catch (error:any) { showToast(error?.message || "Unable to update bookmark in Firebase.", "err"); }
     finally { bookmarkRequests.current.delete(requestKey); }
@@ -361,41 +381,155 @@ export default function App() {
         .forEach((b)=>[b.firestoreId, ...(b.duplicateFirestoreIds || [])].filter(Boolean).forEach((documentId)=>firebaseClient.entities.Bookmark.delete(documentId!).catch(()=>{})));
       next.forEach((b)=>{
         const old = previous.find((x)=>String(x.locationId)===String(b.locationId));
-        if (old?.firestoreId && (old.notes!==b.notes || JSON.stringify(old.folders||[])!==JSON.stringify(b.folders||[]))) {
-          const folders = [...new Set(b.folders || [])];
-          [old.firestoreId, ...(old.duplicateFirestoreIds || [])].forEach((documentId)=>firebaseClient.entities.Bookmark.update(documentId,{notes:b.notes,folders,folder:folders[0]||"Uncategorized",sharedFolderId:null}).catch(()=>{}));
+        if (old?.firestoreId && (old.notes!==b.notes || JSON.stringify(old.folderIds||[])!==JSON.stringify(b.folderIds||[]))) {
+          const folderIds = [...new Set(b.folderIds || [])];
+          const folders = folderIds.map((id) => personalFolders.find((folder) => folder.id === id)?.name).filter(Boolean) as string[];
+          [old.firestoreId, ...(old.duplicateFirestoreIds || [])].forEach((documentId)=>firebaseClient.entities.Bookmark.update(documentId,{notes:b.notes,folderIds,folders,folder:folders[0]||"Uncategorized",sharedFolderId:null}).catch(()=>{}));
         }
       });
       return next;
     });
   }
 
-  async function updateBookmarkFolders(locationId: string | number, requestedFolders: string[]) {
+  async function updateBookmarkFolders(locationId: string | number, requestedFolderIds: string[]) {
     const bookmark = bookmarks.find((entry) => String(entry.locationId) === String(locationId));
     if (!bookmark) throw new Error("Bookmark not found. Refresh the page and try again.");
     const documentIds = [bookmark.firestoreId, ...(bookmark.duplicateFirestoreIds || [])].filter(Boolean) as string[];
     if (!documentIds.length) throw new Error("Bookmark database record not found. Refresh the page and try again.");
 
-    const folders = [...new Set(requestedFolders.map((name) => name.trim()).filter(Boolean))];
-    await Promise.all(documentIds.map((documentId) => firebaseClient.entities.Bookmark.update(documentId, { folders, folder: folders[0] || "Uncategorized", sharedFolderId: null })));
+    const folderIds = [...new Set(requestedFolderIds)].filter((id) => personalFolders.some((folder) => folder.id === id));
+    const folders = folderIds.map((id) => personalFolders.find((folder) => folder.id === id)?.name).filter(Boolean) as string[];
+    await Promise.all(documentIds.map((documentId) => firebaseClient.entities.Bookmark.update(documentId, { folderIds, folders, folder: folders[0] || "Uncategorized", sharedFolderId: null })));
     setBookmarks((previous) => dedupeBookmarkEntries(previous.map((entry) => (
-      String(entry.locationId) === String(locationId) ? { ...entry, folders, folder: folders[0] || "Uncategorized", sharedFolderId: null } : entry
+      String(entry.locationId) === String(locationId) ? { ...entry, folderIds, folders, folder: folders[0] || "Uncategorized", sharedFolderId: null } : entry
     ))));
   }
 
+  async function createPersonalFolder(name: string): Promise<PersonalBookmarkFolder> {
+    if (!user) throw new Error("Please sign in first.");
+    const cleanName = name.trim();
+    if (!cleanName) throw new Error("Folder name cannot be empty.");
+    if (isReservedPersonalFolderName(cleanName)) throw new Error("This folder name is reserved. Please choose another name.");
+    if (personalFolders.some((folder) => normalizedFolderName(folder.name) === normalizedFolderName(cleanName))) throw new Error("A folder with this name already exists. Please choose another name.");
+    const now = new Date().toISOString();
+    const id = `bookmark_folder_${encodeURIComponent(user.id)}_${crypto.randomUUID()}`;
+    const created = await firebaseClient.entities.BookmarkFolder.createWithId(id, { ownerUid: user.id, name: cleanName, isDefault: false, createdAt: now, updatedAt: now });
+    const folder = normalizePersonalFolder(created);
+    setPersonalFolders((current) => [...current, folder]);
+    return folder;
+  }
+
+  async function renamePersonalFolder(folderId: string, name: string): Promise<void> {
+    const folder = personalFolders.find((item) => item.id === folderId);
+    if (!folder) throw new Error("Folder not found.");
+    const cleanName = name.trim();
+    if (!cleanName) throw new Error("Folder name cannot be empty.");
+    if (isReservedPersonalFolderName(cleanName)) throw new Error("This folder name is reserved. Please choose another name.");
+    if (personalFolders.some((item) => item.id !== folderId && normalizedFolderName(item.name) === normalizedFolderName(cleanName))) throw new Error("A folder with this name already exists. Please choose another name.");
+    const affected = bookmarks.filter((bookmark) => (bookmark.folderIds || []).includes(folderId));
+    const now = new Date().toISOString();
+    await firebaseClient.entities.BookmarkFolder.update(folderId, { name: cleanName, updatedAt: now });
+    await Promise.all(affected.flatMap((bookmark) => [bookmark.firestoreId, ...(bookmark.duplicateFirestoreIds || [])].filter(Boolean).map((documentId) => {
+      const folderIds = [...new Set(bookmark.folderIds || [])];
+      const folders = folderIds.map((id) => id === folderId ? cleanName : personalFolders.find((item) => item.id === id)?.name).filter(Boolean) as string[];
+      return firebaseClient.entities.Bookmark.update(documentId!, { folderIds, folders, folder: folders[0] || "Uncategorized" });
+    })));
+    setPersonalFolders((current) => current.map((item) => item.id === folderId ? { ...item, name: cleanName, updatedAt: now } : item));
+    setBookmarks((current) => current.map((bookmark) => (bookmark.folderIds || []).includes(folderId) ? { ...bookmark, folders: (bookmark.folderIds || []).map((id) => id === folderId ? cleanName : personalFolders.find((item) => item.id === id)?.name).filter(Boolean) as string[] } : bookmark));
+  }
+
+  async function deletePersonalFolder(folderId: string, beforeFolderDelete?: () => Promise<void>): Promise<void> {
+    const folder = personalFolders.find((item) => item.id === folderId);
+    if (!folder) throw new Error("Folder not found.");
+    const affected = bookmarks.filter((bookmark) => (bookmark.folderIds || []).includes(folderId));
+    const bookmarkUpdates = affected.flatMap((bookmark) => {
+      const documentIds = [bookmark.firestoreId, ...(bookmark.duplicateFirestoreIds || [])].filter(Boolean) as string[];
+      if (!documentIds.length) throw new Error("A bookmark database record is missing. Refresh the page and try again.");
+      const folderIds = [...new Set(bookmark.folderIds || [])].filter((id) => id !== folderId);
+      const folders = folderIds.map((id) => personalFolders.find((item) => item.id === id)?.name).filter(Boolean) as string[];
+      return documentIds.map((documentId) => firebaseClient.entities.Bookmark.update(documentId, {
+        folderIds,
+        folders,
+        folder: folders[0] || "Uncategorized",
+        sharedFolderId: null,
+      }));
+    });
+    await Promise.all(bookmarkUpdates);
+    setBookmarks((current) => dedupeBookmarkEntries(current.map((bookmark) => {
+      if (!(bookmark.folderIds || []).includes(folderId)) return bookmark;
+      const folderIds = [...new Set(bookmark.folderIds || [])].filter((id) => id !== folderId);
+      const folders = folderIds.map((id) => personalFolders.find((item) => item.id === id)?.name).filter(Boolean) as string[];
+      return { ...bookmark, folderIds, folders, folder: folders[0] || "Uncategorized", sharedFolderId: null };
+    })));
+    if (beforeFolderDelete) await beforeFolderDelete();
+    await firebaseClient.entities.BookmarkFolder.delete(folderId);
+    setPersonalFolders((current) => current.filter((item) => item.id !== folderId));
+  }
+
+  async function ensurePersonalFolders(current: AppUser, bookmarkRows: any[], folderRows: any[]): Promise<PersonalBookmarkFolder[]> {
+    const normalizedRows = folderRows.map(normalizePersonalFolder).filter((folder) => folder.name);
+    const reservedFolders = normalizedRows.filter((folder) => isReservedPersonalFolderName(folder.name));
+    await Promise.all(reservedFolders.map((folder) => firebaseClient.entities.BookmarkFolder.delete(folder.id)));
+    const loaded = normalizedRows.filter((folder) => !isReservedPersonalFolderName(folder.name));
+    const usedFolderIds = new Set(bookmarkRows.flatMap((row: any) => Array.isArray(row.folderIds) ? row.folderIds.map(String) : []));
+    const usedFolderNames = new Set(bookmarkRows.flatMap((row: any) => [
+      ...(Array.isArray(row.folders) ? row.folders.map(String) : []),
+      String(row.folder || ""),
+    ]).map(normalizedFolderName).filter((name: string) => name && name !== "all" && name !== "uncategorized"));
+    const existing: PersonalBookmarkFolder[] = [];
+    for (const folder of loaded) {
+      if (!folder.isDefault) {
+        existing.push(folder);
+        continue;
+      }
+      const isUsed = usedFolderIds.has(folder.id) || usedFolderNames.has(normalizedFolderName(folder.name));
+      if (!isUsed) {
+        await firebaseClient.entities.BookmarkFolder.delete(folder.id);
+        continue;
+      }
+      const now = new Date().toISOString();
+      await firebaseClient.entities.BookmarkFolder.update(folder.id, { isDefault: false, updatedAt: now });
+      existing.push({ ...folder, isDefault: false, updatedAt: now });
+    }
+    const byName = new Map(existing.map((folder) => [normalizedFolderName(folder.name), folder]));
+    const legacyNames = [...new Set([
+      ...bookmarkRows.flatMap((row: any) => Array.isArray(row.folders) ? row.folders.map(String) : []),
+      ...bookmarkRows.map((row: any) => String(row.folder || "")),
+    ].map((name) => String(name).trim()).filter((name) => name && !isReservedPersonalFolderName(name)))];
+    for (const name of legacyNames) {
+      const key = normalizedFolderName(name);
+      if (byName.has(key)) continue;
+      const now = new Date().toISOString();
+      const id = legacyPersonalFolderId(current.id, name);
+      const created = await firebaseClient.entities.BookmarkFolder.createWithId(id, { ownerUid: current.id, name, isDefault: false, createdAt: now, updatedAt: now });
+      const folder = normalizePersonalFolder(created);
+      existing.push(folder);
+      byName.set(key, folder);
+    }
+    return existing
+      .map((folder) => ({ ...folder, isDefault: false }))
+      .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+  }
+
   async function loadUserFirebaseData(current: AppUser) {
-      const [bookmarkRows, backendData] = await Promise.all([
+      const [bookmarkRows, folderRows, backendData] = await Promise.all([
         firebaseClient.entities.Bookmark.filter({ created_by_id: current.id }, "-created_date", 500),
+        firebaseClient.entities.BookmarkFolder.filter({ created_by_id: current.id }, undefined, 500),
         firebaseClient.backend.getMyData(),
       ]);
       const logRows = backendData.activities;
       const badgeRows = backendData.badges;
 
-    const normalizedBookmarks = normalizeBookmarkRows(bookmarkRows);
+    const ensuredFolders = await ensurePersonalFolders(current, bookmarkRows, folderRows);
+    setPersonalFolders(ensuredFolders);
+    const normalizedBookmarks = normalizeBookmarkRows(bookmarkRows, ensuredFolders);
     setBookmarks(normalizedBookmarks);
-    void Promise.all(bookmarkRows.filter((row:any)=>!Array.isArray(row.folders)).map((row:any)=>{
+    void Promise.all(bookmarkRows.map((row:any)=>{
       const normalized = normalizedBookmarks.find((entry)=>String(entry.firestoreId)===String(row.id));
-      return normalized ? firebaseClient.entities.Bookmark.update(String(row.id), { folders: normalized.folders || [], folder: normalized.folder, sharedFolderId: null }) : Promise.resolve();
+      const folderIds = normalized?.folderIds || [];
+      const folders = normalized?.folders || [];
+      const unchanged = JSON.stringify(row.folderIds || []) === JSON.stringify(folderIds) && JSON.stringify(row.folders || []) === JSON.stringify(folders) && !row.sharedFolderId && !row.shared_folder_id;
+      return normalized && !unchanged ? firebaseClient.entities.Bookmark.update(String(row.id), { folderIds, folders, folder: folders[0] || "Uncategorized", sharedFolderId: null }) : Promise.resolve();
     })).catch(()=>{});
 
       setActivityLogs(logRows.map((l:any)=>({
@@ -480,6 +614,7 @@ export default function App() {
     } catch { /* keep logout usable in demo mode */ }
     setUser(null);
     setBookmarks([]);
+    setPersonalFolders([]);
     setActivityLogs([]);
     setUnreadAnnouncements(0);
     navigate("home");
@@ -516,6 +651,7 @@ export default function App() {
         <SharedBookmarksPage
           token={sharedFolderToken}
           user={user}
+          personalFolderNames={personalFolders.map((folder) => folder.name)}
           onSignIn={() => setShowAuth(true)}
           onOpenBookmarks={() => { window.location.href = "/?page=bookmarks"; }}
         />
@@ -660,8 +796,12 @@ export default function App() {
       {page === "bookmarks" && (
         <BookmarksPage
           bookmarks={bookmarks}
+          personalFolders={personalFolders}
           setBookmarks={setBookmarksPersist}
           updateBookmarkFolders={updateBookmarkFolders}
+          createPersonalFolder={createPersonalFolder}
+          renamePersonalFolder={renamePersonalFolder}
+          deletePersonalFolder={deletePersonalFolder}
           setPage={navigate}
           setSelectedLocation={selectLocation}
           onToast={showToast}

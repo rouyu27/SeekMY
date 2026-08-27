@@ -32,6 +32,14 @@ service cloud.firestore {
       allow update: if isAdmin() || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','flagReason','flaggedBy','updated_date']) && request.resource.data.status == 'flagged');
     }
     match /Bookmark/{id} { allow read: if isAdmin() || ownsExisting(); allow create: if createsOwn(); allow update, delete: if isAdmin() || ownsExisting(); }
+    match /BookmarkFolder/{id} {
+      allow read: if isAdmin() || ownsExisting();
+      allow create: if createsOwn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if isAdmin() || (ownsExisting()
+        && request.resource.data.created_by_id == resource.data.created_by_id
+        && request.resource.data.ownerUid == resource.data.ownerUid);
+      allow delete: if isAdmin() || ownsExisting();
+    }
     match /ActivityLog/{id} { allow read: if isAdmin() || ownsExisting(); allow create: if false; allow update, delete: if isAdmin(); }
     match /Badge/{id} { allow read: if isAdmin() || ownsExisting(); allow create, update, delete: if false; }
     match /Contributor/{id} {

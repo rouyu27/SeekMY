@@ -5,7 +5,7 @@ import type { AppUser, SharedBookmarkFolder } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
 
-export function SharedBookmarksPage({ token, user, onSignIn, onOpenBookmarks }: { token: string; user: AppUser | null; onSignIn: () => void; onOpenBookmarks: () => void }) {
+export function SharedBookmarksPage({ token, user, personalFolderNames, onSignIn, onOpenBookmarks }: { token: string; user: AppUser | null; personalFolderNames: string[]; onSignIn: () => void; onOpenBookmarks: () => void }) {
   const adminViewer = user?.role === "admin";
   const [folder, setFolder] = useState<SharedBookmarkFolder | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +54,11 @@ export function SharedBookmarksPage({ token, user, onSignIn, onOpenBookmarks }: 
     if (adminViewer) {
       setShowJoinConfirm(false);
       setJoinError("Collaboration is available for user accounts only.");
+      return;
+    }
+    if (folder && personalFolderNames.some((name) => name.trim().toLocaleLowerCase() === folder.name.trim().toLocaleLowerCase())) {
+      setShowJoinConfirm(false);
+      setJoinError("A folder with this name already exists. Please choose another folder name first.");
       return;
     }
     setJoining(true);

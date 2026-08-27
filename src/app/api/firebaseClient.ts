@@ -838,7 +838,7 @@ const auth = {
       );
     }
 
-    for (const collection of ["Bookmark", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
+    for (const collection of ["Bookmark", "BookmarkFolder", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
       const records = await entity(collection).filter({ created_by_id: user.uid }, undefined, 500);
       await Promise.all(records.map((record) => entity(collection).delete(String(record.id))));
     }
@@ -853,7 +853,7 @@ const auth = {
 
     await backend.adminDeleteUserData(uid);
 
-    for (const collection of ["Bookmark", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
+    for (const collection of ["Bookmark", "BookmarkFolder", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
       const createdRows = await entity(collection).filter({ created_by_id: uid }, undefined, 500);
       const userRows = await entity(collection).filter({ userId: uid }, undefined, 500);
       const contributorRows = await entity(collection).filter({ contributorId: uid }, undefined, 500);
@@ -1109,14 +1109,14 @@ const backend = {
   getSharedBookmarkFolder(token: string) {
     return this.call<{ folder: { id: string; name: string; sharingEnabled: boolean; memberCount: number; viewerRole: "owner" | "member" | null; locations: Array<Record<string, any>> } }>("getSharedBookmarkFolder", { token });
   },
-  getBookmarkFolderShareStatus(folderName: string) {
-    return this.call<{ active: boolean; folderId: string | null; updatedAt: string | null }>("getBookmarkFolderShareStatus", { folderName });
+  getBookmarkFolderShareStatus(personalFolderId: string, folderName: string) {
+    return this.call<{ active: boolean; folderId: string | null; updatedAt: string | null }>("getBookmarkFolderShareStatus", { personalFolderId, folderName });
   },
-  createBookmarkFolderShare(folderName: string, locationIds: Array<string | number>) {
-    return this.call<{ token: string; folderId: string; folderName: string; locationCount: number }>("createBookmarkFolderShare", { folderName, locationIds });
+  createBookmarkFolderShare(folderName: string, locationIds: Array<string | number>, personalFolderId?: string, sharedFolderId?: string) {
+    return this.call<{ token: string; folderId: string; folderName: string; locationCount: number }>("createBookmarkFolderShare", { folderName, locationIds, personalFolderId, sharedFolderId });
   },
-  disableBookmarkFolderShare(folderName: string, folderId?: string) {
-    return this.call<{ success: boolean }>("disableBookmarkFolderShare", { folderName, folderId });
+  disableBookmarkFolderShare(folderName: string, folderId?: string, personalFolderId?: string) {
+    return this.call<{ success: boolean }>("disableBookmarkFolderShare", { folderName, folderId, personalFolderId });
   },
   getMyCollaborativeFolders() {
     return this.call<{ folders: Array<Record<string, any>> }>("getMyCollaborativeFolders");
@@ -1260,6 +1260,7 @@ export const firebaseClient = {
         "Location",
         "Review",
         "Bookmark",
+        "BookmarkFolder",
         "ActivityLog",
         "Badge",
         "Contributor",

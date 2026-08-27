@@ -125,10 +125,20 @@ export interface BookmarkEntry {
   duplicateFirestoreIds?: string[];
   locationId: number | string;
   notes: string;
+  folderIds?: string[];
   folder: string;
   folders?: string[];
   sharedFolderId?: string | null;
   savedAt: string;
+}
+
+export interface PersonalBookmarkFolder {
+  id: string;
+  ownerUid: string;
+  name: string;
+  isDefault?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SharedBookmarkLocation {
@@ -146,6 +156,7 @@ export interface SharedBookmarkLocation {
 
 export interface SharedBookmarkFolder {
   id: string;
+  personalFolderId?: string | null;
   name: string;
   sharingEnabled: boolean;
   memberCount: number;
