@@ -1,6 +1,7 @@
 //==================== WongYueShan Part - Local Contributor Portal ====================
 import { useEffect, useMemo, useState } from "react";
-import { FileUp, MapPin, Check, AlertTriangle, UserRoundCheck, Pencil, X, ShieldCheck, WalletCards, Lightbulb, Phone, Globe2, Languages, CalendarClock, BarChart3 } from "lucide-react";
+import { FileUp, MapPin, Check, AlertTriangle, UserRoundCheck, Pencil, X, ShieldCheck, WalletCards, Lightbulb, Phone, Globe2, Languages, CalendarClock, BarChart3, Search } from "lucide-react";
+import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
 import type { AppUser, Page } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
@@ -9,6 +10,8 @@ import { firebaseClient } from "../api/firebaseClient";
 import type { ContributorApplication, LocationSubmission } from "../lib/communityTypes";
 import type { Language } from "../lib/i18n";
 import { t, activityLabel } from "../lib/i18n";
+import { geocodeMapLocation, reverseGeocodeLocation } from "../lib/mapGeocoding";
+import "leaflet/dist/leaflet.css";
 
 const ALLOWED = ["application/pdf", "image/jpeg", "image/png"];
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -91,6 +94,8 @@ export function ContributorPage({
   // Location form
   const [locName, setLocName] = useState("");
   const [locAddress, setLocAddress] = useState("");
+  const [locLat, setLocLat] = useState("");
+  const [locLng, setLocLng] = useState("");
   const [locState, setLocState] = useState("Selangor");
   const [locActivity, setLocActivity] = useState("Hiking");
   const [locDiff, setLocDiff] = useState("Easy");
@@ -106,6 +111,8 @@ export function ContributorPage({
   const [photoName, setPhotoName] = useState("");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [editingSubmissionId, setEditingSubmissionId] = useState<string | null>(null);
+  const [findingLocation, setFindingLocation] = useState(false);
+  const [detectedLocation, setDetectedLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
 
   // Profile
   const [profServices, setProfServices] = useState(myApp?.contributionArea || myApp?.services || "");
@@ -251,15 +258,17 @@ export function ContributorPage({
   }
 
   function resetLocationForm() {
-    setLocName(""); setLocAddress(""); setLocState("Selangor"); setLocActivity("Hiking"); setLocDiff("Easy");
+    setLocName(""); setLocAddress(""); setLocLat(""); setLocLng(""); setLocState("Selangor"); setLocActivity("Hiking"); setLocDiff("Easy");
     setLocDesc(""); setLocFac(""); setLocAccess(""); setLocPriceMin(""); setLocPriceMax(""); setLocSafety(""); setLocBestTime(""); setLocTip(""); setLocSourceUrl("");
-    setPhotoName(""); setPhotoFile(null); setEditingSubmissionId(null);
+    setPhotoName(""); setPhotoFile(null); setEditingSubmissionId(null); setDetectedLocation(null); setFindingLocation(false);
   }
 
   function editSubmission(submission: LocationSubmission) {
     if (submission.status === "approved") { setMsg({type:"err",text:"Approved locations are already published. Please contact admin for public changes."}); return; }
     setLocName(submission.name || "");
     setLocAddress(submission.address || "");
+    setLocLat(typeof submission.lat === "number" ? String(submission.lat) : "");
+    setLocLng(typeof submission.lng === "number" ? String(submission.lng) : "");
     setLocState(submission.state || "Selangor");
     setLocActivity(submission.activity || "Hiking");
     setLocDiff(submission.difficulty || "Easy");
@@ -276,14 +285,43 @@ export function ContributorPage({
     setPhotoName(submission.photoName || "");
     setPhotoFile(null);
     setEditingSubmissionId(submission.id);
+    setDetectedLocation(null);
     setTab("submit");
     setMsg(null);
+  }
+
+  async function findContributorLocation() {
+    if (!locName.trim()) { setMsg({type:"err",text:"Enter the location name before searching the map."}); return; }
+    setFindingLocation(true);
+    setDetectedLocation(null);
+    setMsg(null);
+    try {
+      const found = await geocodeMapLocation({ name: locName.trim(), state: locState });
+      if (!found) { setMsg({type:"err",text:"Place not found. Check the name and state, then try again."}); return; }
+      const address = (await reverseGeocodeLocation(found.lat, found.lng)) || found.label || `${locName.trim()}, ${locState}, Malaysia`;
+      setDetectedLocation({ lat: found.lat, lng: found.lng, address });
+    } catch (error:any) {
+      setMsg({type:"err",text:error?.message || "Unable to find this location."});
+    } finally {
+      setFindingLocation(false);
+    }
+  }
+
+  function confirmContributorLocation() {
+    if (!detectedLocation) return;
+    setLocLat(String(detectedLocation.lat));
+    setLocLng(String(detectedLocation.lng));
+    setLocAddress(detectedLocation.address);
+    setMsg({type:"ok",text:"Map location applied to the form."});
   }
 
   async function submitLocation() {
     setMsg(null);
     if (!approved) { setMsg({type:"err",text:"Only approved contributors can submit locations."}); return; }
     if (!locName.trim() || !locAddress.trim() || !locDesc.trim()) { setMsg({type:"err",text:"Please complete all required fields (name, address and description)."}); return; }
+    const lat = Number(locLat);
+    const lng = Number(locLng);
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) { setMsg({type:"err",text:"Please find and apply the map location before submitting."}); return; }
     if (!priceRange) { setMsg({type:"err",text:"Please enter a valid estimated cost. Max RM must be the same or higher than Min RM."}); return; }
     if (locSafety.trim().length < 10) { setMsg({type:"err",text:"Please add at least one useful safety note for visitors."}); return; }
     if (subs.some(s=>s.id!==editingSubmissionId&&s.name.toLowerCase()===locName.trim().toLowerCase() && s.state===locState)) { setMsg({type:"err",text:"This location already exists in your submissions."}); return; }
@@ -292,7 +330,7 @@ export function ContributorPage({
       const photoUrl = photoFile ? await firebaseClient.storage.uploadLocationPhoto(photoFile) : undefined;
       const payload = {
         contributorId:user!.id,contributorName:myApp?.fullName||user!.displayName,name:locName.trim(),address:locAddress.trim(),state:locState,activity:locActivity,difficulty:locDiff,
-        description:locDesc.trim(),facilities:locFac.trim(),accessibility:locAccess.trim(),estimatedPrice:numericPrice,estimatedPriceRange:priceRange.label,budget,
+        lat,lng,locationConfirmed:true,description:locDesc.trim(),facilities:locFac.trim(),accessibility:locAccess.trim(),estimatedPrice:numericPrice,estimatedPriceRange:priceRange.label,budget,
         safetyNotes:locSafety.trim(),bestTime:locBestTime.trim(),contributorTip:locTip.trim(),sourceUrl:locSourceUrl.trim(),
         photoName:photoName||undefined,status:"pending",rejectReason:"",updatedAt:new Date().toISOString(),
         ...(photoUrl ? { photoUrl } : {}),
@@ -510,68 +548,165 @@ export function ContributorPage({
         )}
 
         {tab === "submit" && (
-          <div className="bg-white rounded-[18px] p-6 space-y-3" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.1)` }}>
-            <h2 className="font-bold flex items-center gap-2" style={{ fontFamily: F.body, color: C.text }}>
-              <MapPin size={16} /> {editingSubmissionId ? "Update Location Information" : "Submit New Location"}
-            </h2>
+          <div className="bg-white rounded-[18px] p-6 space-y-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: C.muted, color: C.forest }}>
+                <MapPin size={17} />
+              </div>
+              <div>
+                <h2 className="font-bold text-sm" style={{ fontFamily: F.body, color: C.text }}>
+                  {editingSubmissionId ? "Update location information" : "Submit new location"}
+                </h2>
+                <p className="text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>
+                  Use the same details format as admin location management. Admin will review before publishing.
+                </p>
+              </div>
+            </div>
             {!approved ? (
               <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>
                 Your contributor registration must be approved by an administrator before submitting locations.
               </p>
             ) : (
               <>
-                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Location name *" value={locName} onChange={(e) => setLocName(e.target.value)} />
-                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Full address *" value={locAddress} onChange={(e) => setLocAddress(e.target.value)} />
+                <div>
+                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Location name *</label>
+                  <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Example: Bukit Sawa Trail" value={locName} onChange={(e) => { setLocName(e.target.value); setLocLat(""); setLocLng(""); setDetectedLocation(null); }} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Full address *</label>
+                  <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Full address, e.g. Bukit Sawa Trail, Selangor, Malaysia" value={locAddress} onChange={(e) => setLocAddress(e.target.value)} />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <select className="px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locState} onChange={(e) => setLocState(e.target.value)}>
-                    {ALL_STATES.map((s) => <option key={s.code} value={s.name}>{s.name}</option>)}
-                  </select>
-                  <select className="px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locActivity} onChange={(e) => setLocActivity(e.target.value)}>
-                    {"Hiking,Diving,Cycling,Camping,Swimming,Trail Running,Jogging,Rock Climbing,Water Sports".split(",").map((a) => <option key={a} value={a}>{activityLabel(language, a)}</option>)}
+                  <div>
+                    <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>State *</label>
+                    <select className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locState} onChange={(e) => { setLocState(e.target.value); setLocLat(""); setLocLng(""); setDetectedLocation(null); }}>
+                      {ALL_STATES.map((s) => <option key={s.code} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Activity *</label>
+                    <select className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locActivity} onChange={(e) => setLocActivity(e.target.value)}>
+                      {"Hiking,Diving,Cycling,Camping,Swimming,Trail Running,Jogging,Rock Climbing,Water Sports".split(",").map((a) => <option key={a} value={a}>{activityLabel(language, a)}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Latitude *</label>
+                    <input inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="3.1390" value={locLat} onChange={(e) => setLocLat(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Longitude *</label>
+                    <input inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="101.6869" value={locLng} onChange={(e) => setLocLng(e.target.value)} />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={findContributorLocation}
+                  disabled={findingLocation}
+                  className="w-full rounded-xl px-4 py-3 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+                  style={{ backgroundColor: C.muted, color: C.jungle, fontFamily: F.body }}
+                >
+                  <Search size={15} />
+                  {findingLocation ? "Finding location..." : "Find on Map"}
+                </button>
+                {detectedLocation && (
+                  <div className="rounded-[16px] overflow-hidden border" style={{ borderColor: C.border }}>
+                    <div className="p-3 bg-white">
+                      <p className="text-xs font-bold" style={{ color: C.text, fontFamily: F.body }}>Detected location</p>
+                      <p className="text-xs mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>{detectedLocation.address}</p>
+                    </div>
+                    <div className="h-56">
+                      <MapContainer center={[detectedLocation.lat, detectedLocation.lng]} zoom={14} scrollWheelZoom={false} className="h-full w-full">
+                        <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                        <Marker position={[detectedLocation.lat, detectedLocation.lng]}>
+                          <Popup>{locName || "Detected location"}</Popup>
+                        </Marker>
+                      </MapContainer>
+                    </div>
+                    <div className="p-3 bg-white flex justify-end">
+                      <Pill variant="outline" onClick={confirmContributorLocation}>Use this map location</Pill>
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Difficulty *</label>
+                  <select className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locDiff} onChange={(e) => setLocDiff(e.target.value)}>
+                    <option>Easy</option><option>Moderate</option><option>Hard</option>
                   </select>
                 </div>
-                <select className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} value={locDiff} onChange={(e) => setLocDiff(e.target.value)}>
-                  <option>Easy</option><option>Moderate</option><option>Hard</option>
-                </select>
-                <div className="rounded-xl p-4" style={{ backgroundColor: C.muted }}>
+                <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: C.muted }}>
                   <div className="flex items-center gap-2 mb-2">
                     <WalletCards size={16} style={{ color: C.jungle }} />
                     <label className="text-sm font-bold" style={{ color: C.text, fontFamily: F.body }}>Estimated Entry / Activity Cost (RM) *</label>
                   </div>
-                  <div className="grid grid-cols-2 gap-3"><input inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="Min RM" value={locPriceMin} onChange={(e) => setLocPriceMin(e.target.value)} /><input inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="Max RM" value={locPriceMax} onChange={(e) => setLocPriceMax(e.target.value)} /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold block mb-1" style={{ color: C.textSub }}>Min RM</label>
+                      <input inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="0" value={locPriceMin} onChange={(e) => setLocPriceMin(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold block mb-1" style={{ color: C.textSub }}>Max RM</label>
+                      <input inputMode="decimal" className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="0" value={locPriceMax} onChange={(e) => setLocPriceMax(e.target.value)} />
+                    </div>
+                  </div>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>Automatically classified</span>
                     <span className="text-xs font-bold px-3 py-1 rounded-full" style={{ backgroundColor: "#fff", color: C.jungle, fontFamily: F.body }}>{!locPriceMin && !locPriceMax ? "Enter price" : priceRange ? `RM ${priceRange.label} - ${budget}` : "Invalid range"}</span>
                   </div>
                   <p className="text-[10px] mt-2" style={{ color: C.textMuted, fontFamily: F.body }}>Type numbers only. For a fixed/free price, fill one box or use the same amount.</p>
                 </div>
-                <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none" style={inputStyle} rows={3} placeholder="Description *" value={locDesc} onChange={(e) => setLocDesc(e.target.value)} />
-                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Facilities (comma-separated)" value={locFac} onChange={(e) => setLocFac(e.target.value)} />
-                <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Accessibility info" value={locAccess} onChange={(e) => setLocAccess(e.target.value)} />
+                <div>
+                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Description *</label>
+                  <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none" style={inputStyle} rows={4} placeholder="Describe the place, activity, route, and visitor experience." value={locDesc} onChange={(e) => setLocDesc(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Facilities</label>
+                  <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Parking, toilets, food stalls" value={locFac} onChange={(e) => setLocFac(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Accessibility information</label>
+                  <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Road condition, steps, family access, wheelchair access" value={locAccess} onChange={(e) => setLocAccess(e.target.value)} />
+                </div>
                 <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: C.muted }}>
                   <div className="flex items-center gap-2">
                     <ShieldCheck size={16} style={{ color: C.jungle }} />
                     <p className="text-sm font-bold" style={{ color: C.text, fontFamily: F.body }}>Contributor verification details</p>
                   </div>
-                  <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none bg-white" style={inputStyle} rows={3} placeholder="Safety notes * (trail condition, weather risk, water depth, permits, parking safety)" value={locSafety} onChange={(e) => setLocSafety(e.target.value)} />
-                  <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="Best visiting time / season, e.g. Morning, dry season" value={locBestTime} onChange={(e) => setLocBestTime(e.target.value)} />
-                  <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none bg-white" style={inputStyle} rows={2} placeholder="Local contributor tip (optional)" value={locTip} onChange={(e) => setLocTip(e.target.value)} />
-                  <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="Supporting source / official page URL (optional)" value={locSourceUrl} onChange={(e) => setLocSourceUrl(e.target.value)} />
+                  <div>
+                    <label className="text-[11px] font-bold block mb-1" style={{ color: C.textSub }}>Safety notes *</label>
+                    <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none bg-white" style={inputStyle} rows={3} placeholder="Trail condition, weather risk, water depth, permits, parking safety" value={locSafety} onChange={(e) => setLocSafety(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold block mb-1" style={{ color: C.textSub }}>Best visiting time / season</label>
+                    <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="Morning, dry season, avoid rainy days" value={locBestTime} onChange={(e) => setLocBestTime(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold block mb-1" style={{ color: C.textSub }}>Local contributor tip</label>
+                    <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none bg-white" style={inputStyle} rows={2} placeholder="Optional tip from local experience" value={locTip} onChange={(e) => setLocTip(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold block mb-1" style={{ color: C.textSub }}>Supporting source / official page URL</label>
+                    <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none bg-white" style={inputStyle} placeholder="https://..." value={locSourceUrl} onChange={(e) => setLocSourceUrl(e.target.value)} />
+                  </div>
                 </div>
-                <label className="flex items-center gap-2 text-sm font-bold cursor-pointer" style={{ color: C.forest, fontFamily: F.body }}>
-                  <FileUp size={16} /> Photo (optional)
-                  <input type="file" accept=".jpg,.jpeg,.png" className="hidden" onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (!f) return;
-                    if (!["image/jpeg", "image/png", "image/webp"].includes(f.type) || f.size > MAX_PHOTO_BYTES) {
-                      setMsg({ type: "err", text: "Photo must be JPG/PNG/WEBP under 2MB." });
-                      return;
-                    }
-                    setPhotoFile(f);
-                    setPhotoName(f.name);
-                  }} />
-                </label>
-                {photoName && <p className="text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>{photoName}</p>}
+                <div>
+                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Photo (optional)</label>
+                  <label className="flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold cursor-pointer bg-white" style={{ color: C.forest, borderColor: C.border, fontFamily: F.body }}>
+                    <FileUp size={16} /> Upload JPG, PNG, or WEBP
+                    <input type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden" onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      if (!["image/jpeg", "image/png", "image/webp"].includes(f.type) || f.size > MAX_PHOTO_BYTES) {
+                        setMsg({ type: "err", text: "Photo must be JPG/PNG/WEBP under 2MB." });
+                        return;
+                      }
+                      setPhotoFile(f);
+                      setPhotoName(f.name);
+                    }} />
+                  </label>
+                  {photoName && <p className="text-xs mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>Selected: {photoName}</p>}
+                </div>
                 <div className="flex gap-2">
                   <Pill variant="filled" onClick={submitLocation}>{editingSubmissionId ? "Resubmit update" : "Submit location"}</Pill>
                   {editingSubmissionId && <Pill variant="outline" onClick={resetLocationForm}><X size={13}/> Cancel edit</Pill>}
