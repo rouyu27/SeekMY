@@ -43,6 +43,26 @@ function routeSegment(prefix: string): string {
   catch { return ""; }
 }
 
+type SeekMyHistoryState = {
+  seekmy: true;
+  page: Page;
+  prevPage: Page;
+  locationId?: string;
+};
+
+function isPage(value: unknown): value is Page {
+  return [
+    "home", "explore", "location", "ai", "leaderboard", "log", "bookmarks",
+    "account", "admin", "map", "contributor", "suggest", "insights", "help",
+  ].includes(String(value));
+}
+
+function appUrlFor(page: Page, locationId?: string) {
+  if (page === "home") return "/";
+  if (page === "location" && locationId) return `/location/${encodeURIComponent(locationId)}`;
+  return `/?page=${encodeURIComponent(page)}`;
+}
+
 function dedupeBookmarkEntries(entries: BookmarkEntry[]): BookmarkEntry[] {
   const byLocation = new Map<string, BookmarkEntry>();
   for (const entry of entries) {
@@ -146,6 +166,9 @@ export default function App() {
   const [language, setLanguageState] = useState<Language>("en");
   const [sharedFolderToken] = useState(() => routeSegment("/shared/bookmarks/"));
   const [initialPublicLocationId] = useState(() => routeSegment("/location/"));
+  const pendingHistoryLocationId = useRef<string | null>(initialPublicLocationId || null);
+  const applyingBrowserHistory = useRef(false);
+  const hasWrittenInitialHistory = useRef(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("seekmy-onboarding-complete") !== "true";
@@ -275,6 +298,44 @@ export default function App() {
     }).catch(() => { /* guest mode: public Firebase locations still load */ });
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || hasWrittenInitialHistory.current) return;
+    if (initialPublicLocationId && page !== "location") return;
+    const locationId = page === "location"
+      ? String(selectedLocation?.id || initialPublicLocationId || "")
+      : undefined;
+    const state: SeekMyHistoryState = {
+      seekmy: true,
+      page,
+      prevPage,
+      ...(locationId ? { locationId } : {}),
+    };
+    window.history.replaceState(state, "", appUrlFor(page, locationId));
+    hasWrittenInitialHistory.current = true;
+  }, [initialPublicLocationId, page, prevPage, selectedLocation?.id]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPopState = (event: PopStateEvent) => {
+      const state = event.state as Partial<SeekMyHistoryState> | null;
+      if (!state?.seekmy || !isPage(state.page)) return;
+      applyingBrowserHistory.current = true;
+      setPrevPage(isPage(state.prevPage) ? state.prevPage : "home");
+      if (state.page === "location") {
+        const location = allLocations.find((item) => String(item.id) === String(state.locationId))
+          || selectedLocation;
+        setSelectedLocation(location || null);
+        setLocationInitialTab("overview");
+      }
+      setPage(state.page);
+      setMobileOpen(false);
+      window.scrollTo({ top: 0, behavior: "auto" });
+      window.setTimeout(() => { applyingBrowserHistory.current = false; }, 0);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [allLocations, selectedLocation]);
+
   function navigate(p: Page) {
     // Opening Discover normally should always start with ALL locations.
     // A state-card click can set the state immediately after this call.
@@ -283,9 +344,23 @@ export default function App() {
       refreshLocationReviewSummaries();
     }
 
-    setPrevPage(page);
+    const nextPrevPage = page;
+    const locationId = p === "location"
+      ? pendingHistoryLocationId.current || (selectedLocation ? String(selectedLocation.id) : undefined)
+      : undefined;
+    setPrevPage(nextPrevPage);
     setPage(p);
     setMobileOpen(false);
+    if (!applyingBrowserHistory.current && typeof window !== "undefined") {
+      const state: SeekMyHistoryState = {
+        seekmy: true,
+        page: p,
+        prevPage: nextPrevPage,
+        ...(locationId ? { locationId } : {}),
+      };
+      window.history.pushState(state, "", appUrlFor(p, locationId));
+    }
+    pendingHistoryLocationId.current = null;
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function openWeatherMap() {
@@ -295,6 +370,7 @@ export default function App() {
   function selectLocation(l: Location) {
     setSelectedLocation(l);
     setLocationInitialTab("overview");
+    pendingHistoryLocationId.current = String(l.id);
   }
   function openLocationFromLog(log: ActivityLog, tab: "overview" | "reviews" = "overview") {
     const location = allLocations.find((item) => String(item.id) === String(log.locationId))
@@ -305,6 +381,7 @@ export default function App() {
     }
     setSelectedLocation(location);
     setLocationInitialTab(tab);
+    pendingHistoryLocationId.current = String(location.id);
     navigate("location");
   }
   function updateLocationReviewSummary(locationId: number | string, rating: number, reviews: number) {
