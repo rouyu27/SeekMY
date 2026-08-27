@@ -4,7 +4,7 @@ import { Search, X, Trash2, LogOut, Users, Shield, CheckCircle, Star, Plus, User
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Location, AppUser } from "../lib/types";
-import type { ContributorApplication, LocationSubmission, StoredReview } from "../lib/communityTypes";
+import type { ContributorApplication, LocationSubmission, StoredReview, UserAnnouncement } from "../lib/communityTypes";
 import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
 import { ALL_STATES } from "../lib/constants";
@@ -29,6 +29,14 @@ function isFixedTeamAdmin(email?: string) {
 const ACTIVITIES = ["Hiking","Diving","Cycling","Camping","Swimming","Trail Running","Jogging","Rock Climbing","Water Sports"];
 const STATE_CODE: Record<string,string> = Object.fromEntries(ALL_STATES.map(s=>[s.name,s.code]));
 const emptyLocation = { name:"",address:"",lat:"",lng:"",state:"Selangor",activity:"Hiking",difficulty:"Easy",description:"",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:"",facilities:"",accessibility:"",image_url:"",image_urls:[] as string[],estimatedPriceMin:"",estimatedPriceMax:"" };
+
+type AdminAnnouncementLog = UserAnnouncement & {
+  adminLog?: boolean;
+  sentBy?: string;
+  sentByEmail?: string;
+  targetLabel?: string;
+  targetCount?: number;
+};
 
 function parsePriceRange(minValue: string, maxValue: string): { min: number; max: number; label: string } | null {
   const minText = minValue.trim();
@@ -124,24 +132,27 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   const [noticeMessage,setNoticeMessage]=useState("");
   const [noticeTarget,setNoticeTarget]=useState("all");
   const [sendingNotice,setSendingNotice]=useState(false);
+  const [announcementLogs,setAnnouncementLogs]=useState<AdminAnnouncementLog[]>([]);
 
   function showToast(msg:string){setToast(msg);setTimeout(()=>setToast(null),2800);}
 
   async function loadData(){
     setLoading(true);
     try{
-      const [locationsResult, contributorsResult, reviewsResult, usersResult, submissionsResult]=await Promise.allSettled([
+      const [locationsResult, contributorsResult, reviewsResult, usersResult, submissionsResult, announcementLogsResult]=await Promise.allSettled([
         firebaseClient.entities.Location.list("name"),
         firebaseClient.entities.Contributor.list("-created_date",500),
         firebaseClient.backend.getAdminReviews().then(result=>result.reviews),
         firebaseClient.entities.User.list("full_name",500),
         firebaseClient.entities.LocationSubmission.list("-created_date",500),
+        firebaseClient.entities.Announcement.filter({adminLog:true}, "-createdAt", 50),
       ]);
 
       if(locationsResult.status==="fulfilled")setLocations(prepareAdminLocations(locationsResult.value as Location[]));
       if(contributorsResult.status==="fulfilled")setContributors(contributorsResult.value as ContributorApplication[]);
       if(reviewsResult.status==="fulfilled")setReviews(reviewsResult.value as StoredReview[]);
       if(submissionsResult.status==="fulfilled")setSubmissions(submissionsResult.value as LocationSubmission[]);
+      if(announcementLogsResult.status==="fulfilled")setAnnouncementLogs(announcementLogsResult.value as AdminAnnouncementLog[]);
 
       if(usersResult.status==="fulfilled"){
         setUserLoadError("");
@@ -151,7 +162,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         setUserLoadError(usersResult.reason?.message||"Unable to load Firebase users.");
       }
 
-      const failures=[locationsResult,contributorsResult,reviewsResult,usersResult,submissionsResult]
+      const failures=[locationsResult,contributorsResult,reviewsResult,usersResult,submissionsResult,announcementLogsResult]
         .filter((result): result is PromiseRejectedResult=>result.status==="rejected");
       if(failures.length)showToast(failures[0].reason?.message||"Some admin data could not be loaded.");
     }catch(error:any){showToast(error?.message||"Unable to load admin data.");}
@@ -400,22 +411,50 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
   async function rejectSubmission(s:LocationSubmission){const reason=prompt("Give a friendly rejection reason for the contributor:",s.rejectReason||"Please add more complete location details or clearer safety information.")?.trim();if(!reason){showToast("A rejection reason is required.");return;}try{const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"rejected",rejectReason:reason,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location needs changes",message:`Thanks for submitting "${s.name}". We cannot publish it yet.\n\nReason: ${reason}\n\nYou can edit the suggestion in My Contributions and resubmit it for review.`,type:"rejected",relatedPage:"suggestions",submissionId:s.id,read:false,dismissed:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));showToast("Location rejected and user notified through Firebase.");}catch(e:any){showToast(e?.message||"Unable to reject location.");}}
   async function sendAdminNotice(){
     if(!noticeTitle.trim()||!noticeMessage.trim()){showToast("Notice title and message are required.");return;}
+    const activeUsers=users.filter(member=>member.status!=="deleted"&&member.status!=="disabled");
+    const targetUsers=noticeTarget==="all"?activeUsers:activeUsers.filter(member=>String(member.id)===String(noticeTarget));
+    if(!targetUsers.length){showToast("No matching user found for this announcement.");return;}
     setSendingNotice(true);
     try{
-      await firebaseClient.entities.Announcement.create({
-        userId:noticeTarget,
-        title:noticeTitle.trim(),
-        message:noticeMessage.trim(),
+      const createdAt=new Date().toISOString();
+      const title=noticeTitle.trim();
+      const message=noticeMessage.trim();
+      const admin=await firebaseClient.auth.me().catch(()=>null) as any;
+      const targetLabel=noticeTarget==="all"
+        ? `All users (${targetUsers.length})`
+        : `${targetUsers[0].displayName} - ${targetUsers[0].email}`;
+      await Promise.all(targetUsers.map(member=>firebaseClient.entities.Announcement.create({
+        userId:String(member.id),
+        title,
+        message,
         type:"notice",
         relatedPage:"announcements",
         read:false,
         dismissed:false,
-        createdAt:new Date().toISOString(),
-      });
+        createdAt,
+        sentBy:admin?.full_name||admin?.email||"Admin",
+        sentByEmail:admin?.email||"",
+      })));
+      const log=await firebaseClient.entities.Announcement.create({
+        userId:"admin-log",
+        adminLog:true,
+        title,
+        message,
+        type:"notice",
+        relatedPage:"announcements",
+        read:true,
+        dismissed:false,
+        createdAt,
+        sentBy:admin?.full_name||admin?.email||"Admin",
+        sentByEmail:admin?.email||"",
+        targetLabel,
+        targetCount:targetUsers.length,
+      }) as AdminAnnouncementLog;
+      setAnnouncementLogs(logs=>[log,...logs].slice(0,50));
       setNoticeTitle("");
       setNoticeMessage("");
       setNoticeTarget("all");
-      showToast("Announcement notice sent.");
+      showToast(`Announcement sent to ${targetUsers.length} user${targetUsers.length===1?"":"s"}.`);
     }catch(e:any){showToast(e?.message||"Unable to send announcement.");}
     finally{setSendingNotice(false);}
   }
@@ -477,11 +516,11 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     {id:"contributors",icon:"🤝",label:"Contributors"},
     {id:"announcements",icon:"🔔",label:"Announcements"},
   ];
-  const DASHBOARD_CARDS:{icon:string;label:string;value:number;target:AdminTab}[]=[
-    {icon:"👥",label:"Users",value:users.length,target:"users"},
-    {icon:"📍",label:"Locations",value:locations.length,target:"locations"},
-    {icon:"⏳",label:"Pending",value:pendingSubs.length,target:"pendingLocs"},
-    {icon:"⚑",label:"Flagged",value:flaggedReviews.length,target:"reviews"},
+  const DASHBOARD_CARDS:{icon:string;label:string;value:number;target:AdminTab;hint:string}[]=[
+    {icon:"👥",label:"Users",value:users.length,target:"users",hint:"Click here to manage users"},
+    {icon:"📍",label:"Locations",value:locations.length,target:"locations",hint:"Click here to manage places"},
+    {icon:"⏳",label:"Pending",value:pendingSubs.length,target:"pendingLocs",hint:"Click here to review submissions"},
+    {icon:"⚑",label:"Flagged",value:flaggedReviews.length,target:"reviews",hint:"Click here to moderate reviews"},
   ];
   const card="bg-white rounded-[18px] p-4";
   return <div className="pt-14 min-h-screen flex" style={{backgroundColor:"#f8fafc"}}>
@@ -505,7 +544,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       </div>
       {tab!=="dashboard"&&<div className="flex items-center gap-2 bg-white rounded-full px-4 mb-6 border" style={{borderColor:C.border,height:44}}><Search size={14} style={{color:C.textMuted}}/><input value={search} onChange={e=>setSearch(e.target.value)} className="flex-1 outline-none text-sm bg-transparent" placeholder={`Search ${tab}…`}/>{search&&<button onClick={()=>setSearch("")}><X size={13}/></button>}</div>}
       {loading?<div className="space-y-3">{[1,2,3].map(i=><div key={i} className="h-24 bg-white rounded-[18px] animate-pulse"/>)}</div>:<>
-        {tab==="dashboard"&&<div><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-7"><div><h1 className="text-3xl font-normal" style={{fontFamily:F.display,color:C.jungle}}>Platform Overview</h1><p className="text-sm" style={{color:C.textMuted}}>Loaded directly from Firebase. Select a card to manage its records.</p></div><Pill variant="outline" small onClick={loadData}><Database size={13}/> Refresh</Pill></div><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{DASHBOARD_CARDS.map(card=><button type="button" key={card.label} onClick={()=>{setSearch("");setTab(card.target);}} className="bg-white rounded-[18px] p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2" style={{outlineColor:C.forest}} aria-label={`Open ${card.label} management`}><span className="text-2xl">{card.icon}</span><p className="text-2xl font-bold mt-2" style={{fontFamily:F.display,color:C.jungle}}>{card.value}</p><p className="text-xs" style={{color:C.textMuted}}>{card.label}</p></button>)}</div></div>}
+        {tab==="dashboard"&&<div><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-7"><div><h1 className="text-3xl font-normal" style={{fontFamily:F.display,color:C.jungle}}>Platform Overview</h1><p className="text-sm" style={{color:C.textMuted}}>Loaded directly from Firebase. Select a card to manage its records.</p></div><Pill variant="outline" small onClick={loadData}><Database size={13}/> Refresh</Pill></div><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{DASHBOARD_CARDS.map(card=><button type="button" key={card.label} onClick={()=>{setSearch("");setTab(card.target);}} className="bg-white rounded-[18px] p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2" style={{outlineColor:C.forest}} aria-label={`Open ${card.label} management`}><span className="text-2xl">{card.icon}</span><p className="text-2xl font-bold mt-2" style={{fontFamily:F.display,color:C.jungle}}>{card.value}</p><p className="text-xs" style={{color:C.textMuted}}>{card.label}</p><p className="text-[11px] font-bold mt-3" style={{color:C.forest,fontFamily:F.body}}>{card.hint}</p></button>)}</div></div>}
         {tab==="users"&&<div className="space-y-3">
           <h1 className="text-2xl mb-3" style={{fontFamily:F.display,color:C.jungle}}>User Management</h1>
           {userLoadError&&<p className="text-sm font-semibold bg-white rounded-[18px] p-4" style={{color:C.error}}>{userLoadError}</p>}
@@ -567,7 +606,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         {tab==="pendingLocs"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Pending Locations</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingSubs.length} awaiting review</p><div className="space-y-3">{filteredPendingSubmissions.map(s=><div key={s.id} className={card}><div className="flex gap-4">{s.photoUrl&&<img src={s.photoUrl} className="w-20 h-20 rounded-xl object-cover"/>}<div className="flex-1"><p className="font-bold text-sm">{s.name}</p><p className="text-xs" style={{color:C.textMuted}}>{s.state} · {s.activity} · {s.contributorName}</p><p className="text-sm mt-2" style={{color:C.textSub}}>{s.description}</p><p className="text-xs mt-1">Status: {s.status}</p><div className="flex gap-2 mt-3"><Pill variant="filled" small onClick={()=>approveSubmission(s)}>{saving?"Saving...":"Approve"}</Pill><Pill variant="danger" small onClick={()=>rejectSubmission(s)}>Reject</Pill></div></div></div></div>)}{!filteredPendingSubmissions.length&&<p className="text-sm" style={{color:C.textMuted}}>{pendingSubs.length?"No pending locations match your search.":"No pending locations yet."}</p>}</div></div>}
         {tab==="reviews"&&<div><h1 className="text-2xl mb-4" style={{fontFamily:F.display,color:C.jungle}}>Review Moderation</h1><div className="space-y-3">{filteredReviews.map(r=><div key={r.id} className={card}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div className="min-w-0"><p className="font-bold text-sm">{r.userName||"Anonymous"} · {r.locationName}</p><div className="flex gap-0.5 my-1">{[1,2,3,4,5].map(n=><Star key={n} size={12} fill={n<=r.rating?C.amber:"none"}/>)}</div><p className="text-sm leading-relaxed" style={{color:C.textSub}}>{r.comment}</p><p className="text-xs mt-1">Status: {r.status}</p></div><div className="flex flex-row gap-2 sm:flex-col sm:items-end">{r.status!=="approved"&&r.status!=="active"&&<button onClick={()=>reviewAction(r,"approve")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.successBg,color:C.success}} aria-label={`Approve review for ${r.locationName}`}><CheckCircle size={15}/></button>}<button onClick={()=>reviewAction(r,"remove")} className="h-10 w-10 rounded-lg flex items-center justify-center" style={{backgroundColor:C.errorBg,color:C.error}} aria-label={`Remove review for ${r.locationName}`}><Trash2 size={15}/></button></div></div></div>)}{!filteredReviews.length&&<p className="text-sm" style={{color:C.textMuted}}>{reviews.length?"No reviews match your search.":"No reviews yet."}</p>}</div></div>}
         {tab==="contributors"&&<div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Contributor Registration Review</h1><p className="text-sm mb-4" style={{color:C.textMuted}}>{pendingContributors.length} pending</p><div className="space-y-3">{filteredContributors.map(c=>{const approved=c.status==="approved"||c.status==="verified";return <div key={c.id} className={`${card} flex gap-4`}><div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{backgroundColor:approved?C.successBg:c.status==="rejected"?C.errorBg:"#fffbef"}}><Users size={17}/></div><div className="flex-1 min-w-0"><p className="font-bold text-sm">{c.fullName}</p><p className="text-xs" style={{color:C.textMuted}}>{c.area} · {c.contributionArea||c.services||"Area not provided"}</p><p className="text-xs mt-1" style={{color:C.textSub}}>{c.localKnowledgeExperience||c.experience||"Local knowledge not provided"}</p><p className="text-xs mt-1">{c.userEmail} · {c.phone}</p>{c.rejectReason&&<p className="text-xs mt-1" style={{color:C.error}}>Rejection reason: {c.rejectReason}</p>}{c.docUrl&&<button type="button" onClick={()=>openContributorDocument(c.docUrl!)} className="text-xs font-bold block mt-1" style={{color:C.forest}}>View supporting document</button>}</div><div className="flex items-start gap-2"><span className="text-xs capitalize">{approved?"Approved":c.status}</span>{c.status==="pending"&&<><button title="Approve contributor" onClick={()=>contributorStatus(c,"approved")} className="p-2 rounded-lg" style={{backgroundColor:C.successBg,color:C.success}}><CheckCircle size={15}/></button><button title="Reject contributor" onClick={()=>contributorStatus(c,"rejected")} className="p-2 rounded-lg" style={{backgroundColor:C.errorBg,color:C.error}}><X size={15}/></button></>}</div></div>})}{!filteredContributors.length&&<p className="text-sm" style={{color:C.textMuted}}>{contributors.length?"No contributor applications match your search.":"No contributor applications yet."}</p>}</div></div>}
-        {tab==="announcements"&&<div className="max-w-2xl"><div className="mb-5"><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Send Announcement</h1><p className="text-sm" style={{color:C.textMuted}}>Send a notice to everyone or to one user. Approval, rejection, and achievement notices are created automatically.</p></div><div className={`${card} space-y-4`}><div className="flex items-center gap-3"><div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{backgroundColor:C.muted,color:C.forest}}><Bell size={17}/></div><div><p className="text-sm font-bold">Notice details</p><p className="text-xs" style={{color:C.textMuted}}>This appears in the user's profile announcement inbox.</p></div></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Target</label><select value={noticeTarget} onChange={e=>setNoticeTarget(e.target.value)} className="w-full border rounded-xl px-4 py-3 text-sm" style={{borderColor:C.border,fontFamily:F.body}}><option value="all">All users</option>{users.map(member=><option key={member.id} value={member.id}>{member.displayName} - {member.email}</option>)}</select></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Title</label><input value={noticeTitle} onChange={e=>setNoticeTitle(e.target.value)} maxLength={90} placeholder="Example: Weather safety reminder" className="w-full border rounded-xl px-4 py-3 text-sm" style={{borderColor:C.border,fontFamily:F.body}}/></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Message</label><textarea value={noticeMessage} onChange={e=>setNoticeMessage(e.target.value)} rows={5} placeholder="Write a clear, friendly notice for users." className="w-full border rounded-xl px-4 py-3 text-sm resize-none" style={{borderColor:C.border,fontFamily:F.body}}/></div><Pill variant="filled" onClick={sendAdminNotice} disabled={sendingNotice}><Send size={14}/>{sendingNotice?"Sending...":"Send notice"}</Pill></div></div>}
+        {tab==="announcements"&&<div className="max-w-2xl space-y-5"><div><h1 className="text-2xl" style={{fontFamily:F.display,color:C.jungle}}>Send Announcement</h1><p className="text-sm" style={{color:C.textMuted}}>Send a notice to everyone or to one user. Approval, rejection, and achievement notices are created automatically.</p></div><div className={`${card} space-y-4`}><div className="flex items-center gap-3"><div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{backgroundColor:C.muted,color:C.forest}}><Bell size={17}/></div><div><p className="text-sm font-bold">Notice details</p><p className="text-xs" style={{color:C.textMuted}}>This appears in each selected user's profile announcement inbox.</p></div></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Target</label><select value={noticeTarget} onChange={e=>setNoticeTarget(e.target.value)} className="w-full border rounded-xl px-4 py-3 text-sm" style={{borderColor:C.border,fontFamily:F.body}}><option value="all">All users</option>{users.filter(member=>member.status!=="deleted"&&member.status!=="disabled").map(member=><option key={member.id} value={member.id}>{member.displayName} - {member.email}</option>)}</select><p className="text-[11px] mt-1" style={{color:C.textMuted}}>All users creates one notice for every active user account.</p></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Title</label><input value={noticeTitle} onChange={e=>setNoticeTitle(e.target.value)} maxLength={90} placeholder="Example: Weather safety reminder" className="w-full border rounded-xl px-4 py-3 text-sm" style={{borderColor:C.border,fontFamily:F.body}}/></div><div><label className="text-xs font-bold block mb-1" style={{color:C.textSub}}>Message</label><textarea value={noticeMessage} onChange={e=>setNoticeMessage(e.target.value)} rows={5} placeholder="Write a clear, friendly notice for users." className="w-full border rounded-xl px-4 py-3 text-sm resize-none" style={{borderColor:C.border,fontFamily:F.body}}/></div><Pill variant="filled" onClick={sendAdminNotice} disabled={sendingNotice}><Send size={14}/>{sendingNotice?"Sending...":"Send notice"}</Pill></div><div className={`${card} space-y-3`}><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-bold">Announcement history</p><p className="text-xs" style={{color:C.textMuted}}>Admins can see who sent each manual announcement.</p></div><span className="text-[11px] font-bold px-2.5 py-1 rounded-full" style={{backgroundColor:C.muted,color:C.forest}}>{announcementLogs.length}</span></div>{announcementLogs.length===0?<p className="text-sm" style={{color:C.textMuted}}>No admin announcements sent yet.</p>:<div className="space-y-2">{announcementLogs.map(log=><div key={log.id} className="rounded-xl border p-3" style={{borderColor:C.border}}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-bold truncate" style={{fontFamily:F.body,color:C.text}}>{log.title}</p><p className="text-xs mt-1" style={{color:C.textMuted}}>{log.targetLabel||"Selected users"} · {log.targetCount||1} recipient{(log.targetCount||1)===1?"":"s"}</p></div><p className="text-[10px] flex-shrink-0" style={{color:C.textMuted}}>{new Date(log.createdAt||log.created_date||"").toLocaleDateString()}</p></div><p className="text-[12px] mt-2 line-clamp-2" style={{color:C.textSub}}>{log.message}</p><p className="text-[11px] mt-2" style={{color:C.textMuted}}>Sent by {log.sentBy||"Admin"}{log.sentByEmail?` (${log.sentByEmail})`:""}</p></div>)}</div>}</div></div>}
       </>}
     </main>
     {showAdd&&

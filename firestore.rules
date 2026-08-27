@@ -79,7 +79,7 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
       allow create: if isAdmin();
       allow delete: if isAdmin();
-      allow update: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read','updated_date']));
+      allow update: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read','dismissed','updated_date']));
     }
   }
 }
