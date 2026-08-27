@@ -6,16 +6,6 @@ service cloud.firestore {
     function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/User/$(request.auth.uid)) && get(/databases/$(database)/documents/User/$(request.auth.uid)).data.role == 'admin'; }
     function ownsExisting() { return signedIn() && resource.data.created_by_id == request.auth.uid; }
     function createsOwn() { return signedIn() && request.resource.data.created_by_id == request.auth.uid; }
-    function approvedContributor() {
-      return signedIn()
-        && (
-          (exists(/databases/$(database)/documents/User/$(request.auth.uid))
-            && get(/databases/$(database)/documents/User/$(request.auth.uid)).data.contributorStatus in ['approved', 'verified'])
-          || (exists(/databases/$(database)/documents/Contributor/$(request.auth.uid))
-            && get(/databases/$(database)/documents/Contributor/$(request.auth.uid)).data.status in ['approved', 'verified'])
-        );
-    }
-
     match /User/{userId} {
       allow read: if signedIn();
       allow create: if signedIn() && userId == request.auth.uid && (request.resource.data.role == 'user' || (primaryAdmin() && request.resource.data.role == 'admin'));
