@@ -25,6 +25,7 @@ import type { StoredReview } from "../lib/communityTypes";
 import { locationMetadataFor } from "../lib/locationMetadata";
 import type { Language } from "../lib/i18n";
 import { activityLabel, difficultyLabel, t } from "../lib/i18n";
+import type { WeatherAlert } from "../lib/weather";
 
 const MAX_REVIEW_PHOTO_BYTES = 1 * 1024 * 1024;
 const MAX_REVIEW_WORDS = 300;
@@ -311,6 +312,123 @@ export function LocationPage({
     if (value === "Check Before You Go") return locCopy.checkBeforeGo;
     return value;
   };
+  const weatherConditionLabel = (value: string) => {
+    if (language === "en") return value;
+    const normalized = value.toLowerCase();
+    const zh: Record<string, string> = {
+      "clear sky": "晴朗",
+      "few clouds": "少云",
+      "scattered clouds": "零散云",
+      "broken clouds": "多云",
+      "overcast clouds": "阴天",
+      clouds: "多云",
+      rain: "下雨",
+      "light rain": "小雨",
+      "moderate rain": "中雨",
+      "heavy intensity rain": "大雨",
+      drizzle: "毛毛雨",
+      thunderstorm: "雷雨",
+      mist: "薄雾",
+      haze: "烟霾",
+      fog: "雾",
+    };
+    const ms: Record<string, string> = {
+      "clear sky": "langit cerah",
+      "few clouds": "sedikit awan",
+      "scattered clouds": "awan berselerak",
+      "broken clouds": "berawan",
+      "overcast clouds": "mendung",
+      clouds: "berawan",
+      rain: "hujan",
+      "light rain": "hujan renyai",
+      "moderate rain": "hujan sederhana",
+      "heavy intensity rain": "hujan lebat",
+      drizzle: "gerimis",
+      thunderstorm: "ribut petir",
+      mist: "berkabus tipis",
+      haze: "jerebu",
+      fog: "kabus",
+    };
+    const copy = language === "zh" ? zh : ms;
+    return copy[normalized] || value;
+  };
+  const openingHoursLabel = (value: string) => {
+    if (language === "en") return value;
+    if (value === "Hours not verified yet") {
+      return language === "zh" ? "开放时间未确认" : "Waktu belum disahkan";
+    }
+    if (value === "Daylight visit recommended. Check local opening hours before visiting.") {
+      return language === "zh"
+        ? "建议白天前往。出发前请查看当地开放时间。"
+        : "Lawatan waktu siang disyorkan. Semak waktu operasi tempatan sebelum pergi.";
+    }
+    return value;
+  };
+  const bestSeasonLabel = (value: string) => {
+    if (value === "Year-round") {
+      return language === "zh" ? "全年" : language === "ms" ? "Sepanjang tahun" : value;
+    }
+    return value;
+  };
+  const weatherAlertLabel = (alert: WeatherAlert) => {
+    if (language === "en") return alert;
+    const zh: Record<string, Pick<WeatherAlert, "title" | "message" | "action">> = {
+      heat: {
+        title: "极端高温",
+        message: "高温可能在步道上造成中暑风险。",
+        action: "携带更多饮用水，在阴凉处休息，并避免中午登山。",
+      },
+      wind: {
+        title: "强风",
+        message: "高处山脊和开放海岸区域可能较危险。",
+        action: "避免暴露山顶和开放水域活动。",
+      },
+      storm: {
+        title: "雷雨风险",
+        message: "雷雨可能影响户外活动。",
+        action: "推迟暴露区域活动，听到雷声时马上寻找遮蔽处。",
+      },
+    };
+    const ms: Record<string, Pick<WeatherAlert, "title" | "message" | "action">> = {
+      heat: {
+        title: "Panas melampau",
+        message: "Suhu tinggi boleh menyebabkan tekanan haba di laluan.",
+        action: "Bawa air tambahan, berehat di tempat teduh dan elakkan pendakian tengah hari.",
+      },
+      wind: {
+        title: "Angin kuat",
+        message: "Permatang tinggi dan pesisir terbuka mungkin berbahaya.",
+        action: "Elakkan puncak terdedah dan aktiviti air terbuka.",
+      },
+      storm: {
+        title: "Risiko ribut petir",
+        message: "Ribut boleh menjejaskan aktiviti luar.",
+        action: "Tangguhkan aktiviti di kawasan terdedah dan cari perlindungan jika terdengar guruh.",
+      },
+    };
+    const copy = (language === "zh" ? zh : ms)[alert.id];
+    return copy ? { ...alert, ...copy } : alert;
+  };
+  const weatherRecommendationLabel = (value: string) => {
+    if (language === "en") return value;
+    const zh: Record<string, string> = {
+      "Prioritise safety: review weather alerts before departing.": "安全优先：出发前请查看天气警报。",
+      "Conditions look suitable for most outdoor activities.": "当前天气适合大多数户外活动。",
+      "Bring at least 2L of water per person.": "每人至少携带 2L 饮用水。",
+      "Use SPF 50+ and sun protection — UV is high.": "紫外线偏高，请使用 SPF 50+ 防晒并做好遮阳。",
+      "Pace yourself; high humidity slows recovery.": "湿度较高，体力恢复较慢，请放慢节奏。",
+      "Pack a light rain jacket and protect electronics.": "携带轻便雨衣，并保护好电子设备。",
+    };
+    const ms: Record<string, string> = {
+      "Prioritise safety: review weather alerts before departing.": "Utamakan keselamatan: semak amaran cuaca sebelum bertolak.",
+      "Conditions look suitable for most outdoor activities.": "Keadaan sesuai untuk kebanyakan aktiviti luar.",
+      "Bring at least 2L of water per person.": "Bawa sekurang-kurangnya 2L air untuk setiap orang.",
+      "Use SPF 50+ and sun protection — UV is high.": "Gunakan SPF 50+ dan perlindungan matahari kerana UV tinggi.",
+      "Pace yourself; high humidity slows recovery.": "Kawal rentak anda; kelembapan tinggi melambatkan pemulihan.",
+      "Pack a light rain jacket and protect electronics.": "Bawa jaket hujan ringan dan lindungi peranti elektronik.",
+    };
+    return (language === "zh" ? zh : ms)[value] || value;
+  };
   const locationImages = (Array.isArray(loc.image_urls) && loc.image_urls.length ? loc.image_urls : (loc.image_url ? [loc.image_url] : [])).filter(Boolean);
   const activeImage = locationImages[Math.min(activeLocationImage, Math.max(locationImages.length - 1, 0))];
   const estimatedCostLabel = loc.estimatedPriceRange
@@ -379,7 +497,7 @@ export function LocationPage({
               <Clock size={12} />{locCopy.duration}: {loc.duration}
             </div>
             <div className="flex items-center gap-1.5 text-sm" title="Opening hours" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-              <CalendarClock size={12} />{locCopy.hours}: {openingHours}
+              <CalendarClock size={12} />{locCopy.hours}: {openingHoursLabel(openingHours)}
               {officialUrl && (
                 <a
                   href={officialUrl}
@@ -393,7 +511,7 @@ export function LocationPage({
               )}
             </div>
             <div className="flex items-center gap-1.5 text-sm" title="Best season to visit" style={{ color: "rgba(255,255,255,0.72)", fontFamily: F.body }}>
-              <Sun size={12} />{locCopy.bestSeason}: {loc.bestMonths}
+              <Sun size={12} />{locCopy.bestSeason}: {bestSeasonLabel(loc.bestMonths)}
             </div>
           </div>
         </div>
@@ -681,7 +799,7 @@ export function LocationPage({
                     <span className="text-5xl">{weather.current.icon}</span>
                     <div>
                       <p className="text-4xl font-bold" style={{ color: C.jungle, fontFamily: F.display }}>{weather.current.temp}°C</p>
-                      <p className="text-sm" style={{ color: C.textSub, fontFamily: F.body }}>{weather.current.condition}</p>
+                      <p className="text-sm" style={{ color: C.textSub, fontFamily: F.body }}>{weatherConditionLabel(weather.current.condition)}</p>
                       <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>{locCopy.feelsLike} {weather.current.feelsLike}°C</p>
                     </div>
                   </div>
@@ -718,13 +836,16 @@ export function LocationPage({
                     </p>
                   ) : (
                     <div className="space-y-3">
-                      {weather.alerts.map((a) => (
-                        <div key={a.id} className="p-3 rounded-xl border" style={{ borderColor: a.severity === "warning" ? "rgba(192,57,43,0.3)" : C.border, backgroundColor: a.severity === "warning" ? C.errorBg : C.muted }}>
-                          <p className="text-sm font-bold" style={{ color: a.severity === "warning" ? C.error : C.text, fontFamily: F.body }}>{a.title}</p>
-                          <p className="text-[12px] mt-1" style={{ color: C.textSub, fontFamily: F.body }}>{a.message}</p>
-                          <p className="text-[12px] mt-1 font-semibold" style={{ color: C.forest, fontFamily: F.body }}>→ {a.action}</p>
-                        </div>
-                      ))}
+                      {weather.alerts.map((a) => {
+                        const alertCopy = weatherAlertLabel(a);
+                        return (
+                          <div key={a.id} className="p-3 rounded-xl border" style={{ borderColor: a.severity === "warning" ? "rgba(192,57,43,0.3)" : C.border, backgroundColor: a.severity === "warning" ? C.errorBg : C.muted }}>
+                            <p className="text-sm font-bold" style={{ color: a.severity === "warning" ? C.error : C.text, fontFamily: F.body }}>{alertCopy.title}</p>
+                            <p className="text-[12px] mt-1" style={{ color: C.textSub, fontFamily: F.body }}>{alertCopy.message}</p>
+                            <p className="text-[12px] mt-1 font-semibold" style={{ color: C.forest, fontFamily: F.body }}>→ {alertCopy.action}</p>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -738,7 +859,7 @@ export function LocationPage({
                           <p className="text-[11px] font-bold" style={{ color: C.textMuted, fontFamily: F.body }}>{f.date}</p>
                           <p className="text-2xl my-1">{f.icon}</p>
                           <p className="text-sm font-bold" style={{ color: C.text, fontFamily: F.body }}>{f.high}° / {f.low}°</p>
-                          <p className="text-[11px]" style={{ color: C.textSub, fontFamily: F.body }}>{f.condition}</p>
+                          <p className="text-[11px]" style={{ color: C.textSub, fontFamily: F.body }}>{weatherConditionLabel(f.condition)}</p>
                           <p className="text-[10px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>{locCopy.rain} {f.precipChance}%</p>
                         </div>
                       ))}
@@ -753,7 +874,7 @@ export function LocationPage({
                       {weather.recommendations.map((r, i) => (
                         <li key={i} className="flex gap-2 text-sm" style={{ color: C.textSub, fontFamily: F.body }}>
                           <span>{r.icon}</span>
-                          <span>{r.text}</span>
+                          <span>{weatherRecommendationLabel(r.text)}</span>
                         </li>
                       ))}
                     </ul>
@@ -832,21 +953,23 @@ export function LocationPage({
                   {locCopy.officialWarning}
                 </p>
                 <h3 className="font-bold mt-1" style={{ color: C.error, fontFamily: F.body }}>
-                  {warning.heading_en || warning.warning_issue?.title_en || warning.heading_bm || "Weather warning"}
+                  {language === "ms"
+                    ? warning.heading_bm || warning.warning_issue?.title_bm || warning.heading_en || warning.warning_issue?.title_en || "Amaran cuaca"
+                    : warning.heading_en || warning.warning_issue?.title_en || warning.heading_bm || warning.warning_issue?.title_bm || (language === "zh" ? "天气警报" : "Weather warning")}
                 </h3>
                 {(warning.text_en || warning.text_bm) && (
                   <p className="text-sm mt-2" style={{ color: C.textSub, fontFamily: F.body }}>
-                    {warning.text_en || warning.text_bm}
+                    {language === "ms" ? warning.text_bm || warning.text_en : warning.text_en || warning.text_bm}
                   </p>
                 )}
                 {(warning.instruction_en || warning.instruction_bm) && (
                   <p className="text-sm font-bold mt-2" style={{ color: C.text, fontFamily: F.body }}>
-                    {warning.instruction_en || warning.instruction_bm}
+                    {language === "ms" ? warning.instruction_bm || warning.instruction_en : warning.instruction_en || warning.instruction_bm}
                   </p>
                 )}
                 {warning.valid_to && (
                   <p className="text-[11px] mt-3" style={{ color: C.textMuted, fontFamily: F.body }}>
-                    Valid until {new Date(warning.valid_to).toLocaleString("en-MY")}
+                    {language === "zh" ? "有效至" : language === "ms" ? "Sah sehingga" : "Valid until"} {new Date(warning.valid_to).toLocaleString("en-MY")}
                   </p>
                 )}
               </section>
