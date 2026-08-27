@@ -737,6 +737,7 @@ export default function App() {
           setPage={navigate}
           setSelectedLocation={selectLocation}
           locations={allLocations}
+          activityLogs={activityLogs}
           language={language}
           openWeather={openMapWeather}
           onWeatherOpened={() => setOpenMapWeather(false)}

@@ -14,7 +14,7 @@ import {
   Sun,
   X,
 } from "lucide-react";
-import type { Location, Page } from "../lib/types";
+import type { ActivityLog, Location, Page } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { ACTIVITY_FILTERS } from "../lib/constants";
 import { geocodeMapLocation } from "../lib/mapGeocoding";
@@ -206,6 +206,18 @@ function todayInputValue() {
   }).format(new Date());
 }
 
+function markerIcon(logged: boolean) {
+  const color = logged ? "#b45309" : "#2f80c0";
+  const border = logged ? "#78350f" : "#1b5f92";
+  return L.divIcon({
+    className: "",
+    html: `<span style="display:block;width:26px;height:26px;border-radius:50% 50% 50% 0;background:${color};border:3px solid ${border};box-shadow:0 8px 18px rgba(15,23,42,.3);transform:rotate(-45deg);"><span style="display:block;width:9px;height:9px;margin:5.5px;border-radius:50%;background:#fff;transform:rotate(45deg);"></span></span>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 26],
+    popupAnchor: [0, -24],
+  });
+}
+
 function currentMalaysiaWeatherTime() {
   const currentHour = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Kuala_Lumpur",
@@ -381,6 +393,7 @@ export function MapPage({
   setPage,
   setSelectedLocation,
   locations,
+  activityLogs = [],
   language = "en",
   openWeather = false,
   onWeatherOpened,
@@ -388,6 +401,7 @@ export function MapPage({
   setPage: (p: Page) => void;
   setSelectedLocation: (l: Location) => void;
   locations: Location[];
+  activityLogs?: ActivityLog[];
   language?: Language;
   openWeather?: boolean;
   onWeatherOpened?: () => void;
@@ -405,6 +419,27 @@ export function MapPage({
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [malaysiaBoundary, setMalaysiaBoundary] = useState<MalaysiaStateGeoJson | null>(null);
   const [showPlacePins, setShowPlacePins] = useState(true);
+
+  const loggedByLocation = useMemo(() => {
+    const map = new Map<string, ActivityLog>();
+    for (const log of activityLogs) {
+      const keys = [
+        log.locationId != null ? String(log.locationId) : "",
+        `${log.location}|${log.state}`.toLowerCase(),
+      ].filter(Boolean);
+      for (const key of keys) {
+        const existing = map.get(key);
+        if (!existing || log.date > existing.date) map.set(key, log);
+      }
+    }
+    return map;
+  }, [activityLogs]);
+
+  function loggedActivityFor(location: Location) {
+    return loggedByLocation.get(String(location.id))
+      || loggedByLocation.get(`${location.name}|${location.state}`.toLowerCase())
+      || null;
+  }
 
   useEffect(() => {
     if (!openWeather) return;
@@ -766,17 +801,42 @@ export function MapPage({
             {showPlacePins && visiblePoints.map(({ location, lat, lng, approximate }) => {
               const weather = weatherByPlace[String(location.id)];
               const facilities = visibleFacilities(location);
+              const loggedActivity = loggedActivityFor(location);
               return (
                 <Marker
                   key={String(location.id)}
                   position={[lat, lng]}
+                  icon={markerIcon(Boolean(loggedActivity))}
                 >
                   <Popup>
                     <div style={{ minWidth: 190, fontFamily: F.body }}>
                       <p style={{ fontWeight: 700, marginBottom: 4 }}>{location.name}</p>
+                      {loggedActivity && (
+                        <p style={{ fontSize: 11, color: "#92400e", marginBottom: 6, fontWeight: 700 }}>
+                          Logged on {loggedActivity.date}
+                        </p>
+                      )}
                       <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
                         Location - {location.state} - {activityLabel(language, location.activity)}
                       </p>
+                      {loggedActivity?.photoUrl && (
+                        <img
+                          src={loggedActivity.photoUrl}
+                          alt={`${location.name} logged activity`}
+                          style={{
+                            width: "100%",
+                            maxHeight: 120,
+                            objectFit: "cover",
+                            borderRadius: 10,
+                            marginBottom: 8,
+                          }}
+                        />
+                      )}
+                      {loggedActivity?.comment && (
+                        <p style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
+                          {loggedActivity.comment}
+                        </p>
+                      )}
                       {showWeather && (
                         <p
                           style={{
@@ -873,6 +933,14 @@ export function MapPage({
                   </span>
                 </div>
               ))}
+              <div className="mt-2 border-t pt-2" style={{ borderColor: C.border }}>
+                <div className="flex items-center gap-2 py-1">
+                  <span className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: "#b45309" }} />
+                  <span className="text-[11px] font-bold" style={{ color: C.textSub }}>
+                    Logged place
+                  </span>
+                </div>
+              </div>
             </div>
           )}
         </div>
