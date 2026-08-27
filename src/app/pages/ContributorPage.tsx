@@ -296,7 +296,7 @@ export function ContributorPage({
     setDetectedLocation(null);
     setMsg(null);
     try {
-      const found = await geocodeMapLocation({ name: locName.trim(), state: locState });
+      const found = await geocodeMapLocation({ name: locName.trim(), address: locAddress.trim(), state: locState });
       if (!found) { setMsg({type:"err",text:"Place not found. Check the name and state, then try again."}); return; }
       const address = (await reverseGeocodeLocation(found.lat, found.lng)) || found.label || `${locName.trim()}, ${locState}, Malaysia`;
       setDetectedLocation({ lat: found.lat, lng: found.lng, address });

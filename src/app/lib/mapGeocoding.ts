@@ -102,10 +102,11 @@ export async function geocodeMapLocation(location: {
   const state = location.state?.trim();
 
   const queries = [
-    address,
-    [name, address].filter(Boolean).join(", "),
-    [name, state, "Malaysia"].filter(Boolean).join(", "),
+    [name, address, state, "Malaysia"].filter(Boolean).join(", "),
     [address, state, "Malaysia"].filter(Boolean).join(", "),
+    address,
+    [name, state, "Malaysia"].filter(Boolean).join(", "),
+    [name, address].filter(Boolean).join(", "),
   ].filter((value): value is string => Boolean(value));
 
   for (const query of [...new Set(queries)]) {

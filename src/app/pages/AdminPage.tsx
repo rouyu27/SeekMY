@@ -279,7 +279,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     setFindingLocation(true);
     setDetectedLocation(null);
     try{
-      const found=await geocodeMapLocation({name:form.name.trim(),state:form.state});
+      const found=await geocodeMapLocation({name:form.name.trim(),address:form.address.trim(),state:form.state});
       if(!found){showToast("Place not found. Check the name and state, then try again.");return;}
       const address=(await reverseGeocodeLocation(found.lat,found.lng))||found.label||`${form.name.trim()}, ${form.state}, Malaysia`;
       setDetectedLocation({lat:found.lat,lng:found.lng,address});
