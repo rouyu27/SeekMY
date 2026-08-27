@@ -285,7 +285,7 @@ function keepOpenedPopupVisible(event: L.PopupEvent) {
 
     const popupRect = popupElement.getBoundingClientRect();
     const filterRect = filterElement.getBoundingClientRect();
-    const overlap = filterRect.bottom - popupRect.top + 10;
+    const overlap = filterRect.bottom - popupRect.top + 22;
     if (overlap > 0) {
       const currentShift = Number.parseFloat(popupElement.style.translate.split(" ")[1] || "0") || 0;
       popupElement.style.translate = `0 ${currentShift + overlap}px`;
@@ -293,10 +293,12 @@ function keepOpenedPopupVisible(event: L.PopupEvent) {
   };
 
   event.popup.getElement()?.style.setProperty("translate", "");
-  window.setTimeout(() => {
-    adjust();
-    window.requestAnimationFrame(adjust);
-  }, 0);
+  [0, 80, 180].forEach((delay) => {
+    window.setTimeout(() => {
+      adjust();
+      window.requestAnimationFrame(adjust);
+    }, delay);
+  });
 }
 
 function WeatherCanvasLayer({
@@ -656,7 +658,7 @@ export function MapPage({
   return (
     <div className="pt-14 min-h-screen" style={{ backgroundColor: C.cream }}>
       <div
-        className="px-5 py-5"
+        className="px-4 py-4 sm:px-5 sm:py-5"
         style={{ background: `linear-gradient(135deg, ${C.jungle} 0%, #0a2318 100%)` }}
       >
         <div className="max-w-5xl mx-auto flex items-center gap-3">
@@ -674,13 +676,13 @@ export function MapPage({
       </div>
 
       <div data-map-filter-bar className="bg-white border-b sticky top-14 z-[1100]" style={{ borderColor: C.border }}>
-        <div className="max-w-5xl mx-auto px-5 py-3 space-y-2">
+        <div className="max-w-5xl mx-auto px-3 py-2 space-y-2 sm:px-5 sm:py-3">
           <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {ACTIVITY_FILTERS.map(({ id, label, icon }) => (
               <button
                 key={id}
                 onClick={() => setActivity(id)}
-                className="px-3.5 h-9 rounded-full text-[12px] font-bold whitespace-nowrap"
+                className="h-8 shrink-0 rounded-full px-3 text-[11px] font-bold whitespace-nowrap sm:h-9 sm:px-3.5 sm:text-[12px]"
                 style={{
                   backgroundColor: activity === id ? C.jungle : C.muted,
                   color: activity === id ? "#fff" : C.textSub,
@@ -692,13 +694,13 @@ export function MapPage({
             ))}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter size={14} style={{ color: C.textMuted }} />
+          <div className="flex items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+            <Filter size={14} className="shrink-0" style={{ color: C.textMuted }} />
             {(["All", "Easy", "Moderate", "Hard"] as const).map((level) => (
               <button
                 key={level}
                 onClick={() => setDifficulty(level)}
-                className="px-3 h-8 rounded-full text-[11px] font-bold"
+                className="h-8 shrink-0 rounded-full px-3 text-[11px] font-bold"
                 style={{
                   backgroundColor: difficulty === level ? C.forest : C.muted,
                   color: difficulty === level ? "#fff" : C.textSub,
@@ -715,7 +717,7 @@ export function MapPage({
                   setActivity("all");
                   setDifficulty("All");
                 }}
-                className="flex items-center gap-1 text-[11px] font-bold ml-auto"
+                className="ml-auto flex shrink-0 items-center gap-1 text-[11px] font-bold"
                 style={{ color: C.error, fontFamily: F.body }}
               >
                 <X size={12} /> {t(language, "clear")}
@@ -723,7 +725,7 @@ export function MapPage({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t pt-2" style={{ borderColor: C.border }}>
+          <div className="flex items-center gap-2 overflow-x-auto border-t pt-2" style={{ borderColor: C.border, scrollbarWidth: "none" }}>
             <button
               type="button"
               onClick={() => {
@@ -735,7 +737,7 @@ export function MapPage({
                 setWeatherTime(currentMalaysiaWeatherTime());
                 setShowWeather(true);
               }}
-              className="h-9 px-3.5 rounded-full text-[12px] font-bold inline-flex items-center gap-2"
+              className="inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3.5 text-[12px] font-bold"
               style={{
                 backgroundColor: showWeather ? C.forest : C.muted,
                 color: showWeather ? "#fff" : C.textSub,
@@ -748,22 +750,22 @@ export function MapPage({
 
             {showWeather && (
               <>
-                <label className="text-[11px] font-bold flex items-center gap-1" style={{ color: C.textSub, fontFamily: F.body }}>
+                <label className="flex shrink-0 items-center gap-1 text-[11px] font-bold" style={{ color: C.textSub, fontFamily: F.body }}>
                   {wt(language, "date")}
                   <input
                     type="date"
                     value={weatherDate}
                     onChange={(event) => setWeatherDate(event.target.value)}
-                    className="h-9 rounded-full border px-3 text-[12px]"
+                    className="h-9 w-[138px] rounded-full border px-3 text-[12px]"
                     style={{ borderColor: C.border, color: C.text }}
                   />
                 </label>
-                <label className="text-[11px] font-bold flex items-center gap-1" style={{ color: C.textSub, fontFamily: F.body }}>
+                <label className="flex shrink-0 items-center gap-1 text-[11px] font-bold" style={{ color: C.textSub, fontFamily: F.body }}>
                   {wt(language, "time")}
                   <select
                     value={weatherTime}
                     onChange={(event) => setWeatherTime(event.target.value)}
-                    className="h-9 rounded-full border px-3 text-[12px]"
+                    className="h-9 w-[96px] rounded-full border px-3 text-[12px]"
                     style={{ borderColor: C.border, color: C.text }}
                   >
                     {Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`).map((time) => (
@@ -781,7 +783,7 @@ export function MapPage({
                       key={kind}
                       type="button"
                       onClick={() => setWeatherFilter(kind)}
-                      className="h-8 px-3 rounded-full text-[11px] font-bold inline-flex items-center gap-1.5"
+                      className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-bold"
                       style={{
                         backgroundColor: active ? colors?.bg ?? C.forest : "#fff",
                         color: active ? colors?.text ?? "#fff" : C.textSub,
@@ -810,7 +812,7 @@ export function MapPage({
           </p>
         </div>
       ) : (
-        <div className="relative z-0" style={{ height: "calc(100vh - 240px)" }}>
+        <div className="relative z-0 min-h-[420px] h-[calc(100dvh-230px)] sm:h-[calc(100vh-240px)]">
           <MapContainer
             center={MALAYSIA_CENTER}
             zoom={6}
@@ -844,8 +846,8 @@ export function MapPage({
                   icon={markerIcon(Boolean(loggedActivity))}
                   eventHandlers={{ popupopen: keepOpenedPopupVisible }}
                 >
-                  <Popup maxHeight={360}>
-                    <div style={{ minWidth: 190, fontFamily: F.body }}>
+                  <Popup maxHeight={320} maxWidth={280}>
+                    <div style={{ minWidth: 190, maxWidth: "min(280px, 78vw)", fontFamily: F.body }}>
                       <p style={{ fontWeight: 700, marginBottom: 4 }}>{location.name}</p>
                       {loggedActivity && (
                         <p style={{ fontSize: 11, color: "#92400e", marginBottom: 6, fontWeight: 700 }}>
@@ -919,7 +921,7 @@ export function MapPage({
           </MapContainer>
           {weatherNoDataMessage && (
             <div
-              className="absolute left-1/2 top-4 z-[500] w-[min(92vw,520px)] -translate-x-1/2 rounded-lg border bg-white/95 px-4 py-3 text-sm font-bold shadow-xl"
+              className="absolute left-1/2 top-3 z-[500] w-[min(92vw,520px)] -translate-x-1/2 rounded-lg border bg-white/95 px-3 py-2 text-xs font-bold shadow-xl sm:top-4 sm:px-4 sm:py-3 sm:text-sm"
               style={{ borderColor: C.border, color: C.textSub, fontFamily: F.body }}
             >
               {weatherNoDataMessage}
@@ -927,7 +929,7 @@ export function MapPage({
           )}
           {showWeather && (
             <div
-              className="absolute bottom-4 right-4 z-[500] rounded-lg border bg-white/95 p-3 shadow-xl"
+              className="absolute bottom-3 right-3 z-[500] max-w-[calc(100vw-1.5rem)] rounded-lg border bg-white/95 p-3 shadow-xl sm:bottom-4 sm:right-4"
               style={{ borderColor: C.border, fontFamily: F.body }}
             >
               <button
