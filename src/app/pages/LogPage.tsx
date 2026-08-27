@@ -1,6 +1,6 @@
 //==================== FongXinTong Part - Activity Log Module ====================
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search, Star, ExternalLink, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search, Star, ExternalLink, ChevronLeft, ChevronRight, CalendarDays, X } from "lucide-react";
 import type { ActivityLog, Location, AppUser } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
@@ -51,6 +51,15 @@ function isoDateFromUtc(date: Date) {
 function mondayForMalaysiaDate(date = new Date()) {
   const parts = malaysiaDateParts(date);
   const dateUtc = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12));
+  const mondayOffset = (dateUtc.getUTCDay() + 6) % 7;
+  const monday = new Date(dateUtc);
+  monday.setUTCDate(dateUtc.getUTCDate() - mondayOffset);
+  return isoDateFromUtc(monday);
+}
+
+function mondayForIsoDate(isoDate: string) {
+  const dateUtc = new Date(`${isoDate}T12:00:00Z`);
+  if (Number.isNaN(dateUtc.getTime())) return mondayForMalaysiaDate();
   const mondayOffset = (dateUtc.getUTCDay() + 6) % 7;
   const monday = new Date(dateUtc);
   monday.setUTCDate(dateUtc.getUTCDate() - mondayOffset);
@@ -408,7 +417,19 @@ export function LogPage({
                   {selectedWeek.start} to {selectedWeek.end} · {selectedWeekLogs.length} {t(language, "activities")} · {selectedWeekKm.toFixed(1)} km
                 </p>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                <label className="relative flex h-8 items-center rounded-full border bg-white pl-8 pr-3" style={{ borderColor: C.border, color: C.forest }}>
+                  <CalendarDays size={13} className="absolute left-3" />
+                  <input
+                    type="date"
+                    value={selectedWeekStart}
+                    max={currentWeekStart}
+                    onChange={(event) => setSelectedWeekStart(mondayForIsoDate(event.target.value))}
+                    className="w-[7.3rem] bg-transparent text-[11px] font-bold outline-none"
+                    style={{ color: C.forest, fontFamily: F.body }}
+                    aria-label="Choose week"
+                  />
+                </label>
                 <button
                   type="button"
                   onClick={() => setSelectedWeekStart((week) => shiftWeek(week, -1))}
