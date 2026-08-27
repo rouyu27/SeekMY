@@ -81,7 +81,8 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.read == false
         && request.resource.data.keys().hasOnly([
-          'userId','title','message','type','relatedPage','submissionId','read','dismissed','createdAt','created_by_id','created_date','updated_date'
+          'userId','title','message','type','relatedPage','submissionId','read','dismissed','createdAt',
+          'created_by','created_by_id','created_date','updated_date','server_created_at'
         ]));
       allow delete: if isAdmin();
       allow update: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read','dismissed','updated_date']));
