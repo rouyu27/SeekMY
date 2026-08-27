@@ -651,7 +651,7 @@ export function MapPage({
         </div>
       </div>
 
-      <div className="bg-white border-b sticky top-14 z-20" style={{ borderColor: C.border }}>
+      <div className="bg-white border-b sticky top-14 z-[1100]" style={{ borderColor: C.border }}>
         <div className="max-w-5xl mx-auto px-5 py-3 space-y-2">
           <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {ACTIVITY_FILTERS.map(({ id, label, icon }) => (
@@ -821,7 +821,7 @@ export function MapPage({
                   position={[lat, lng]}
                   icon={markerIcon(Boolean(loggedActivity))}
                 >
-                  <Popup>
+                  <Popup maxHeight={360}>
                     <div style={{ minWidth: 190, fontFamily: F.body }}>
                       <p style={{ fontWeight: 700, marginBottom: 4 }}>{location.name}</p>
                       {loggedActivity && (
@@ -832,19 +832,6 @@ export function MapPage({
                       <p style={{ fontSize: 12, color: "#666", marginBottom: 6 }}>
                         Location - {location.state} - {activityLabel(language, location.activity)}
                       </p>
-                      {loggedActivity?.photoUrl && (
-                        <img
-                          src={loggedActivity.photoUrl}
-                          alt={`${location.name} logged activity`}
-                          style={{
-                            width: "100%",
-                            maxHeight: 120,
-                            objectFit: "cover",
-                            borderRadius: 10,
-                            marginBottom: 8,
-                          }}
-                        />
-                      )}
                       {loggedActivity?.comment && (
                         <p style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
                           {loggedActivity.comment}
