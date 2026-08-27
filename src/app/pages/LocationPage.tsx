@@ -134,12 +134,12 @@ export function LocationPage({
       })
       .catch(() => {
         if (!cancelled) {
-          setWeatherError("Weather data temporarily unavailable. Please try again later.");
+          setWeatherError(language === "zh" ? "天气资料暂时无法使用，请稍后再试。" : language === "ms" ? "Data cuaca tidak tersedia buat sementara waktu. Sila cuba lagi kemudian." : "Weather data temporarily unavailable. Please try again later.");
           setWeatherLoading(false);
         }
       });
     return () => { cancelled = true; };
-  }, [loc?.id, loc?.name, loc?.state, loc?.lat, loc?.lng, loc?.latitude, loc?.longitude]);
+  }, [loc?.id, loc?.name, loc?.state, loc?.lat, loc?.lng, loc?.latitude, loc?.longitude, language]);
 
   // Official state-level forecast and warnings from MET Malaysia/data.gov.my.
   useEffect(() => {
@@ -276,6 +276,40 @@ export function LocationPage({
     save: language === "zh" ? "收藏" : language === "ms" ? "Simpan" : "Save",
     saved: language === "zh" ? "已收藏" : language === "ms" ? "Disimpan" : "Saved",
     getDirections: t(language, "getDirections"),
+    loadingWeather: language === "zh" ? "正在加载天气..." : language === "ms" ? "Memuatkan cuaca..." : "Loading weather...",
+    retry: language === "zh" ? "重试" : language === "ms" ? "Cuba lagi" : "Retry",
+    currentConditions: language === "zh" ? "当前天气状况" : language === "ms" ? "Keadaan semasa" : "Current conditions",
+    feelsLike: language === "zh" ? "体感温度" : language === "ms" ? "Terasa seperti" : "Feels like",
+    humidity: language === "zh" ? "湿度" : language === "ms" ? "Kelembapan" : "Humidity",
+    wind: language === "zh" ? "风速" : language === "ms" ? "Angin" : "Wind",
+    uvIndex: language === "zh" ? "紫外线指数" : language === "ms" ? "Indeks UV" : "UV index",
+    advisory: language === "zh" ? "出行建议" : language === "ms" ? "Nasihat" : "Advisory",
+    notAvailable: language === "zh" ? "暂无资料" : language === "ms" ? "Tidak tersedia" : "Not available",
+    goodToGo: language === "zh" ? "适合出行" : language === "ms" ? "Sesuai pergi" : "Good to Go",
+    checkBeforeGo: language === "zh" ? "出发前请检查" : language === "ms" ? "Semak sebelum pergi" : "Check Before You Go",
+    hideForecast: language === "zh" ? "隐藏预报" : language === "ms" ? "Sembunyikan ramalan" : "Hide forecast",
+    viewForecast: language === "zh" ? "查看预报" : language === "ms" ? "Lihat ramalan" : "View Forecast",
+    hideRecommendations: language === "zh" ? "隐藏建议" : language === "ms" ? "Sembunyikan cadangan" : "Hide recommendations",
+    getRecommendations: language === "zh" ? "获取建议" : language === "ms" ? "Dapatkan cadangan" : "Get Recommendations",
+    weatherAlerts: language === "zh" ? "天气警报" : language === "ms" ? "Amaran cuaca" : "Weather alerts",
+    noWeatherAlerts: language === "zh" ? "此地点暂无严重天气警报。祝你户外活动愉快！" : language === "ms" ? "Tiada amaran cuaca buruk untuk lokasi ini. Selamat beraktiviti!" : "No severe weather alerts for this location. Enjoy your outdoor activity!",
+    next3Days: language === "zh" ? "未来 3 天" : language === "ms" ? "3 hari seterusnya" : "Next 3 days",
+    rain: language === "zh" ? "降雨" : language === "ms" ? "Hujan" : "Rain",
+    weatherRecommendations: language === "zh" ? "基于天气的建议" : language === "ms" ? "Cadangan berdasarkan cuaca" : "Weather-based recommendations",
+    metForecast: language === "zh" ? "马来西亚气象局官方预报" : language === "ms" ? "Ramalan rasmi MET Malaysia" : "Official MET Malaysia forecast",
+    metForecastNote: language === "zh" ? ` ${loc.state} 州的一般天气预报 · 每日更新` : language === "ms" ? `Ramalan umum negeri untuk ${loc.state} · dikemas kini setiap hari` : `General state forecast for ${loc.state} · updated daily`,
+    officialSource: language === "zh" ? "官方来源" : language === "ms" ? "Sumber rasmi" : "Official source",
+    loadingOfficialForecast: language === "zh" ? "正在加载官方预报..." : language === "ms" ? "Memuatkan ramalan rasmi..." : "Loading official forecast...",
+    noStateForecast: language === "zh" ? `${loc.state} 暂无州级天气预报。` : language === "ms" ? `Ramalan peringkat negeri belum tersedia untuk ${loc.state}.` : `No state-level forecast is currently available for ${loc.state}.`,
+    morning: language === "zh" ? "早上" : language === "ms" ? "Pagi" : "Morning",
+    afternoon: language === "zh" ? "下午" : language === "ms" ? "Petang" : "Afternoon",
+    night: language === "zh" ? "晚上" : language === "ms" ? "Malam" : "Night",
+    officialWarning: language === "zh" ? "马来西亚气象局官方警报" : language === "ms" ? "Amaran rasmi MET Malaysia" : "Official MET Malaysia warning",
+  };
+  const weatherAdvisoryLabel = (value: string) => {
+    if (value === "Good to Go") return locCopy.goodToGo;
+    if (value === "Check Before You Go") return locCopy.checkBeforeGo;
+    return value;
   };
   const locationImages = (Array.isArray(loc.image_urls) && loc.image_urls.length ? loc.image_urls : (loc.image_url ? [loc.image_url] : [])).filter(Boolean);
   const activeImage = locationImages[Math.min(activeLocationImage, Math.max(locationImages.length - 1, 0))];
@@ -608,7 +642,7 @@ export function LocationPage({
           <div className="space-y-4">
             {weatherLoading && (
               <div className="bg-white rounded-[18px] p-8 text-center" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10)` }}>
-                <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>Loading weather…</p>
+                <p className="text-sm" style={{ color: C.textMuted, fontFamily: F.body }}>{locCopy.loadingWeather}</p>
               </div>
             )}
             {weatherError && !weatherLoading && (
@@ -628,13 +662,13 @@ export function LocationPage({
                         fetchWeather(loc.name, loc.state, Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : undefined)
                         .then((d) => { setWeather(d); setWeatherLoading(false); })
                         .catch(() => {
-                          setWeatherError("Weather data temporarily unavailable. Please try again later.");
+                          setWeatherError(language === "zh" ? "天气资料暂时无法使用，请稍后再试。" : language === "ms" ? "Data cuaca tidak tersedia buat sementara waktu. Sila cuba lagi kemudian." : "Weather data temporarily unavailable. Please try again later.");
                           setWeatherLoading(false);
                         });
                       }
                     }}
                   >
-                    Retry
+                    {locCopy.retry}
                   </button>
                 )}
               </div>
@@ -642,21 +676,21 @@ export function LocationPage({
             {weather && !weatherLoading && (
               <>
                 <div className="bg-white rounded-[18px] p-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-                  <h2 className="font-bold mb-5 text-base" style={{ fontFamily: F.body, color: C.text }}>Current conditions</h2>
+                  <h2 className="font-bold mb-5 text-base" style={{ fontFamily: F.body, color: C.text }}>{locCopy.currentConditions}</h2>
                   <div className="flex items-center gap-5 mb-6">
                     <span className="text-5xl">{weather.current.icon}</span>
                     <div>
                       <p className="text-4xl font-bold" style={{ color: C.jungle, fontFamily: F.display }}>{weather.current.temp}°C</p>
                       <p className="text-sm" style={{ color: C.textSub, fontFamily: F.body }}>{weather.current.condition}</p>
-                      <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>Feels like {weather.current.feelsLike}°C</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>{locCopy.feelsLike} {weather.current.feelsLike}°C</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                     {[
-                      { icon: <Droplets size={16} style={{ color: C.forest }} />, label: "Humidity", val: `${weather.current.humidity}%` },
-                      { icon: <Wind size={16} style={{ color: C.forest }} />, label: "Wind", val: `${weather.current.wind} km/h` },
-                      { icon: <Sun size={16} style={{ color: C.forest }} />, label: "UV index", val: weather.current.uv === null ? "Not available" : String(weather.current.uv) },
-                      { icon: <AlertTriangle size={16} style={{ color: weather.current.advisory === "Good to Go" ? C.forest : "#92400e" }} />, label: "Advisory", val: weather.current.advisory },
+                      { icon: <Droplets size={16} style={{ color: C.forest }} />, label: locCopy.humidity, val: `${weather.current.humidity}%` },
+                      { icon: <Wind size={16} style={{ color: C.forest }} />, label: locCopy.wind, val: `${weather.current.wind} km/h` },
+                      { icon: <Sun size={16} style={{ color: C.forest }} />, label: locCopy.uvIndex, val: weather.current.uv === null ? locCopy.notAvailable : String(weather.current.uv) },
+                      { icon: <AlertTriangle size={16} style={{ color: weather.current.advisory === "Good to Go" ? C.forest : "#92400e" }} />, label: locCopy.advisory, val: weatherAdvisoryLabel(weather.current.advisory) },
                     ].map(({ icon, label, val }) => (
                       <div key={label} className="text-center p-3 rounded-xl" style={{ backgroundColor: C.muted }}>
                         <div className="flex justify-center mb-1">{icon}</div>
@@ -667,20 +701,20 @@ export function LocationPage({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Pill variant="outline" small onClick={() => setShowForecast((v) => !v)}>
-                      {showForecast ? "Hide forecast" : "View Forecast"}
+                      {showForecast ? locCopy.hideForecast : locCopy.viewForecast}
                     </Pill>
                     <Pill variant="outline" small onClick={() => setShowRecs((v) => !v)}>
-                      {showRecs ? "Hide recommendations" : "Get Recommendations"}
+                      {showRecs ? locCopy.hideRecommendations : locCopy.getRecommendations}
                     </Pill>
                   </div>
                 </div>
 
                 {/* Alerts 2.2.1.3 */}
                 <div className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10)` }}>
-                  <h3 className="font-bold text-sm mb-3" style={{ fontFamily: F.body, color: C.text }}>Weather alerts</h3>
+                  <h3 className="font-bold text-sm mb-3" style={{ fontFamily: F.body, color: C.text }}>{locCopy.weatherAlerts}</h3>
                   {weather.alerts.length === 0 ? (
                     <p className="text-sm" style={{ color: C.success, fontFamily: F.body }}>
-                      No severe weather alerts for this location. Enjoy your outdoor activity!
+                      {locCopy.noWeatherAlerts}
                     </p>
                   ) : (
                     <div className="space-y-3">
@@ -697,7 +731,7 @@ export function LocationPage({
 
                 {showForecast && (
                   <div className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10)` }}>
-                    <h3 className="font-bold text-sm mb-3" style={{ fontFamily: F.body, color: C.text }}>Next 3 days</h3>
+                    <h3 className="font-bold text-sm mb-3" style={{ fontFamily: F.body, color: C.text }}>{locCopy.next3Days}</h3>
                     <div className="grid grid-cols-3 gap-3">
                       {weather.forecast.map((f) => (
                         <div key={f.date} className="text-center p-3 rounded-xl" style={{ backgroundColor: C.muted }}>
@@ -705,7 +739,7 @@ export function LocationPage({
                           <p className="text-2xl my-1">{f.icon}</p>
                           <p className="text-sm font-bold" style={{ color: C.text, fontFamily: F.body }}>{f.high}° / {f.low}°</p>
                           <p className="text-[11px]" style={{ color: C.textSub, fontFamily: F.body }}>{f.condition}</p>
-                          <p className="text-[10px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>Rain {f.precipChance}%</p>
+                          <p className="text-[10px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>{locCopy.rain} {f.precipChance}%</p>
                         </div>
                       ))}
                     </div>
@@ -714,7 +748,7 @@ export function LocationPage({
 
                 {showRecs && (
                   <div className="bg-white rounded-[18px] p-5" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10)` }}>
-                    <h3 className="font-bold text-sm mb-3" style={{ fontFamily: F.body, color: C.text }}>Weather-based recommendations</h3>
+                    <h3 className="font-bold text-sm mb-3" style={{ fontFamily: F.body, color: C.text }}>{locCopy.weatherRecommendations}</h3>
                     <ul className="space-y-2">
                       {weather.recommendations.map((r, i) => (
                         <li key={i} className="flex gap-2 text-sm" style={{ color: C.textSub, fontFamily: F.body }}>
@@ -732,10 +766,10 @@ export function LocationPage({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-sm" style={{ color: C.text, fontFamily: F.body }}>
-                    Official MET Malaysia forecast
+                    {locCopy.metForecast}
                   </h3>
                   <p className="text-[11px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
-                    General state forecast for {loc.state} · updated daily
+                    {locCopy.metForecastNote}
                   </p>
                 </div>
                 <a
@@ -745,13 +779,13 @@ export function LocationPage({
                   className="text-[11px] font-bold whitespace-nowrap"
                   style={{ color: C.forest, fontFamily: F.body }}
                 >
-                  Official source ↗
+                  {locCopy.officialSource} ↗
                 </a>
               </div>
 
               {metLoading && (
                 <p className="text-sm mt-4" style={{ color: C.textMuted, fontFamily: F.body }}>
-                  Loading official forecast…
+                  {locCopy.loadingOfficialForecast}
                 </p>
               )}
               {metError && !metLoading && (
@@ -761,7 +795,7 @@ export function LocationPage({
               )}
               {!metLoading && !metError && metForecast.length === 0 && (
                 <p className="text-sm mt-4" style={{ color: C.textMuted, fontFamily: F.body }}>
-                  No state-level forecast is currently available for {loc.state}.
+                  {locCopy.noStateForecast}
                 </p>
               )}
               {!metLoading && !metError && metForecast.length > 0 && (
@@ -778,9 +812,9 @@ export function LocationPage({
                         {day.min_temp}°C – {day.max_temp}°C
                       </p>
                       <div className="text-[11px] mt-3 space-y-1" style={{ color: C.textSub, fontFamily: F.body }}>
-                        <p>Morning: {day.morning_forecast}</p>
-                        <p>Afternoon: {day.afternoon_forecast}</p>
-                        <p>Night: {day.night_forecast}</p>
+                        <p>{locCopy.morning}: {day.morning_forecast}</p>
+                        <p>{locCopy.afternoon}: {day.afternoon_forecast}</p>
+                        <p>{locCopy.night}: {day.night_forecast}</p>
                       </div>
                     </article>
                   ))}
@@ -795,7 +829,7 @@ export function LocationPage({
                 style={{ borderColor: "rgba(192,57,43,0.3)", backgroundColor: C.errorBg }}
               >
                 <p className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.error, fontFamily: F.body }}>
-                  Official MET Malaysia warning
+                  {locCopy.officialWarning}
                 </p>
                 <h3 className="font-bold mt-1" style={{ color: C.error, fontFamily: F.body }}>
                   {warning.heading_en || warning.warning_issue?.title_en || warning.heading_bm || "Weather warning"}
