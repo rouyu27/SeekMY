@@ -277,6 +277,28 @@ function FitVisibleMarkers({ points }: { points: MapPoint[] }) {
   return null;
 }
 
+function keepOpenedPopupVisible(event: L.PopupEvent) {
+  const adjust = () => {
+    const popupElement = event.popup.getElement();
+    const filterElement = document.querySelector("[data-map-filter-bar]");
+    if (!popupElement || !filterElement) return;
+
+    const popupRect = popupElement.getBoundingClientRect();
+    const filterRect = filterElement.getBoundingClientRect();
+    const overlap = filterRect.bottom - popupRect.top + 10;
+    if (overlap > 0) {
+      const currentShift = Number.parseFloat(popupElement.style.translate.split(" ")[1] || "0") || 0;
+      popupElement.style.translate = `0 ${currentShift + overlap}px`;
+    }
+  };
+
+  event.popup.getElement()?.style.setProperty("translate", "");
+  window.setTimeout(() => {
+    adjust();
+    window.requestAnimationFrame(adjust);
+  }, 0);
+}
+
 function WeatherCanvasLayer({
   boundary,
   points,
@@ -651,7 +673,7 @@ export function MapPage({
         </div>
       </div>
 
-      <div className="bg-white border-b sticky top-14 z-[1100]" style={{ borderColor: C.border }}>
+      <div data-map-filter-bar className="bg-white border-b sticky top-14 z-[1100]" style={{ borderColor: C.border }}>
         <div className="max-w-5xl mx-auto px-5 py-3 space-y-2">
           <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
             {ACTIVITY_FILTERS.map(({ id, label, icon }) => (
@@ -820,6 +842,7 @@ export function MapPage({
                   key={String(location.id)}
                   position={[lat, lng]}
                   icon={markerIcon(Boolean(loggedActivity))}
+                  eventHandlers={{ popupopen: keepOpenedPopupVisible }}
                 >
                   <Popup maxHeight={360}>
                     <div style={{ minWidth: 190, fontFamily: F.body }}>
