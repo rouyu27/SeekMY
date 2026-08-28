@@ -60,7 +60,7 @@ function isPage(value: unknown): value is Page {
 function appUrlFor(page: Page, locationId?: string) {
   if (page === "home") return "/";
   if (page === "location" && locationId) return `/location/${encodeURIComponent(locationId)}`;
-  return `/?page=${encodeURIComponent(page)}`;
+  return "/";
 }
 
 function dedupeBookmarkEntries(entries: BookmarkEntry[]): BookmarkEntry[] {
@@ -142,7 +142,11 @@ function normalizeBookmarkRows(rows: any[], personalFolders: PersonalBookmarkFol
 }
 
 export default function App() {
-  const [page, setPage]               = useState<Page>(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("page") === "bookmarks" ? "bookmarks" : "home");
+  const [page, setPage]               = useState<Page>(() => {
+    if (typeof window === "undefined") return "home";
+    const requestedPage = new URLSearchParams(window.location.search).get("page");
+    return isPage(requestedPage) && requestedPage !== "location" ? requestedPage : "home";
+  });
   const [prevPage, setPrevPage]       = useState<Page>("home");
   const [mobileOpen, setMobileOpen]   = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<Location|null>(null);
@@ -730,7 +734,7 @@ export default function App() {
           user={user}
           personalFolderNames={personalFolders.map((folder) => folder.name)}
           onSignIn={() => setShowAuth(true)}
-          onOpenBookmarks={() => { window.location.href = "/?page=bookmarks"; }}
+          onOpenBookmarks={() => navigate("bookmarks")}
         />
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onLogin={handleLogin} language={language}/>}
         {toast && (
