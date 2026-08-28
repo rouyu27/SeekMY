@@ -1,128 +1,49 @@
+// FILE PRIMARY OWNER: FONG XIN TONG | Activity Log Module
+// GitHub target: feature/fong-xin-tong -> Pull Request -> main
 //==================== FongXinTong Part - Activity Log Module ====================
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare, Trash2, Search, Star, ExternalLink, ChevronLeft, ChevronRight, CalendarDays, X } from "lucide-react";
-import type { ActivityLog, Location, AppUser } from "../lib/types";
+import { useMemo, useState } from "react";
+import { Plus, Activity, MapPin, TrendingUp, Upload, Image as ImageIcon, MessageSquare } from "lucide-react";
+import type { ActivityLog, Location, MockUser } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { Pill } from "../components/Atoms";
 import { ALL_STATES, ACTIVITY_FILTERS } from "../lib/constants";
 import { firebaseClient } from "../api/firebaseClient";
-import type { Language } from "../lib/i18n";
-import { activityLabel, t } from "../lib/i18n";
+import { geocodeMapLocation } from "../lib/mapGeocoding";
+import { distanceKm, getCurrentPosition } from "../lib/geo";
 
-const MAX_PHOTO_BYTES = 1 * 1024 * 1024;
-const HOUR_OPTIONS = Array.from({ length: 13 }, (_, index) => index);
-const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, index) => index * 5);
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
-function parseDuration(value = "") {
-  const hourMatch = value.match(/(\d+)\s*h/i);
-  const minuteMatch = value.match(/(\d+)\s*m/i);
-  return {
-    hours: hourMatch ? hourMatch[1] : "",
-    minutes: minuteMatch ? minuteMatch[1] : "",
-  };
-}
-
-function formatDuration(hours: string, minutes: string) {
-  const h = Number(hours || 0);
-  const m = Number(minutes || 0);
-  if (!h && !m) return "";
-  return `${h ? `${h}h` : ""}${h && m ? " " : ""}${m ? `${m}m` : ""}`;
-}
-
-function malaysiaDateParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kuala_Lumpur",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const value = (type: string) => Number(parts.find((part) => part.type === type)?.value || 0);
-  return {
-    year: value("year"),
-    month: value("month"),
-    day: value("day"),
-  };
-}
-
-function isoDateFromUtc(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function mondayForMalaysiaDate(date = new Date()) {
-  const parts = malaysiaDateParts(date);
-  const dateUtc = new Date(Date.UTC(parts.year, parts.month - 1, parts.day, 12));
-  const mondayOffset = (dateUtc.getUTCDay() + 6) % 7;
-  const monday = new Date(dateUtc);
-  monday.setUTCDate(dateUtc.getUTCDate() - mondayOffset);
-  return isoDateFromUtc(monday);
-}
-
-function mondayForIsoDate(isoDate: string) {
-  const dateUtc = new Date(`${isoDate}T12:00:00Z`);
-  if (Number.isNaN(dateUtc.getTime())) return mondayForMalaysiaDate();
-  const mondayOffset = (dateUtc.getUTCDay() + 6) % 7;
-  const monday = new Date(dateUtc);
-  monday.setUTCDate(dateUtc.getUTCDate() - mondayOffset);
-  return isoDateFromUtc(monday);
-}
-
-function weekRangeFromMonday(mondayIso: string) {
-  const monday = new Date(`${mondayIso}T12:00:00Z`);
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-  return {
-    start: isoDateFromUtc(monday),
-    end: isoDateFromUtc(sunday),
-  };
-}
-
-function shiftWeek(mondayIso: string, weeks: number) {
-  const monday = new Date(`${mondayIso}T12:00:00Z`);
-  monday.setUTCDate(monday.getUTCDate() + weeks * 7);
-  return isoDateFromUtc(monday);
-}
+// How far (km) a device's GPS is allowed to be from a location and still
+// count as "there." Loose on purpose — GPS drifts under forest canopy, some
+// trails/parks genuinely span a couple of km, and the location's coordinates
+// themselves come from live geocoding (not a surveyed point), which has its
+// own margin of error. Tight enough to reject "logged from home."
+const MAX_CHECKIN_DISTANCE_KM = 2;
 
 export function LogPage({
   user,
   logs,
   locations,
-  initialLocation,
-  onInitialLocationUsed,
   onAddLog,
-  onUpdateLog,
-  onDeleteLog,
-  onOpenLocation,
   onSignIn,
-  language = "en",
 }: {
-  user: AppUser | null;
+  user: MockUser | null;
   logs: ActivityLog[];
   locations: Location[];
-  initialLocation?: Location | null;
-  onInitialLocationUsed?: () => void;
-  onAddLog: (l: Omit<ActivityLog, "id">) => Promise<void>;
-  onUpdateLog: (id: string | number, l: Partial<Omit<ActivityLog, "id">>) => Promise<void>;
-  onDeleteLog: (id: string | number) => Promise<void>;
-  onOpenLocation?: (log: ActivityLog, tab?: "overview" | "reviews") => void;
+  onAddLog: (l: Omit<ActivityLog, "id">) => void;
   onSignIn: () => void;
-  language?: Language;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [formError, setFormError] = useState("");
-  const [locationSearch, setLocationSearch] = useState("");
-  const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; alt: string } | null>(null);
-  const [editingId, setEditingId] = useState<string | number | null>(null);
-  const currentWeekStart = useMemo(() => mondayForMalaysiaDate(), []);
-  const [selectedWeekStart, setSelectedWeekStart] = useState(currentWeekStart);
   const [form, setForm] = useState({
     locationId: "",
     state: "All",
     activity: "All",
     distance: "",
-    durationHours: "",
-    durationMinutes: "",
+    duration: "",
     date: new Date().toISOString().split("T")[0],
     notes: "",
     comment: "",
@@ -142,81 +63,38 @@ export function LogPage({
         .filter((location) => {
           if (form.state !== "All" && location.state !== form.state) return false;
           if (form.activity !== "All" && location.activity !== form.activity) return false;
-          const term = locationSearch.trim().toLowerCase();
-          if (term && !`${location.name} ${location.state} ${location.activity} ${location.address || ""}`.toLowerCase().includes(term)) return false;
           return true;
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [locations, form.state, form.activity, locationSearch]
+    [locations, form.state, form.activity]
   );
-  const locationChoices = filteredLocations.slice(0, 50);
 
   const selectedLocation = useMemo(
     () => locations.find((location) => String(location.id) === form.locationId),
     [locations, form.locationId]
   );
 
-  useEffect(() => {
-    if (!initialLocation) return;
-    setShowForm(true);
-    const parsedDuration = parseDuration(initialLocation.duration && initialLocation.duration !== "N/A" ? initialLocation.duration : "");
-    setForm((current) => ({
-      ...current,
-      locationId: String(initialLocation.id),
-      state: initialLocation.state,
-      activity: initialLocation.activity,
-      durationHours: parsedDuration.hours || current.durationHours,
-      durationMinutes: parsedDuration.minutes || current.durationMinutes,
-    }));
-    setFormError("");
-    onInitialLocationUsed?.();
-  }, [initialLocation?.id]);
-
   function resetForm() {
     setPhotoFile(null);
     setFormError("");
-    setLocationSearch("");
     setForm({
       locationId: "",
       state: "All",
       activity: "All",
       distance: "",
-      durationHours: "",
-      durationMinutes: "",
+      duration: "",
       date: new Date().toISOString().split("T")[0],
       notes: "",
       comment: "",
     });
   }
 
-  function beginEdit(log: ActivityLog) {
-    const duration = parseDuration(log.duration);
-    setEditingId(log.id);
-    setShowForm(true);
-    setPhotoFile(null);
-    setLocationSearch(log.location);
-    setForm({
-      locationId: String(log.locationId || ""),
-      state: log.state || "All",
-      activity: log.activity || "All",
-      distance: String(log.distance || ""),
-      durationHours: duration.hours,
-      durationMinutes: duration.minutes,
-      date: log.date,
-      notes: log.notes || "",
-      comment: log.comment || "",
-    });
-    setFormError("");
-  }
-
   function changeState(state: string) {
     setForm((current) => ({ ...current, state, locationId: "" }));
-    setLocationSearch("");
   }
 
   function changeActivity(activity: string) {
     setForm((current) => ({ ...current, activity, locationId: "" }));
-    setLocationSearch("");
   }
 
   function chooseLocation(locationId: string) {
@@ -240,7 +118,7 @@ export function LogPage({
       return;
     }
     if (file.size > MAX_PHOTO_BYTES) {
-      setFormError("Photo must be 2MB or smaller.");
+      setFormError("Photo must be 5MB or smaller.");
       return;
     }
     setPhotoFile(file);
@@ -256,52 +134,65 @@ export function LogPage({
       setFormError("Please enter the distance.");
       return;
     }
-    const distance = Number.parseFloat(form.distance);
-    if (!Number.isFinite(distance) || distance <= 0 || distance > 1000) {
-      setFormError("Distance must be between 0 and 1,000 km.");
+    if (!photoFile) {
+      setFormError("Attach a photo from the location — an admin reviews this along with your GPS check-in before it counts.");
       return;
     }
-    if (!form.date || new Date(`${form.date}T00:00:00`) > new Date()) {
-      setFormError("Enter a valid activity date that is not in the future.");
+
+    setVerifying(true);
+    let position;
+    try {
+      position = await getCurrentPosition();
+    } catch (error: any) {
+      setFormError(error.message);
+      setVerifying(false);
       return;
     }
-    const duration = formatDuration(form.durationHours, form.durationMinutes);
-    if (!duration) {
-      setFormError("Please choose the activity duration.");
+
+    let place;
+    try {
+      place = await geocodeMapLocation({ name: selectedLocation.name, state: selectedLocation.state });
+    } catch {
+      place = null;
+    }
+    if (!place) {
+      setFormError("Couldn't determine this location's coordinates to verify your check-in. Try again in a moment.");
+      setVerifying(false);
       return;
     }
+
+    const distance = distanceKm(position.latitude, position.longitude, place.lat, place.lng);
+    if (distance > MAX_CHECKIN_DISTANCE_KM) {
+      setFormError(
+        `You're ${distance.toFixed(1)} km from ${selectedLocation.name} — too far to log this as a visit ` +
+        `(allowed: within ${MAX_CHECKIN_DISTANCE_KM} km). If you're actually there, your device's location accuracy may be poor — try moving to open sky.`
+      );
+      setVerifying(false);
+      return;
+    }
+    setVerifying(false);
 
     setSaving(true);
     try {
-      let photoUrl = "";
-      if (photoFile) {
-        photoUrl = await firebaseClient.storage.uploadActivityPhoto(photoFile);
-      }
+      const photoUrl = await firebaseClient.storage.uploadActivityPhoto(photoFile);
 
-      const payload = {
+      onAddLog({
         locationId: selectedLocation.id,
         location: selectedLocation.name,
         state: selectedLocation.state,
         activity: selectedLocation.activity,
-        distance,
-        duration,
+        distance: Number.parseFloat(form.distance) || 0,
+        duration: form.duration.trim(),
         date: form.date,
         notes: form.notes.trim(),
         comment: form.comment.trim(),
         photoUrl,
-        locationSnapshot: {
-          name: selectedLocation.name,
-          state: selectedLocation.state,
-          activity: selectedLocation.activity,
-          is_hidden_gem: (selectedLocation as any).is_hidden_gem === true,
-        },
-      };
-
-      if (editingId != null) await onUpdateLog(editingId, payload);
-      else await onAddLog(payload);
+        status: "pending",
+        verifiedDistanceKm: Math.round(distance * 100) / 100,
+        verifiedAccuracyM: position.accuracy != null ? Math.round(position.accuracy) : null,
+      });
 
       setShowForm(false);
-      setEditingId(null);
       resetForm();
     } catch (error: any) {
       setFormError(error?.message || "Unable to upload the activity photo.");
@@ -318,60 +209,41 @@ export function LogPage({
             <Activity size={30} style={{ color: C.jungle }} />
           </div>
           <h1 className="text-2xl font-normal mb-2" style={{ fontFamily: F.display, color: C.text }}>
-            {t(language, "activityLogTitle")}
+            Activity Log
           </h1>
           <p className="text-sm mb-5" style={{ color: C.textMuted, fontFamily: F.body }}>
-            {t(language, "signInActivityLog")}
+            Sign in to view and record your outdoor activities.
           </p>
-          <Pill variant="filled" onClick={onSignIn}>{t(language, "signIn")}</Pill>
+          <Pill variant="filled" onClick={onSignIn}>Sign In</Pill>
         </div>
       </div>
     );
   }
 
-  const totalKm = logs.reduce((sum, log) => sum + log.distance, 0);
-  const uniqueStates = new Set(logs.map((log) => log.state).filter(Boolean)).size;
-  const personalBests = {
-    longestDistance: logs.reduce((best, log) => log.distance > (best?.distance || 0) ? log : best, null as ActivityLog | null),
-    mostRecent: logs.reduce((best, log) => !best || log.date > best.date ? log : best, null as ActivityLog | null),
-    activityTypes: new Set(logs.map((log) => log.activity).filter(Boolean)).size,
-  };
-  const days = language === "zh"
-    ? ["一", "二", "三", "四", "五", "六", "日"]
-    : language === "ms"
-      ? ["Isn", "Sel", "Rab", "Kha", "Jum", "Sab", "Ahd"]
-      : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const selectedWeek = weekRangeFromMonday(selectedWeekStart);
-  const selectedWeekLogs = logs.filter((log) => log.date >= selectedWeek.start && log.date <= selectedWeek.end);
-  const selectedWeekKm = selectedWeekLogs.reduce((sum, log) => sum + log.distance, 0);
-  const isCurrentWeek = selectedWeekStart === currentWeekStart;
-  const weeklyKm = days.map((_, index) =>
-    selectedWeekLogs.reduce((sum, log) => {
-      const date = new Date(`${log.date}T12:00:00`);
-      if (!Number.isFinite(date.getTime())) return sum;
-      const mondayFirstIndex = (date.getDay() + 6) % 7;
-      return mondayFirstIndex === index ? sum + log.distance : sum;
-    }, 0)
-  );
-  const maxKm = Math.max(...weeklyKm, 1);
+  const approvedLogs = logs.filter((log) => (log.status ?? "approved") === "approved");
+  const pendingCount = logs.filter((log) => log.status === "pending").length;
+  const totalKm = approvedLogs.reduce((sum, log) => sum + log.distance, 0);
+  const uniqueStates = new Set(approvedLogs.map((log) => log.state).filter(Boolean)).size;
+  const maxKm = Math.max(...approvedLogs.map((log) => log.distance), 1);
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   return (
     <div className="pt-14 min-h-screen" style={{ backgroundColor: C.cream }}>
       <div className="max-w-2xl mx-auto px-5 py-8">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-normal" style={{ color: C.jungle, fontFamily: F.display }}>
-            {t(language, "activityLogTitle")}
+            Activity Log
           </h1>
           <Pill variant="amber" small onClick={() => setShowForm((current) => !current)}>
-            <Plus size={13}/> {editingId == null ? t(language, "logActivity") : t(language, "edit")}
+            <Plus size={13}/> Log Activity
           </Pill>
         </div>
 
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
-            { icon: <TrendingUp size={17}/>, label: t(language, "totalKm"), val: `${totalKm.toFixed(1)} km` },
-            { icon: <MapPin size={17}/>, label: t(language, "states"), val: uniqueStates },
-            { icon: <Activity size={17}/>, label: t(language, "activities"), val: logs.length },
+            { icon: <TrendingUp size={17}/>, label: "Total km", val: `${totalKm.toFixed(1)} km` },
+            { icon: <MapPin size={17}/>, label: "States", val: uniqueStates },
+            { icon: <Activity size={17}/>, label: "Activities", val: approvedLogs.length },
           ].map(({ icon, label, val }) => (
             <div key={label} className="bg-white rounded-[18px] p-4 text-center" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
               <div className="flex justify-center mb-1" style={{ color: C.jungle }}>{icon}</div>
@@ -381,89 +253,12 @@ export function LogPage({
           ))}
         </div>
 
-        {logs.length > 0 && (
+        {approvedLogs.length > 0 && (
           <div className="bg-white rounded-[18px] p-5 mb-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-            <h2 className="text-sm font-bold mb-3" style={{ fontFamily: F.body, color: C.text }}>{t(language, "personalBestRecords")}</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-xl p-3" style={{ backgroundColor: C.muted }}>
-                <p className="text-[10px] font-bold uppercase" style={{ color: C.textMuted }}>{t(language, "longestDistance")}</p>
-                <p className="text-sm font-bold mt-1" style={{ color: C.jungle }}>{personalBests.longestDistance?.distance.toFixed(1)} km</p>
-                <p className="text-[11px]" style={{ color: C.textSub }}>{personalBests.longestDistance?.location}</p>
-              </div>
-              <div className="rounded-xl p-3" style={{ backgroundColor: C.muted }}>
-                <p className="text-[10px] font-bold uppercase" style={{ color: C.textMuted }}>{t(language, "latestActivity")}</p>
-                <p className="text-sm font-bold mt-1" style={{ color: C.jungle }}>{personalBests.mostRecent?.date}</p>
-                <p className="text-[11px]" style={{ color: C.textSub }}>{personalBests.mostRecent?.activity}</p>
-              </div>
-              <div className="rounded-xl p-3" style={{ backgroundColor: C.muted }}>
-                <p className="text-[10px] font-bold uppercase" style={{ color: C.textMuted }}>{t(language, "activityVariety")}</p>
-                <p className="text-sm font-bold mt-1" style={{ color: C.jungle }}>{personalBests.activityTypes} types</p>
-                <p className="text-[11px]" style={{ color: C.textSub }}>Across your log history</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {logs.length > 0 && (
-          <div className="bg-white rounded-[18px] p-5 mb-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h2 className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>
-                  {isCurrentWeek
-                    ? language === "zh" ? "本周活动" : language === "ms" ? "Aktiviti Minggu Ini" : "This Week's Activity"
-                    : language === "zh" ? "所选周活动" : language === "ms" ? "Aktiviti Minggu Dipilih" : "Selected Week Activity"}
-                </h2>
-                <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>
-                  {selectedWeek.start} to {selectedWeek.end} · {selectedWeekLogs.length} {t(language, "activities")} · {selectedWeekKm.toFixed(1)} km
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
-                <label className="relative flex h-8 items-center rounded-full border bg-white pl-8 pr-3" style={{ borderColor: C.border, color: C.forest }}>
-                  <CalendarDays size={13} className="absolute left-3" />
-                  <input
-                    type="date"
-                    value={selectedWeekStart}
-                    max={currentWeekStart}
-                    onChange={(event) => setSelectedWeekStart(mondayForIsoDate(event.target.value))}
-                    className="w-[7.3rem] bg-transparent text-[11px] font-bold outline-none"
-                    style={{ color: C.forest, fontFamily: F.body }}
-                    aria-label="Choose week"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setSelectedWeekStart((week) => shiftWeek(week, -1))}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border"
-                  style={{ borderColor: C.border, color: C.forest }}
-                  aria-label="Previous week"
-                >
-                  <ChevronLeft size={14}/>
-                </button>
-                {!isCurrentWeek && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedWeekStart(currentWeekStart)}
-                    className="h-8 rounded-full border px-3 text-[11px] font-bold"
-                    style={{ borderColor: C.border, color: C.forest, fontFamily: F.body }}
-                  >
-                    {language === "zh" ? "本周" : language === "ms" ? "Minggu ini" : "This week"}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setSelectedWeekStart((week) => shiftWeek(week, 1))}
-                  disabled={isCurrentWeek}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border disabled:opacity-40"
-                  style={{ borderColor: C.border, color: C.forest }}
-                  aria-label="Next week"
-                >
-                  <ChevronRight size={14}/>
-                </button>
-              </div>
-            </div>
+            <h2 className="text-sm font-bold mb-4" style={{ fontFamily: F.body, color: C.text }}>Weekly Activity</h2>
             <div className="flex items-end gap-2 h-24">
               {days.map((day, index) => {
-                const km = weeklyKm[index];
+                const km = approvedLogs[index % approvedLogs.length]?.distance || 0;
                 return (
                   <div key={day} className="flex-1 flex flex-col items-center gap-1">
                     <div className="w-full rounded-t" style={{ height: `${(km / maxKm) * 76}px`, backgroundColor: km > 0 ? C.jungle : C.muted, minHeight: km > 0 ? 4 : 0 }}/>
@@ -476,26 +271,11 @@ export function LogPage({
         )}
 
         {showForm && (
-          <div className="fixed inset-0 z-[1250] flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white rounded-[20px] p-5 sm:p-6" style={{ boxShadow: `0 18px 60px rgba(27,67,50,0.28)` }}>
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-bold" style={{ fontFamily: F.body, color: C.text }}>{editingId == null ? t(language, "logActivity") : t(language, "edit")}</h2>
-                  <p className="text-xs mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
-                    Choose a state/activity to narrow the location list, or leave both as All to view every Firebase location.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setShowForm(false); setEditingId(null); resetForm(); }}
-                  disabled={saving}
-                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full"
-                  style={{ backgroundColor: C.muted, color: C.text }}
-                  aria-label="Close activity form"
-                >
-                  <X size={17}/>
-                </button>
-              </div>
+          <div className="bg-white rounded-[18px] p-5 mb-6" style={{ boxShadow: `0 4px 20px rgba(27,67,50,0.12)` }}>
+            <h2 className="text-base font-bold mb-1" style={{ fontFamily: F.body, color: C.text }}>New Activity</h2>
+            <p className="text-xs mb-4" style={{ color: C.textMuted, fontFamily: F.body }}>
+              Choose a state/activity to narrow the location list, or leave both as All to view every Firebase location.
+            </p>
 
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -513,54 +293,36 @@ export function LogPage({
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub, fontFamily: F.body }}>{t(language, "activities")}</label>
+                  <label className="text-xs font-bold block mb-1" style={{ color: C.textSub, fontFamily: F.body }}>Activity Type</label>
                   <select
                     value={form.activity}
                     onChange={(event) => changeActivity(event.target.value)}
                     className="w-full px-4 py-3 rounded-xl text-sm outline-none border bg-white"
                     style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
                   >
-                    <option value="All">{t(language, "all")} {t(language, "activities")}</option>
-                    {activityOptions.map((activity) => <option key={activity} value={activity}>{activityLabel(language, activity)}</option>)}
+                    <option value="All">All Activities</option>
+                    {activityOptions.map((activity) => <option key={activity} value={activity}>{activity}</option>)}
                   </select>
                 </div>
               </div>
 
               <div>
                 <label className="text-xs font-bold block mb-1" style={{ color: C.textSub, fontFamily: F.body }}>
-                  {t(language, "locations")} *
+                  Location *
                 </label>
-                <div className="relative mb-2">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.textMuted }} />
-                  <input
-                    value={locationSearch}
-                    onChange={(event) => {
-                      setLocationSearch(event.target.value);
-                      setForm((current) => ({ ...current, locationId: "" }));
-                    }}
-                    placeholder="Search location name, state, activity or address"
-                    className="w-full pl-9 pr-4 py-3 rounded-xl text-sm outline-none border"
-                    style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
-                  />
-                </div>
                 <select
                   value={form.locationId}
                   onChange={(event) => chooseLocation(event.target.value)}
                   className="w-full px-4 py-3 rounded-xl text-sm outline-none border bg-white"
                   style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
                 >
-                  <option value="">Select a location ({filteredLocations.length} matched)</option>
-                  {locationChoices.map((location) => (
+                  <option value="">Select a location ({filteredLocations.length} available)</option>
+                  {filteredLocations.map((location) => (
                     <option key={String(location.id)} value={String(location.id)}>
                       {location.name} — {location.state} — {location.activity}
                     </option>
                   ))}
                 </select>
-                {filteredLocations.length > locationChoices.length && (
-                  <p className="text-xs mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
-                    Showing first {locationChoices.length} matches. Type more keywords to narrow the list.
-                  </p>
-                )}
                 {filteredLocations.length === 0 && (
                   <p className="text-xs mt-1" style={{ color: C.error, fontFamily: F.body }}>
                     No locations match this State and Activity Type.
@@ -572,35 +334,20 @@ export function LogPage({
                 <input
                   value={form.distance}
                   onChange={(event) => setForm((current) => ({ ...current, distance: event.target.value }))}
-                  placeholder={`${t(language, "distance")} (km) *`}
+                  placeholder="Distance (km) *"
                   type="number"
                   min="0"
                   step="0.1"
                   className="px-4 py-3 rounded-xl text-sm outline-none border"
                   style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
                 />
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={form.durationHours}
-                    onChange={(event) => setForm((current) => ({ ...current, durationHours: event.target.value }))}
-                    className="px-4 py-3 rounded-xl text-sm outline-none border bg-white"
-                    style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
-                    aria-label="Duration hours"
-                  >
-                    <option value="">Hours</option>
-                    {HOUR_OPTIONS.map((hour) => <option key={hour} value={String(hour)}>{hour}h</option>)}
-                  </select>
-                  <select
-                    value={form.durationMinutes}
-                    onChange={(event) => setForm((current) => ({ ...current, durationMinutes: event.target.value }))}
-                    className="px-4 py-3 rounded-xl text-sm outline-none border bg-white"
-                    style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
-                    aria-label="Duration minutes"
-                  >
-                    <option value="">Minutes</option>
-                    {MINUTE_OPTIONS.map((minute) => <option key={minute} value={String(minute)}>{minute}m</option>)}
-                  </select>
-                </div>
+                <input
+                  value={form.duration}
+                  onChange={(event) => setForm((current) => ({ ...current, duration: event.target.value }))}
+                  placeholder="Duration (e.g. 2h 15m)"
+                  className="px-4 py-3 rounded-xl text-sm outline-none border"
+                  style={{ borderColor: C.border, fontFamily: F.body, color: C.text }}
+                />
               </div>
 
               <input
@@ -647,9 +394,9 @@ export function LogPage({
                   <Upload size={16}/>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold" style={{ color: C.text }}>{language === "zh" ? "上传照片" : language === "ms" ? "Muat Naik Foto" : "Upload Photo"}</p>
+                  <p className="text-sm font-bold" style={{ color: C.text }}>Upload Photo *</p>
                   <p className="text-xs truncate" style={{ color: C.textMuted }}>
-                    {photoFile ? photoFile.name : "JPG / PNG / WEBP up to 1MB"}
+                    {photoFile ? photoFile.name : "JPG / PNG / image up to 5MB"}
                   </p>
                 </div>
                 <input type="file" accept="image/*" className="hidden" onChange={(event) => choosePhoto(event.target.files?.[0])}/>
@@ -660,10 +407,11 @@ export function LogPage({
               )}
 
               <div className="flex gap-2 pt-1">
-                <Pill variant="filled" small onClick={saveEntry} disabled={saving}>{saving ? (language === "zh" ? "保存中..." : language === "ms" ? "Menyimpan..." : "Saving...") : editingId == null ? (language === "zh" ? "保存记录" : language === "ms" ? "Simpan rekod" : "Save entry") : t(language, "saveChanges")}</Pill>
-                <Pill variant="outline" small onClick={() => { setShowForm(false); setEditingId(null); resetForm(); }} disabled={saving}>Cancel</Pill>
+                <Pill variant="filled" small onClick={saveEntry}>
+                  {verifying ? "Checking location..." : saving ? "Saving..." : "Save entry"}
+                </Pill>
+                <Pill variant="outline" small onClick={() => { setShowForm(false); resetForm(); }}>Cancel</Pill>
               </div>
-            </div>
             </div>
           </div>
         )}
@@ -676,63 +424,44 @@ export function LogPage({
           </div>
         ) : (
           <div className="space-y-3">
-            {logs.map((log) => (
+            {logs.map((log) => {
+              const status = log.status ?? "approved";
+              const statusStyle =
+                status === "approved" ? { backgroundColor: C.successBg, color: C.success, label: "✓ Approved" } :
+                status === "pending" ? { backgroundColor: "#fef3c7", color: "#b45309", label: "⏳ Awaiting admin review" } :
+                { backgroundColor: C.errorBg, color: C.error, label: "✕ Rejected" };
+              return (
               <div key={String(log.id)} className="bg-white rounded-[18px] p-4" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.muted }}>
                     <Activity size={17} style={{ color: C.jungle }}/>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>{log.location}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>{log.location}</p>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: statusStyle.backgroundColor, color: statusStyle.color }}>
+                        {statusStyle.label}
+                      </span>
+                    </div>
                     <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>
-                      {activityLabel(language, log.activity)} · {log.state} · {log.date}
+                      {log.activity} · {log.state} · {log.date}
                     </p>
                     {log.notes && <p className="text-[11px] mt-2" style={{ color: C.textSub, fontFamily: F.body }}><strong>Notes:</strong> {log.notes}</p>}
                     {log.comment && <p className="text-[11px] mt-1" style={{ color: C.textSub, fontFamily: F.body }}><strong>Place comment:</strong> {log.comment}</p>}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onOpenLocation?.(log, "overview")}
-                        className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold"
-                        style={{ borderColor: C.border, color: C.forest, fontFamily: F.body }}
-                      >
-                        <ExternalLink size={12}/> {language === "zh" ? "查看地点" : language === "ms" ? "Lihat lokasi" : "View place"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => beginEdit(log)}
-                        className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold"
-                        style={{ borderColor: C.border, color: C.forest, fontFamily: F.body }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onOpenLocation?.(log, "reviews")}
-                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold"
-                        style={{ backgroundColor: C.amber, color: C.jungle, fontFamily: F.body }}
-                      >
-                        <Star size={12}/> {language === "zh" ? "评价地点" : language === "ms" ? "Ulas lokasi" : "Review place"}
-                      </button>
-                    </div>
+                    {status === "rejected" && log.rejectionReason && (
+                      <p className="text-[11px] mt-1" style={{ color: C.error, fontFamily: F.body }}><strong>Reason:</strong> {log.rejectionReason}</p>
+                    )}
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold" style={{ color: C.jungle, fontFamily: F.body }}>{log.distance} km</p>
                     <p className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>{log.duration}</p>
-                    <button type="button" title="Delete activity" aria-label={`Delete ${log.location} activity`} onClick={async()=>{if(confirm("Delete this activity? Statistics and badges will be recalculated."))await onDeleteLog(log.id);}} className="mt-2 p-1.5 rounded-lg" style={{color:C.error,backgroundColor:C.errorBg}}><Trash2 size={13}/></button>
                   </div>
                 </div>
 
                 {log.photoUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPhoto({ url: log.photoUrl!, alt: `${log.location} activity photo` })}
-                    className="mt-3 block w-full overflow-hidden rounded-xl border text-left"
-                    style={{ borderColor: C.border }}
-                    aria-label={`Open full photo for ${log.location}`}
-                  >
+                  <div className="mt-3 rounded-xl overflow-hidden border" style={{ borderColor: C.border }}>
                     <img src={log.photoUrl} alt={`${log.location} activity`} className="w-full max-h-64 object-cover" />
-                  </button>
+                  </div>
                 )}
                 {!log.photoUrl && log.comment && (
                   <div className="mt-2 flex items-center gap-1 text-[10px]" style={{ color: C.textMuted, fontFamily: F.body }}>
@@ -740,35 +469,16 @@ export function LogPage({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
+        {pendingCount > 0 && (
+          <p className="text-[11px] mt-3 text-center" style={{ color: C.textMuted, fontFamily: F.body }}>
+            {pendingCount} {pendingCount === 1 ? "activity is" : "activities are"} still awaiting admin review and not yet counted in your stats or the leaderboard.
+          </p>
+        )}
       </div>
-      {selectedPhoto && (
-        <div
-          className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/70 p-4"
-          onClick={() => setSelectedPhoto(null)}
-        >
-          <div
-            className="relative flex max-h-[90vh] w-full max-w-5xl items-center justify-center rounded-2xl bg-white p-3 shadow-2xl sm:p-4"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-black shadow-md"
-              onClick={() => setSelectedPhoto(null)}
-              aria-label="Close full image"
-            >
-              <X size={18}/>
-            </button>
-            <img
-              src={selectedPhoto.url}
-              alt={selectedPhoto.alt}
-              className="max-h-[84vh] max-w-full rounded-xl object-contain"
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

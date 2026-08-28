@@ -1,14 +1,16 @@
+// MAIN / TEAM SHARED FOUNDATION
+// GitHub target: main
 // Shared Integration Code - used by multiple SeekMY modules/members.
 // Member-specific ownership is documented in MODULE_OWNERSHIP.md.
 export type Page = "home"|"explore"|"location"|"ai"|"leaderboard"|"log"|"bookmarks"|"account"|"admin"|"map"|"contributor"|"suggest"|"insights"|"help";
 
-export interface AppUser {
+//==================== WilsonChoongWeiShan Part - Account/User Types ====================
+export interface MockUser {
   id: string;
   username: string;
   displayName: string;
   email: string;
   password: string;
-  photoUrl?: string;
   bio: string;
   joinDate: string;
   totalKm: number;
@@ -18,6 +20,8 @@ export interface AppUser {
   status?: "active"|"suspended"|"review_restricted";
 }
 
+//==================== WilsonChoongWeiShan END - Account/User Types ====================
+//==================== LimRouYu Part - Location Detail Types ====================
 export interface ActivitySpecific {
   certification?: string;
   visibility?: string;
@@ -38,40 +42,12 @@ export interface Location {
   id: number | string;
   name: string;
   address?: string;
-  /** WGS84 coordinates. Required for imported/published locations. */
-  lat?: number;
-  lng?: number;
-  /** Accepted while older/imported datasets are migrated to lat/lng. */
-  latitude?: number;
-  longitude?: number;
-  source?: "OpenStreetMap" | "Community" | "Admin" | string;
-  sourceId?: string;
-  sourceUrl?: string;
-  officialUrl?: string;
-  image_url?: string;
-  image_urls?: string[];
-  estimatedPrice?: number;
-  estimatedPriceRange?: string;
-  photoAttribution?: string;
-  photo?: {
-    imageUrl: string;
-    originalUrl?: string;
-    sourcePageUrl: string;
-    source: string;
-    title?: string;
-    author: string;
-    license: string;
-    licenseUrl?: string;
-    matchMethod: string;
-    matchConfidence: number;
-  } | null;
   state: string;
   stateCode: string;
   activity: string;
   difficulty: "Easy"|"Moderate"|"Hard";
   distance: string;
   duration: string;
-  openingHours?: string;
   rating: number;
   reviews: number;
   badge: string;
@@ -85,16 +61,15 @@ export interface Location {
   budget: "Free"|"Low"|"Medium"|"High";
   activitySpecific?: ActivitySpecific;
   contributors?: Contributor[];
-  status?: "active" | "unavailable" | "deleted" | string;
 }
 
+//==================== LimRouYu END - Location Detail Types ====================
+//==================== FongXinTong Part - Activity Log Types ====================
 export interface ActivityLog {
   id: number | string;
   locationId?: number | string;
   location: string;
   activity: string;
-  is_hidden_gem?: boolean;
-  isHiddenGem?: boolean;
   distance: number;
   duration: string;
   date: string;
@@ -102,16 +77,24 @@ export interface ActivityLog {
   comment?: string;
   photoUrl?: string;
   state: string;
+  // Admin-review workflow: a log doesn't count toward stats/leaderboard until approved.
+  status?: "pending" | "approved" | "rejected";
+  verifiedDistanceKm?: number;
+  verifiedAccuracyM?: number | null;
+  rejectionReason?: string;
+  created_by?: string;
+  created_by_id?: string;
 }
 
+//==================== FongXinTong END - Activity Log Types ====================
+//==================== LowJunFeng Part - Badge Types ====================
 export interface BadgeDef {
   id: string;
   icon: string;
-  image: string;
   name: string;
   desc: string;
   requirement: number;
-  metric: "activities" | "hikes" | "dives" | "states" | "km" | "gems" | "reviews" | "cycleKm" | "camps";
+  metric: "hikes" | "dives" | "states" | "km" | "gems" | "reviews" | "cycleKm" | "camps";
 }
 
 export interface BadgeStatus extends BadgeDef {
@@ -120,53 +103,13 @@ export interface BadgeStatus extends BadgeDef {
   justEarned?: boolean;
 }
 
+//==================== LowJunFeng END - Badge Types ====================
+//==================== LimTzeXin Part - Bookmark Types ====================
 export interface BookmarkEntry {
   firestoreId?: string;
-  duplicateFirestoreIds?: string[];
   locationId: number | string;
   notes: string;
-  folderIds?: string[];
   folder: string;
-  folders?: string[];
-  sharedFolderId?: string | null;
   savedAt: string;
 }
-
-export interface PersonalBookmarkFolder {
-  id: string;
-  ownerUid: string;
-  name: string;
-  isDefault?: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SharedBookmarkLocation {
-  id: number | string;
-  name: string;
-  address?: string;
-  state: string;
-  activity: string;
-  difficulty?: string;
-  emoji?: string;
-  imageUrl?: string;
-  addedByMe?: boolean;
-  canRemove?: boolean;
-}
-
-export interface SharedBookmarkFolder {
-  id: string;
-  personalFolderId?: string | null;
-  name: string;
-  sharingEnabled: boolean;
-  memberCount: number;
-  viewerRole: "owner" | "member" | null;
-  locations: SharedBookmarkLocation[];
-}
-
-export interface SharedBookmarkMember {
-  id: string;
-  display_name: string;
-  role: "owner" | "member";
-  joined_at: string;
-}
+//==================== LimTzeXin END - Bookmark Types ====================
