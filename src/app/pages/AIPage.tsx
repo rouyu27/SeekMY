@@ -169,6 +169,8 @@ function detectActivity(text: string) {
   if (lower.includes("div") || text.includes("潜水") || lower.includes("menyelam")) return "Diving";
   if (lower.includes("cycl") || lower.includes("bike") || text.includes("骑行") || lower.includes("berbasikal")) return "Cycling";
   if (lower.includes("trail run") || text.includes("越野跑") || lower.includes("larian denai")) return "Trail Running";
+  if (lower.includes("jog") || lower.includes("running") || text.includes("慢跑") || lower.includes("berjoging")) return "Jogging";
+  if (/\brock\b/.test(lower) || lower.includes("climbing") || text.includes("攀岩") || lower.includes("memanjat batu")) return "Rock Climbing";
   if (lower.includes("water sport") || text.includes("水上") || lower.includes("sukan air")) return "Water Sports";
   if (lower.includes("hik") || text.includes("徒步") || lower.includes("mendaki")) return "Hiking";
   return "";
@@ -198,11 +200,22 @@ function buildAIResponse(text: string, locations: Location[], language: Language
   return { type: "text", text: localCopy(language, "default") };
 }
 
-function FormattedAIText({ text }: { text: string }) {
-  return <div className="whitespace-pre-line leading-6">{text}</div>;
+function naturalChatText(text: string) {
+  return text
+    .replace(/^\s{0,3}#{1,6}\s*/gm, "💡 ")
+    .replace(/^\s*(?:[-*•]+|\d+[.)])\s*/gm, "✨ ")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/[*_`]/g, "")
+    .replace(/[“”\"]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
-export function AIPage({ locations, language = "en" }: { locations: Location[]; language?: Language }) {
+function FormattedAIText({ text }: { text: string }) {
+  return <div className="whitespace-pre-line leading-6">{naturalChatText(text)}</div>;
+}
+
+export function AIPage({ locations, language = "en", onOpenLocation }: { locations: Location[]; language?: Language; onOpenLocation: (location: Location) => void }) {
   const [messages, setMessages] = useState<AIMessage[]>([{ id: 0, from: "bot", type: "text", time: now(), text: t(language, "aiGreeting") }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -292,15 +305,14 @@ export function AIPage({ locations, language = "en" }: { locations: Location[]; 
                     {message.text && <div className="px-4 py-3 mb-3 text-sm rounded-2xl" style={{ backgroundColor: "rgba(255,255,255,0.12)", color: "#fff", fontFamily: F.body }}><FormattedAIText text={message.text} /></div>}
                     <div className="flex flex-col gap-2">
                       {message.locations?.map((loc) => (
-                        <div key={loc.id} className="rounded-2xl p-4" style={{ backgroundColor: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                        <button key={loc.id} type="button" onClick={() => onOpenLocation(loc)} aria-label={`Open ${loc.name} location page`} className="w-full rounded-2xl p-4 text-left cursor-pointer transition-all hover:bg-white/15 active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[#e9c46a]" style={{ backgroundColor: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.12)" }}>
                           <p className="text-sm font-bold text-white truncate" style={{ fontFamily: F.body }}>{loc.name}</p>
                           <p className="text-[11px] mb-1.5" style={{ color: "rgba(255,255,255,0.55)", fontFamily: F.body }}>{loc.state} · {activityLabel(language, loc.activity)}</p>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(45,106,79,0.5)", color: "#fff", fontFamily: F.body }}>{difficultyLabel(language, loc.difficulty)}</span>
                             <span className="flex items-center gap-1 text-[10px]" style={{ color: C.amber, fontFamily: F.body }}><Star size={9} fill={C.amber} />{loc.rating}</span>
-                            <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.45)", fontFamily: F.body }}>{loc.distance} · {loc.duration}</span>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>

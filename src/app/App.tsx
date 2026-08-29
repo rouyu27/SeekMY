@@ -864,7 +864,7 @@ export default function App() {
         />
       )}
       {/* ==================== WilsonChoongWeiShan Part - AI Outdoor Assistant Chatbot ==================== */}
-      {page === "ai" && <AIPage locations={allLocations} language={language}/>}
+      {page === "ai" && <AIPage locations={allLocations} language={language} onOpenLocation={(location) => { selectLocation(location); navigate("location"); }} />}
       {/* ==================== WilsonChoongWeiShan END - AI Outdoor Assistant Chatbot ==================== */}
       {/* ==================== FongXinTong Part - Community Leaderboard & Ranking Module ==================== */}
       {page === "leaderboard" && <LeaderboardPage currentUserId={user?.id} language={language}/>}
