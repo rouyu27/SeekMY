@@ -110,6 +110,6 @@ export function LocationImageUploader({ existing, files, setFiles, setExisting, 
       <Upload size={16} /> Add Pictures ({remainingSlots} left)
       <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { selectImages(event.target.files); event.currentTarget.value = ""; }} />
     </label>}
-    <p className="text-[10px] mt-1" style={{ color: C.textMuted }}>Images are compressed before upload. Maximum 2 MB per picture. Use the arrows to arrange the cover and gallery order.</p>
+    <p className="text-[10px] mt-1" style={{ color: C.textMuted }}>You can select several pictures at once or add more later. Drag pictures to arrange the cover and gallery order. Maximum 2 MB per picture.</p>
   </div>;
 }
