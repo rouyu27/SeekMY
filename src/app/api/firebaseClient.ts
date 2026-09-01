@@ -1106,6 +1106,24 @@ const backend = {
   moderateActivity(id: string, action: "approve" | "reject", reason = "") {
     return this.call<{ activity: EntityRecord; stats: Record<string, number>; newBadges: EntityRecord[]; revokedBadges?: string[] }>("moderateActivity", { id, action, reason });
   },
+  getBadgeDefinitions() {
+    return this.call<{ badges: EntityRecord[] }>("getBadgeDefinitions");
+  },
+  getAdminBadgeDefinitions() {
+    return this.call<{ badges: EntityRecord[] }>("getAdminBadgeDefinitions");
+  },
+  createBadgeDefinition(payload: Record<string, any>) {
+    return this.call<{ badge: EntityRecord }>("createBadgeDefinition", payload);
+  },
+  updateBadgeDefinition(id: string, payload: Record<string, any>) {
+    return this.call<{ badge: EntityRecord }>("updateBadgeDefinition", { id, ...payload });
+  },
+  archiveBadgeDefinition(id: string) {
+    return this.call<{ badge: EntityRecord }>("archiveBadgeDefinition", { id });
+  },
+  restoreBadgeDefinition(id: string) {
+    return this.call<{ badge: EntityRecord }>("restoreBadgeDefinition", { id });
+  },
   getReviews(locationId: string) {
     return this.call<{ reviews: EntityRecord[] }>("getReviews", { locationId });
   },

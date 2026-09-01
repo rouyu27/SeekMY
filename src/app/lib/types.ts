@@ -127,6 +127,30 @@ export interface BadgeStatus extends BadgeDef {
   justEarned?: boolean;
 }
 
+export type BadgeMetric = BadgeDef["metric"];
+
+export interface ManagedBadgeDefinition {
+  id: string;
+  key: string;
+  name: string;
+  desc: string;
+  description: string;
+  nameMs: string;
+  descriptionMs: string;
+  nameZh: string;
+  descriptionZh: string;
+  icon: string;
+  imageUrl: string;
+  metric: BadgeMetric;
+  requirement: number;
+  displayOrder: number;
+  status: "active" | "archived";
+  isSystem: boolean;
+  earnedCount?: number;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
 export interface BookmarkEntry {
   firestoreId?: string;
   duplicateFirestoreIds?: string[];

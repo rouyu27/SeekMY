@@ -9,16 +9,18 @@ import type { AppUser, ActivityLog, Page } from "../lib/types";
 import { firebaseClient } from "../api/firebaseClient";
 import { isStrongPassword, PASSWORD_REQUIREMENT } from "../api/firebaseClient";
 import type { LocationSubmission, UserAnnouncement } from "../lib/communityTypes";
+import type { BadgeDef } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { evaluateBadges, shareBadge } from "../lib/badges";
 import { Pill, AlertBanner, PasswordInput, SectionHead } from "../components/Atoms";
 import type { Language } from "../lib/i18n";
 import { t } from "../lib/i18n";
 
-export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage, users, setUsers, earnedBadgeIds = [], onAnnouncementsChanged, language = "en" }:{
+export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage, users, setUsers, earnedBadgeIds = [], badgeDefinitions, onAnnouncementsChanged, language = "en" }:{
   user:AppUser; setUser:(u:AppUser)=>void; onLogout:()=>void;
   logs:ActivityLog[]; bookmarks:(string|number)[]; setPage:(p:Page)=>void;
   users:AppUser[]; setUsers:(u:AppUser[])=>void; earnedBadgeIds?: string[];
+  badgeDefinitions?: BadgeDef[];
   onAnnouncementsChanged?:(count:number)=>void;
   language?:Language;
 }) {
@@ -66,7 +68,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
 
   const totalKm     = logs.reduce((s,l)=>s+l.distance,user.totalKm);
   const uniqueStates = new Set(logs.map(l=>l.state)).size + user.states;
-  const badges = evaluateBadges(logs, 0, earnedBadgeIds);
+  const badges = evaluateBadges(logs, 0, earnedBadgeIds, badgeDefinitions);
   const earnedCount = badges.filter(b => b.earned).length;
   const passwordConditionCount = [
     /[a-z]/.test(newPass),
