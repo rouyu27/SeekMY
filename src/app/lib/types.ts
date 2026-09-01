@@ -91,6 +91,10 @@ export interface Location {
 export interface ActivityLog {
   id: number | string;
   locationId?: number | string;
+  userId?: string;
+  userName?: string;
+  created_by_id?: string;
+  created_by?: string;
   location: string;
   activity: string;
   is_hidden_gem?: boolean;
@@ -102,6 +106,9 @@ export interface ActivityLog {
   comment?: string;
   photoUrl?: string;
   state: string;
+  status?: "pending" | "approved" | "rejected";
+  rejectionReason?: string;
+  reviewedAt?: string;
 }
 
 export interface BadgeDef {

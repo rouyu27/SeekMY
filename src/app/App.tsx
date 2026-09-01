@@ -615,6 +615,10 @@ export default function App() {
 
       setActivityLogs(logRows.map((l:any)=>({
       id:l.id,
+      userId:l.userId || l.firebase_uid,
+      userName:l.userName || l.user_name,
+      created_by_id:l.userId || l.firebase_uid,
+      created_by:l.userName || l.user_name,
       location:l.location || l.locationName || "Unknown",
       activity:l.activity || "Hiking",
       distance:Number(l.distance || 0),
@@ -627,6 +631,9 @@ export default function App() {
       isHiddenGem:l.is_hidden_gem===true || l.isHiddenGem===true,
       locationId:l.locationId ?? l.location_id,
       state:l.state || "",
+      status:l.status || "approved",
+      rejectionReason:l.rejectionReason || l.rejection_reason || "",
+      reviewedAt:l.reviewedAt || l.reviewed_at || "",
       })));
       setEarnedBadgeIds(badgeRows.map((badge:any)=>String(badge.key || badge.id).replace(`${current.id}_`, "")));
       refreshUnreadAnnouncements(current);

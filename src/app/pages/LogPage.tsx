@@ -240,7 +240,7 @@ export function LogPage({
       return;
     }
     if (file.size > MAX_PHOTO_BYTES) {
-      setFormError("Photo must be 2MB or smaller.");
+      setFormError("Photo must be 1MB or smaller.");
       return;
     }
     setPhotoFile(file);
@@ -270,10 +270,15 @@ export function LogPage({
       setFormError("Please choose the activity duration.");
       return;
     }
+    const existingLog = editingId != null ? logs.find((log) => String(log.id) === String(editingId)) : null;
+    if (!photoFile && !existingLog?.photoUrl) {
+      setFormError("Please upload at least one activity photo. Admin needs it before your log can be reviewed.");
+      return;
+    }
 
     setSaving(true);
     try {
-      let photoUrl = "";
+      let photoUrl = existingLog?.photoUrl || "";
       if (photoFile) {
         photoUrl = await firebaseClient.storage.uploadActivityPhoto(photoFile);
       }
@@ -329,12 +334,14 @@ export function LogPage({
     );
   }
 
-  const totalKm = logs.reduce((sum, log) => sum + log.distance, 0);
-  const uniqueStates = new Set(logs.map((log) => log.state).filter(Boolean)).size;
+  const approvedLogs = logs.filter((log) => (log.status || "approved") === "approved");
+  const pendingCount = logs.filter((log) => log.status === "pending").length;
+  const totalKm = approvedLogs.reduce((sum, log) => sum + log.distance, 0);
+  const uniqueStates = new Set(approvedLogs.map((log) => log.state).filter(Boolean)).size;
   const personalBests = {
-    longestDistance: logs.reduce((best, log) => log.distance > (best?.distance || 0) ? log : best, null as ActivityLog | null),
-    mostRecent: logs.reduce((best, log) => !best || log.date > best.date ? log : best, null as ActivityLog | null),
-    activityTypes: new Set(logs.map((log) => log.activity).filter(Boolean)).size,
+    longestDistance: approvedLogs.reduce((best, log) => log.distance > (best?.distance || 0) ? log : best, null as ActivityLog | null),
+    mostRecent: approvedLogs.reduce((best, log) => !best || log.date > best.date ? log : best, null as ActivityLog | null),
+    activityTypes: new Set(approvedLogs.map((log) => log.activity).filter(Boolean)).size,
   };
   const days = language === "zh"
     ? ["一", "二", "三", "四", "五", "六", "日"]
@@ -342,7 +349,7 @@ export function LogPage({
       ? ["Isn", "Sel", "Rab", "Kha", "Jum", "Sab", "Ahd"]
       : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const selectedWeek = weekRangeFromMonday(selectedWeekStart);
-  const selectedWeekLogs = logs.filter((log) => log.date >= selectedWeek.start && log.date <= selectedWeek.end);
+  const selectedWeekLogs = approvedLogs.filter((log) => log.date >= selectedWeek.start && log.date <= selectedWeek.end);
   const selectedWeekKm = selectedWeekLogs.reduce((sum, log) => sum + log.distance, 0);
   const isCurrentWeek = selectedWeekStart === currentWeekStart;
   const weeklyKm = days.map((_, index) =>
@@ -371,7 +378,7 @@ export function LogPage({
           {[
             { icon: <TrendingUp size={17}/>, label: t(language, "totalKm"), val: `${totalKm.toFixed(1)} km` },
             { icon: <MapPin size={17}/>, label: t(language, "states"), val: uniqueStates },
-            { icon: <Activity size={17}/>, label: t(language, "activities"), val: logs.length },
+            { icon: <Activity size={17}/>, label: t(language, "activities"), val: approvedLogs.length },
           ].map(({ icon, label, val }) => (
             <div key={label} className="bg-white rounded-[18px] p-4 text-center" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
               <div className="flex justify-center mb-1" style={{ color: C.jungle }}>{icon}</div>
@@ -381,7 +388,7 @@ export function LogPage({
           ))}
         </div>
 
-        {logs.length > 0 && (
+        {approvedLogs.length > 0 && (
           <div className="bg-white rounded-[18px] p-5 mb-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
             <h2 className="text-sm font-bold mb-3" style={{ fontFamily: F.body, color: C.text }}>{t(language, "personalBestRecords")}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -404,7 +411,7 @@ export function LogPage({
           </div>
         )}
 
-        {logs.length > 0 && (
+        {approvedLogs.length > 0 && (
           <div className="bg-white rounded-[18px] p-5 mb-6" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -647,9 +654,9 @@ export function LogPage({
                   <Upload size={16}/>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold" style={{ color: C.text }}>{language === "zh" ? "上传照片" : language === "ms" ? "Muat Naik Foto" : "Upload Photo"}</p>
+                  <p className="text-sm font-bold" style={{ color: C.text }}>{language === "zh" ? "上传照片" : language === "ms" ? "Muat Naik Foto" : "Upload Photo"} *</p>
                   <p className="text-xs truncate" style={{ color: C.textMuted }}>
-                    {photoFile ? photoFile.name : "JPG / PNG / WEBP up to 1MB"}
+                    {photoFile ? photoFile.name : editingId != null ? "Keep existing photo or upload a new JPG / PNG / WEBP up to 1MB" : "Required: JPG / PNG / WEBP up to 1MB"}
                   </p>
                 </div>
                 <input type="file" accept="image/*" className="hidden" onChange={(event) => choosePhoto(event.target.files?.[0])}/>
@@ -676,19 +683,34 @@ export function LogPage({
           </div>
         ) : (
           <div className="space-y-3">
-            {logs.map((log) => (
+            {logs.map((log) => {
+              const status = log.status || "approved";
+              const statusStyle =
+                status === "approved"
+                  ? { label: "Approved", bg: C.successBg, color: C.success }
+                  : status === "rejected"
+                    ? { label: "Rejected", bg: C.errorBg, color: C.error }
+                    : { label: "Awaiting admin review", bg: "#fffbef", color: "#92400e" };
+              return (
               <div key={String(log.id)} className="bg-white rounded-[18px] p-4" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.muted }}>
                     <Activity size={17} style={{ color: C.jungle }}/>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>{log.location}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>{log.location}</p>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: statusStyle.bg, color: statusStyle.color }}>
+                        {statusStyle.label}
+                      </span>
+                    </div>
                     <p className="text-[11px] mt-0.5" style={{ color: C.textMuted, fontFamily: F.body }}>
                       {activityLabel(language, log.activity)} · {log.state} · {log.date}
                     </p>
                     {log.notes && <p className="text-[11px] mt-2" style={{ color: C.textSub, fontFamily: F.body }}><strong>Notes:</strong> {log.notes}</p>}
                     {log.comment && <p className="text-[11px] mt-1" style={{ color: C.textSub, fontFamily: F.body }}><strong>Place comment:</strong> {log.comment}</p>}
+                    {status === "rejected" && log.rejectionReason && <p className="text-[11px] mt-1" style={{ color: C.error, fontFamily: F.body }}><strong>Admin feedback:</strong> {log.rejectionReason}</p>}
+                    {status === "pending" && <p className="text-[11px] mt-1" style={{ color: "#92400e", fontFamily: F.body }}>This log will count in stats, badges, leaderboard, and review access after admin approval.</p>}
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -740,8 +762,14 @@ export function LogPage({
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
+        )}
+        {pendingCount > 0 && (
+          <p className="mt-3 text-center text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>
+            {pendingCount} activity {pendingCount === 1 ? "is" : "are"} waiting for admin review and not counted yet.
+          </p>
         )}
       </div>
       {selectedPhoto && (

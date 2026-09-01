@@ -5,10 +5,15 @@ create table if not exists public.seekmy_activities (
   distance_km numeric(8,2) not null check (distance_km > 0 and distance_km <= 1000),
   duration text not null default '', activity_date date not null check (activity_date <= current_date),
   notes text not null default '', comment text not null default '', photo_url text not null default '',
+  status text not null default 'approved' check (status in ('pending','approved','rejected')),
+  rejection_reason text not null default '', reviewed_at timestamptz,
+  user_name text not null default 'Explorer',
   created_at timestamptz not null default now()
 );
 create index if not exists seekmy_activities_user_idx on public.seekmy_activities(firebase_uid, activity_date desc);
 create index if not exists seekmy_activities_period_idx on public.seekmy_activities(activity_date desc);
+create index if not exists seekmy_activities_status_idx on public.seekmy_activities(status, activity_date desc);
+create index if not exists seekmy_activities_user_status_idx on public.seekmy_activities(firebase_uid, status, activity_date desc);
 
 create table if not exists public.seekmy_reviews (
   id uuid primary key default gen_random_uuid(), firebase_uid text not null,

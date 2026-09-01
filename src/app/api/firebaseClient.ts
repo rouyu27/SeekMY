@@ -1100,6 +1100,12 @@ const backend = {
   getMyData() {
     return this.call<{ activities: EntityRecord[]; badges: EntityRecord[] }>("getMyData");
   },
+  getAdminActivities() {
+    return this.call<{ activities: EntityRecord[] }>("getAdminActivities");
+  },
+  moderateActivity(id: string, action: "approve" | "reject", reason = "") {
+    return this.call<{ activity: EntityRecord; stats: Record<string, number>; newBadges: EntityRecord[]; revokedBadges?: string[] }>("moderateActivity", { id, action, reason });
+  },
   getReviews(locationId: string) {
     return this.call<{ reviews: EntityRecord[] }>("getReviews", { locationId });
   },

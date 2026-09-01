@@ -15,11 +15,17 @@ create table if not exists public.seekmy_activities (
   notes text not null default '',
   comment text not null default '',
   photo_url text not null default '',
+  status text not null default 'approved' check (status in ('pending','approved','rejected')),
+  rejection_reason text not null default '',
+  reviewed_at timestamptz,
+  user_name text not null default 'Explorer',
   created_at timestamptz not null default now()
 );
 
 create index if not exists seekmy_activities_user_idx on public.seekmy_activities(firebase_uid, activity_date desc);
 create index if not exists seekmy_activities_period_idx on public.seekmy_activities(activity_date desc);
+create index if not exists seekmy_activities_status_idx on public.seekmy_activities(status, activity_date desc);
+create index if not exists seekmy_activities_user_status_idx on public.seekmy_activities(firebase_uid, status, activity_date desc);
 
 create table if not exists public.seekmy_reviews (
   id uuid primary key default gen_random_uuid(),
