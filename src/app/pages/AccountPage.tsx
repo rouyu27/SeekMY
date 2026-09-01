@@ -87,6 +87,7 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
   ];
 
   const initials = user.displayName.split(" ").map(n=>n[0]).join("").slice(0,2);
+  const unreadAnnouncementCount = announcements.filter(a=>!a.read).length;
 
   async function uploadProfilePhoto(file?: File) {
     setProfileAlert(null);
@@ -276,7 +277,14 @@ export function AccountPage({ user, setUser, onLogout, logs, bookmarks, setPage,
       <div className="bg-white border-b sticky top-14 z-30" style={{borderColor:C.border}}>
         <div className="max-w-2xl mx-auto px-5 flex gap-6 overflow-x-auto" style={{scrollbarWidth:"none"}}>
           {([["profile",t(language,"profile")],["suggestions",t(language,"mySuggestions")],["announcements",t(language,"announcements")],["badges",t(language,"badges")],["security",t(language,"security")],["danger",t(language,"dangerZone")]] as [AccTab,string][]) .map(([tabId,label])=>(
-            <button key={tabId} onClick={()=>{ setActiveTab(tabId); if(tabId==="suggestions"||tabId==="announcements") refreshMine(); }} className="py-4 text-sm transition-all whitespace-nowrap" style={tabStyle(tabId)}>{label}</button>
+            <button key={tabId} onClick={()=>{ setActiveTab(tabId); if(tabId==="suggestions"||tabId==="announcements") refreshMine(); }} className="relative flex items-center gap-1.5 py-4 text-sm transition-all whitespace-nowrap" style={tabStyle(tabId)}>
+              <span>{label}</span>
+              {tabId==="announcements" && unreadAnnouncementCount>0 && (
+                <span className="min-w-4 h-4 px-1 rounded-full text-[10px] font-bold leading-4 text-center text-white" style={{backgroundColor:C.error,fontFamily:F.body}}>
+                  {unreadAnnouncementCount>9 ? "9+" : unreadAnnouncementCount}
+                </span>
+              )}
+            </button>
           ))}
         </div>
       </div>
