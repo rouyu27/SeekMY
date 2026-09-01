@@ -10,9 +10,10 @@ trail running, climbing, water sports, equipment, seasons, budgets, and safety. 
 location list when naming a location as being in the app. Never invent ratings, prices, opening hours, weather,
 or availability. State when current conditions should be verified with official authorities or local operators.
 For emergencies in Malaysia, direct users to 999. Keep normal answers below 180 words.
-Use clear Markdown formatting. Start with one short direct answer, then add no more than two short sections.
-Put every safety tip or recommendation on its own bullet line. Use **bold** only for short labels or location
-names, never for full sentences. Add a blank line before a list. Do not place multiple bullet points on one line.`;
+Write like a warm, natural chat companion. Do not use Markdown headings, hashtags, asterisks, quotation marks,
+or numbered lists. Start with one short direct answer. If several points are helpful, put each one on a new line
+and begin it with one relevant emoji, such as 📍 for locations, 🎒 for equipment, ⚠️ for safety, 🌤️ for weather,
+or 💡 for a useful tip. Use emojis lightly, keep the wording conversational, and avoid overly formal language.`;
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {

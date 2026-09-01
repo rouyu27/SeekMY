@@ -1,20 +1,27 @@
 //==================== LowJunFeng Part - Badge Achievement System ====================
 import type { ActivityLog, BadgeDef, BadgeStatus } from "./types";
 
-/** Asset helper to resolve badge image URLs cleanly */
-const getBadgeImage = (filename: string) =>
-  new URL(`../../assets/badges/${filename}`, import.meta.url).toString();
+const firstFootstep = new URL("../../assets/badges/first-footstep.png", import.meta.url).toString();
+const stateExplorer = new URL("../../assets/badges/state-explorer.png", import.meta.url).toString();
+const malaysiaWanderer = new URL("../../assets/badges/malaysia-wanderer.png", import.meta.url).toString();
+const hiddenGemHunter = new URL("../../assets/badges/hidden-gem-hunter.png", import.meta.url).toString();
+const firstContribution = new URL("../../assets/badges/first-contribution.png", import.meta.url).toString();
+const localStoryteller = new URL("../../assets/badges/local-storyteller.png", import.meta.url).toString();
+const trustedContributor = new URL("../../assets/badges/trusted-contributor.png", import.meta.url).toString();
+const communityFavourite = new URL("../../assets/badges/community-favourite.png", import.meta.url).toString();
+const malaysiaInsider = new URL("../../assets/badges/malaysia-insider.png", import.meta.url).toString();
+const SEEKMY_APP_URL = "https://seekmy-integration.web.app/";
 
 export const BADGE_DEFS: BadgeDef[] = [
-  { id: "first-footstep", icon: "🥾", image: getBadgeImage("first-footstep.png"), name: "First Footstep", desc: "Log your first outdoor activity", requirement: 1, metric: "activities" },
-  { id: "state-explorer", icon: "🧭", image: getBadgeImage("state-explorer.png"), name: "State Explorer", desc: "Visit 3 different Malaysian states", requirement: 3, metric: "states" },
-  { id: "malaysia-wanderer", icon: "🗺️", image: getBadgeImage("malaysia-wanderer.png"), name: "Malaysia Wanderer", desc: "Visit 5 different Malaysian states", requirement: 5, metric: "states" },
-  { id: "hidden-gem-hunter", icon: "💎", image: getBadgeImage("hidden-gem-hunter.png"), name: "Hidden Gem Hunter", desc: "Visit 3 hidden-gem locations", requirement: 3, metric: "gems" },
-  { id: "first-contribution", icon: "✍️", image: getBadgeImage("first-contribution.png"), name: "First Contribution", desc: "Write your first community review", requirement: 1, metric: "reviews" },
-  { id: "local-storyteller", icon: "📖", image: getBadgeImage("local-storyteller.png"), name: "Local Storyteller", desc: "Write 3 community reviews", requirement: 3, metric: "reviews" },
-  { id: "trusted-contributor", icon: "✅", image: getBadgeImage("trusted-contributor.png"), name: "Trusted Contributor", desc: "Write 5 community reviews", requirement: 5, metric: "reviews" },
-  { id: "community-favourite", icon: "⭐", image: getBadgeImage("community-favourite.png"), name: "Community Favourite", desc: "Write 10 community reviews", requirement: 10, metric: "reviews" },
-  { id: "malaysia-insider", icon: "🏆", image: getBadgeImage("malaysia-insider.png"), name: "Malaysia Insider", desc: "Log 100 km of outdoor activities", requirement: 100, metric: "km" },
+  { id: "first-footstep", icon: "🥾", image: firstFootstep, name: "First Footstep", desc: "Log your first outdoor activity", requirement: 1, metric: "activities" },
+  { id: "state-explorer", icon: "🧭", image: stateExplorer, name: "State Explorer", desc: "Visit 3 different Malaysian states", requirement: 3, metric: "states" },
+  { id: "malaysia-wanderer", icon: "🗺️", image: malaysiaWanderer, name: "Malaysia Wanderer", desc: "Visit 5 different Malaysian states", requirement: 5, metric: "states" },
+  { id: "hidden-gem-hunter", icon: "💎", image: hiddenGemHunter, name: "Hidden Gem Hunter", desc: "Visit 3 hidden-gem locations", requirement: 3, metric: "gems" },
+  { id: "first-contribution", icon: "✍️", image: firstContribution, name: "First Contribution", desc: "Write your first community review", requirement: 1, metric: "reviews" },
+  { id: "local-storyteller", icon: "📖", image: localStoryteller, name: "Local Storyteller", desc: "Write 3 community reviews", requirement: 3, metric: "reviews" },
+  { id: "trusted-contributor", icon: "✅", image: trustedContributor, name: "Trusted Contributor", desc: "Write 5 community reviews", requirement: 5, metric: "reviews" },
+  { id: "community-favourite", icon: "⭐", image: communityFavourite, name: "Community Favourite", desc: "Write 10 community reviews", requirement: 10, metric: "reviews" },
+  { id: "malaysia-insider", icon: "🏆", image: malaysiaInsider, name: "Malaysia Insider", desc: "Log 100 km of outdoor activities", requirement: 100, metric: "km" },
 ];
 
 const GEM_NAMES = new Set([
@@ -25,25 +32,21 @@ const GEM_NAMES = new Set([
   "Mulu Caves Trekking",
 ]);
 
-/** Evaluates user activity logs against badge definitions to calculate progress and unlock status */
 export function evaluateBadges(
   logs: ActivityLog[],
   reviewCount = 0,
   previouslyEarned: string[] = []
 ): BadgeStatus[] {
-  // Aggregate user statistics
-  const totalKm = logs.reduce((sum, log) => sum + (log.distance || 0), 0);
-  const states = new Set(logs.map((log) => log.state).filter(Boolean)).size;
+  const totalKm = logs.reduce((s, l) => s + (l.distance || 0), 0);
+  const states = new Set(logs.map((l) => l.state).filter(Boolean)).size;
   const activities = logs.length;
-
-  // Filter activity categories
-  const hikes = logs.filter((log) => /hike/i.test(log.activity)).length;
-  const dives = logs.filter((log) => /div/i.test(log.activity)).length;
-  const camps = logs.filter((log) => /camp/i.test(log.activity)).length;
+  const hikes = logs.filter((l) => /hike/i.test(l.activity)).length;
+  const dives = logs.filter((l) => /div/i.test(l.activity)).length;
+  const camps = logs.filter((l) => /camp/i.test(l.activity)).length;
   const cycleKm = logs
-    .filter((log) => /cycl/i.test(log.activity))
-    .reduce((sum, log) => sum + (log.distance || 0), 0);
-  const gems = logs.filter((log) => GEM_NAMES.has(log.location)).length;
+    .filter((l) => /cycl/i.test(l.activity))
+    .reduce((s, l) => s + (l.distance || 0), 0);
+  const gems = logs.filter((l) => l.is_hidden_gem === true || l.isHiddenGem === true || GEM_NAMES.has(l.location)).length;
 
   const metrics: Record<BadgeDef["metric"], number> = {
     activities,
@@ -57,42 +60,43 @@ export function evaluateBadges(
     camps,
   };
 
-  return BADGE_DEFS.map((badge) => {
-    const calculatedProgress = Math.min(metrics[badge.metric], badge.requirement);
-    const storedEarned = previouslyEarned.includes(badge.id);
-    const progress = storedEarned ? badge.requirement : calculatedProgress;
-    const earned = progress >= badge.requirement;
-    const justEarned = earned && !storedEarned;
-
-    return { ...badge, progress, earned, justEarned };
+  return BADGE_DEFS.map((b) => {
+    const calculatedProgress = Math.min(metrics[b.metric], b.requirement);
+    const storedEarned = previouslyEarned.includes(b.id);
+    const progress = storedEarned ? b.requirement : calculatedProgress;
+    const earned = progress >= b.requirement;
+    const justEarned = earned && !previouslyEarned.includes(b.id);
+    return { ...b, progress, earned, justEarned };
   });
 }
 
-/** Handles native Web Share API sharing with image attachments, falling back to clipboard copying */
-export async function shareBadge(badge: BadgeStatus): Promise<void> {
-  const text = `I earned the "${badge.name}" badge on SeekMY! ${badge.icon}\n${badge.desc}`;
+export function getSeekMyAppUrl() {
+  return SEEKMY_APP_URL;
+}
 
+export function badgeAchievementMessage(badge: Pick<BadgeDef, "name" | "desc" | "icon">) {
+  return `I earned the "${badge.name}" badge on SeekMY! ${badge.icon || ""}\n${badge.desc}\n\nOpen SeekMY and earn your own badges:\n${getSeekMyAppUrl()}`;
+}
+
+export async function shareBadge(badge: BadgeStatus) {
+  const text = badgeAchievementMessage(badge);
   if (typeof navigator !== "undefined" && navigator.share) {
     try {
       if (badge.image && navigator.canShare) {
         const response = await fetch(badge.image);
         const blob = await response.blob();
         const file = new File([blob], `${badge.id}.png`, { type: blob.type || "image/png" });
-
         if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ title: "SeekMY Badge", text, files: [file] });
+          await navigator.share({ title: `${badge.name} on SeekMY`, text, files: [file] });
           return;
         }
       }
-
-      await navigator.share({ title: "SeekMY Badge", text });
+      await navigator.share({ title: `${badge.name} on SeekMY`, text });
       return;
     } catch {
-      /* User cancelled or share failed silently */
+      /* cancelled */
     }
   }
-
-  // Fallback for browsers without Web Share support
   try {
     await navigator.clipboard.writeText(text);
     alert("Badge text copied — paste it anywhere to share!");

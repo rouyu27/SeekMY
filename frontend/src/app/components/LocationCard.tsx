@@ -5,9 +5,11 @@ import { Star, Bookmark, BookmarkCheck, MapPin } from "lucide-react";
 import type { Location } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { diffStyle } from "../lib/helpers";
+import type { Language } from "../lib/i18n";
+import { activityLabel, t } from "../lib/i18n";
 
-export function LocationCard({ loc, onView, bookmarked, onBookmark }:{
-  loc:Location; onView:()=>void; bookmarked:boolean; onBookmark:()=>void;
+export function LocationCard({ loc, onView, bookmarked, onBookmark, language = "en" }:{
+  loc:Location; onView:()=>void; bookmarked:boolean; onBookmark:()=>void; language?:Language;
 }) {
   const d = diffStyle(loc.difficulty);
   const [imageFailed, setImageFailed] = useState(false);
@@ -38,7 +40,7 @@ export function LocationCard({ loc, onView, bookmarked, onBookmark }:{
           <MapPin size={10} style={{color:C.textMuted}}/>
           <span className="text-[11px]" style={{color:C.textMuted,fontFamily:F.body}}>{loc.state}</span>
           <span className="text-xs" style={{color:C.border}}>·</span>
-          <span className="text-[11px] font-semibold" style={{color:C.forest,fontFamily:F.body}}>{loc.activity}</span>
+          <span className="text-[11px] font-semibold" style={{color:C.forest,fontFamily:F.body}}>{activityLabel(language, loc.activity)}</span>
         </div>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-[11px] px-2 py-0.5 rounded-full font-bold" style={{backgroundColor:d.bg,color:d.color,fontFamily:F.body}}>{loc.difficulty}</span>
@@ -52,7 +54,7 @@ export function LocationCard({ loc, onView, bookmarked, onBookmark }:{
             <span className="text-[11px]" style={{color:C.textMuted,fontFamily:F.body}}>({loc.reviews})</span>
           </div>
           {/* ==================== LimTzeXin END - User Review & Rating Module ==================== */}
-          <span className="text-[11px]" style={{color:C.textMuted,fontFamily:F.body}}>View details</span>
+          <span className="text-[11px]" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "viewDetails")}</span>
         </div>
       </div>
     </div>

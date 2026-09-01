@@ -196,9 +196,9 @@ async function profile(user: User): Promise<EntityRecord> {
       ? existing.data()
       : {};
 
-  if (existingData.status === "deleted" || existingData.status === "disabled") {
+  if (existingData.status === "deleted" || existingData.status === "disabled" || existingData.status === "suspended") {
     await signOut(firebase().auth);
-    throw new Error("This account has been disabled by an administrator.");
+    throw new Error(existingData.restrictionReason ? `This account is suspended: ${existingData.restrictionReason}` : "This account has been suspended by an administrator.");
   }
 
   const now = new Date().toISOString();
@@ -838,7 +838,7 @@ const auth = {
       );
     }
 
-    for (const collection of ["Bookmark", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
+    for (const collection of ["Bookmark", "BookmarkFolder", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
       const records = await entity(collection).filter({ created_by_id: user.uid }, undefined, 500);
       await Promise.all(records.map((record) => entity(collection).delete(String(record.id))));
     }
@@ -853,7 +853,7 @@ const auth = {
 
     await backend.adminDeleteUserData(uid);
 
-    for (const collection of ["Bookmark", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
+    for (const collection of ["Bookmark", "BookmarkFolder", "ActivityLog", "Badge", "Contributor", "LocationSubmission", "Review"]) {
       const createdRows = await entity(collection).filter({ created_by_id: uid }, undefined, 500);
       const userRows = await entity(collection).filter({ userId: uid }, undefined, 500);
       const contributorRows = await entity(collection).filter({ contributorId: uid }, undefined, 500);
@@ -1094,14 +1094,65 @@ const backend = {
   deleteActivity(id: string) {
     return this.call<{ success: boolean; stats: Record<string, number>; revokedBadges: string[] }>("deleteActivity", { id });
   },
+  updateActivity(id: string, payload: Record<string, any>) {
+    return this.call<{ activity: EntityRecord; stats: Record<string, number>; newBadges?: EntityRecord[]; revokedBadges?: string[] }>("updateActivity", { id, ...payload });
+  },
   getMyData() {
     return this.call<{ activities: EntityRecord[]; badges: EntityRecord[] }>("getMyData");
+  },
+  getAdminActivities() {
+    return this.call<{ activities: EntityRecord[] }>("getAdminActivities");
+  },
+  moderateActivity(id: string, action: "approve" | "reject", reason = "") {
+    return this.call<{ activity: EntityRecord; stats: Record<string, number>; newBadges: EntityRecord[]; revokedBadges?: string[] }>("moderateActivity", { id, action, reason });
   },
   getReviews(locationId: string) {
     return this.call<{ reviews: EntityRecord[] }>("getReviews", { locationId });
   },
   getLocationReviewSummaries() {
     return this.call<{ summaries: Array<{ locationId: string; locationName?: string; count: number; rating: number }> }>("getLocationReviewSummaries");
+  },
+  getSharedBookmarkFolder(token: string) {
+    return this.call<{ folder: { id: string; name: string; sharingEnabled: boolean; memberCount: number; viewerRole: "owner" | "member" | null; locations: Array<Record<string, any>> } }>("getSharedBookmarkFolder", { token });
+  },
+  getBookmarkFolderShareStatus(personalFolderId: string, folderName: string) {
+    return this.call<{ active: boolean; folderId: string | null; updatedAt: string | null }>("getBookmarkFolderShareStatus", { personalFolderId, folderName });
+  },
+  createBookmarkFolderShare(folderName: string, locationIds: Array<string | number>, personalFolderId?: string, sharedFolderId?: string) {
+    return this.call<{ token: string; folderId: string; folderName: string; locationCount: number }>("createBookmarkFolderShare", { folderName, locationIds, personalFolderId, sharedFolderId });
+  },
+  disableBookmarkFolderShare(folderName: string, folderId?: string, personalFolderId?: string) {
+    return this.call<{ success: boolean }>("disableBookmarkFolderShare", { folderName, folderId, personalFolderId });
+  },
+  getMyCollaborativeFolders() {
+    return this.call<{ folders: Array<Record<string, any>> }>("getMyCollaborativeFolders");
+  },
+  joinSharedBookmarkFolder(token: string) {
+    return this.call<{ folderId: string; folderName: string; role: "owner" | "member"; alreadyJoined: boolean }>("joinSharedBookmarkFolder", { token });
+  },
+  addSharedBookmarkLocation(folderId: string, locationId: string | number, locationSnapshot?: Record<string, any>) {
+    return this.call<{ location: Record<string, any> }>("addSharedBookmarkLocation", { folderId, locationId, locationSnapshot });
+  },
+  removeSharedBookmarkLocation(folderId: string, locationId: string | number) {
+    return this.call<{ success: boolean }>("removeSharedBookmarkLocation", { folderId, locationId });
+  },
+  renameSharedBookmarkFolder(folderId: string, folderName: string) {
+    return this.call<{ success: boolean; folderName: string }>("renameSharedBookmarkFolder", { folderId, folderName });
+  },
+  deleteSharedBookmarkFolder(folderId: string) {
+    return this.call<{ success: boolean }>("deleteSharedBookmarkFolder", { folderId });
+  },
+  leaveSharedBookmarkFolder(folderId: string) {
+    return this.call<{ success: boolean }>("leaveSharedBookmarkFolder", { folderId });
+  },
+  getSharedBookmarkFolderMembers(folderId: string) {
+    return this.call<{ viewerRole: "owner" | "member"; members: Array<Record<string, any>> }>("getSharedBookmarkFolderMembers", { folderId });
+  },
+  removeSharedBookmarkFolderMember(folderId: string, membershipId: string) {
+    return this.call<{ success: boolean }>("removeSharedBookmarkFolderMember", { folderId, membershipId });
+  },
+  cleanupAdminCollaborativeMemberships() {
+    return this.call<{ success: boolean; removedMemberships: number }>("cleanupAdminCollaborativeMemberships");
   },
   submitReview(payload: Record<string, any>) {
     return this.call<{ review: EntityRecord; newBadges: EntityRecord[] }>("submitReview", payload);
@@ -1182,6 +1233,13 @@ const storage = {
     return this.uploadFile("review-photos", file, onProgress);
   },
 
+  async uploadAnnouncementPhoto(
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<string> {
+    return this.uploadFile("announcement-posters", file, onProgress);
+  },
+
   async uploadLocationPhoto(
     file: File,
     onProgress?: (percent: number) => void
@@ -1215,6 +1273,7 @@ export const firebaseClient = {
         "Location",
         "Review",
         "Bookmark",
+        "BookmarkFolder",
         "ActivityLog",
         "Badge",
         "Contributor",

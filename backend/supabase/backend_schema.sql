@@ -15,11 +15,17 @@ create table if not exists public.seekmy_activities (
   notes text not null default '',
   comment text not null default '',
   photo_url text not null default '',
+  status text not null default 'approved' check (status in ('pending','approved','rejected')),
+  rejection_reason text not null default '',
+  reviewed_at timestamptz,
+  user_name text not null default 'Explorer',
   created_at timestamptz not null default now()
 );
 
 create index if not exists seekmy_activities_user_idx on public.seekmy_activities(firebase_uid, activity_date desc);
 create index if not exists seekmy_activities_period_idx on public.seekmy_activities(activity_date desc);
+create index if not exists seekmy_activities_status_idx on public.seekmy_activities(status, activity_date desc);
+create index if not exists seekmy_activities_user_status_idx on public.seekmy_activities(firebase_uid, status, activity_date desc);
 
 create table if not exists public.seekmy_reviews (
   id uuid primary key default gen_random_uuid(),
@@ -28,7 +34,10 @@ create table if not exists public.seekmy_reviews (
   location_name text not null,
   user_name text not null default 'Explorer',
   rating smallint not null check (rating between 1 and 5),
-  comment text not null check (char_length(comment) between 1 and 2000),
+  comment text not null constraint seekmy_reviews_comment_check check (
+    btrim(comment) <> '' and
+    cardinality(regexp_split_to_array(btrim(comment), E'\\s+')) <= 300
+  ),
   photo_url text not null default '',
   status text not null default 'approved' check (status in ('approved','flagged','removed','rejected')),
   flag_reason text,
@@ -41,6 +50,28 @@ create unique index if not exists seekmy_one_active_review_idx
   on public.seekmy_reviews(firebase_uid, location_id)
   where status not in ('removed','rejected');
 create index if not exists seekmy_reviews_location_idx on public.seekmy_reviews(location_id, created_at desc);
+
+create table if not exists public.seekmy_bookmark_folder_shares (
+  id uuid primary key default gen_random_uuid(),
+  firebase_uid text not null,
+  personal_folder_id text,
+  folder_key text not null,
+  folder_name text not null check (char_length(folder_name) between 1 and 80),
+  token_hash text not null unique check (char_length(token_hash) = 64),
+  locations jsonb not null default '[]'::jsonb check (jsonb_typeof(locations) = 'array'),
+  enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index if not exists seekmy_bookmark_folder_shares_personal_folder_idx
+  on public.seekmy_bookmark_folder_shares(firebase_uid, personal_folder_id)
+  where personal_folder_id is not null;
+create index if not exists seekmy_bookmark_folder_shares_token_idx
+  on public.seekmy_bookmark_folder_shares(token_hash)
+  where enabled = true;
+alter table public.seekmy_bookmark_folder_shares enable row level security;
+revoke all on table public.seekmy_bookmark_folder_shares from anon, authenticated;
+grant select, insert, update, delete on table public.seekmy_bookmark_folder_shares to service_role;
 
 create table if not exists public.seekmy_badges (
   firebase_uid text not null,

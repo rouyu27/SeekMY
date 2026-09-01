@@ -9,6 +9,8 @@ import { ImageWithFallback } from "./ui/ImageWithFallback";
 const seekMyLogo = new URL("../../imports/logo.png", import.meta.url).toString();
 import type { Page, AppUser } from "../lib/types";
 import { C, F } from "../lib/tokens";
+import type { Language } from "../lib/i18n";
+import { LANGUAGE_LABELS, t } from "../lib/i18n";
 
 const NAV_PRIMARY = [
   {label:"Home",     page:"home"        as Page, icon:<Home size={15}/>},
@@ -25,9 +27,9 @@ const NAV_MORE = [
   {label:"Help & FAQ",    page:"help"        as Page, icon:<CircleHelp size={14}/>},
 ];
 
-export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthClick, unreadAnnouncements = 0 }:{
+export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthClick, unreadAnnouncements = 0, language = "en", setLanguage }:{
   page:Page; setPage:(p:Page)=>void; mobileOpen:boolean; setMobileOpen:(v:boolean)=>void;
-  user:AppUser|null; onAuthClick:()=>void; unreadAnnouncements?:number;
+  user:AppUser|null; onAuthClick:()=>void; unreadAnnouncements?:number; language?:Language; setLanguage?:(language:Language)=>void;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement | null>(null);
@@ -67,7 +69,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
           </div>
           <div className="hidden sm:block">
             <p className="font-bold text-sm leading-tight" style={{color:C.text,fontFamily:F.display}}>SeekMY</p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{color:C.textMuted,fontFamily:F.body}}>Outdoor Discovery</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.14em]" style={{color:C.textMuted,fontFamily:F.body}}>{t(language || "en", "outdoorDiscovery")}</p>
           </div>
         </button>
 
@@ -77,7 +79,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
             <button key={label} onClick={()=>goTo(p)}
               className="flex items-center gap-1.5 px-3.5 h-8 rounded-xl text-[13px] font-semibold transition-all"
               style={{backgroundColor:page===p?C.muted:"transparent",color:page===p?C.jungle:C.textSub,fontFamily:F.body}}>
-              <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{label}
+              <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{t(language || "en", label === "Home" ? "home" : label === "Explore" ? "explore" : label === "Map" ? "map" : "aiGuide")}
             </button>
           ))}
 
@@ -95,7 +97,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
                   <button key={label} onClick={()=>goTo(p)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-semibold transition-colors text-left"
                     style={{backgroundColor:page===p?C.muted:"transparent",color:page===p?C.jungle:C.textSub,fontFamily:F.body}}>
-                    <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{label}
+                    <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{t(language || "en", label === "Activity Log" ? "activityLog" : label === "Leaderboard" ? "leaderboard" : label === "Saved" ? "saved" : label === "Contributor" ? "contributor" : label === "Insights" ? "insights" : "help")}
                   </button>
                 ))}
               </div>
@@ -108,6 +110,17 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {setLanguage && (
+            <select
+              value={language || "en"}
+              onChange={(event) => setLanguage(event.target.value as Language)}
+              className="hidden h-8 rounded-full border bg-white px-2 text-xs font-bold outline-none sm:block"
+              style={{ borderColor: C.border, color: C.textSub, fontFamily: F.body }}
+              aria-label="Language"
+            >
+              {Object.entries(LANGUAGE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select>
+          )}
           {user ? (
             <button onClick={()=>goTo("account")} className="relative flex items-center gap-2 px-2.5 py-1.5 rounded-full hover:bg-gray-50 transition-colors">
               {user.photoUrl ? (
@@ -130,7 +143,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
             </button>
           ) : (
             <button onClick={onAuthClick} className="hidden md:flex items-center gap-1.5 px-4 h-8 rounded-full text-xs font-bold text-white transition-all active:scale-95" style={{backgroundColor:C.jungle,fontFamily:F.body}}>
-              Sign In
+              {t(language || "en", "signIn")}
             </button>
           )}
           {/* Hamburger — mobile only */}
@@ -148,13 +161,13 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
               <button key={label} onClick={()=>goTo(p)}
                 className="flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm font-semibold text-left transition-colors"
                 style={{backgroundColor:page===p?C.muted:"transparent",color:page===p?C.jungle:C.textSub,fontFamily:F.body}}>
-                <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{label}
+                <span style={{color:page===p?C.jungle:C.textMuted}}>{icon}</span>{t(language || "en", label === "Home" ? "home" : label === "Explore" ? "explore" : label === "Map" ? "map" : label === "AI Guide" ? "aiGuide" : label === "Activity Log" ? "activityLog" : label === "Leaderboard" ? "leaderboard" : label === "Saved" ? "saved" : label === "Contributor" ? "contributor" : label === "Insights" ? "insights" : "help")}
               </button>
             ))}
             <button onClick={()=>goTo("account")}
               className="flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm font-semibold text-left"
               style={{backgroundColor:page==="account"?C.muted:"transparent",color:page==="account"?C.jungle:C.textSub,fontFamily:F.body}}>
-              <UserCircle size={14}/> Profile
+              <UserCircle size={14}/> {t(language || "en", "profile")}
               {unreadAnnouncements > 0 && (
                 <span className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{backgroundColor:C.error}}>
                   <Bell size={10}/> {unreadAnnouncements > 9 ? "9+" : unreadAnnouncements}
@@ -172,7 +185,7 @@ export function NavBar({ page, setPage, mobileOpen, setMobileOpen, user, onAuthC
               </div>
             ) : (
               <button onClick={()=>{onAuthClick();setMobileOpen(false);}} className="w-full py-2.5 rounded-xl text-sm font-bold text-white" style={{backgroundColor:C.jungle,fontFamily:F.body}}>
-                Sign In / Register
+                {t(language || "en", "signInRegister")}
               </button>
             )}
           </div>

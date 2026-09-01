@@ -21,3 +21,8 @@ body {
   background: #ffffff;
   color: #111827;
 }
+
+.seekmy-weather-canvas {
+  opacity: 1;
+  pointer-events: none;
+}

@@ -20,6 +20,16 @@ export interface ForecastDay {
   icon: string;
 }
 
+export interface ForecastHour {
+  date: string;
+  time: string;
+  timestamp: number;
+  temp: number;
+  condition: string;
+  precipChance: number;
+  icon: string;
+}
+
 export interface WeatherAlert {
   id: string;
   severity: "warning" | "watch" | "info";
@@ -31,6 +41,7 @@ export interface WeatherAlert {
 export interface WeatherBundle {
   current: WeatherCurrent;
   forecast: ForecastDay[];
+  hourly?: ForecastHour[];
   alerts: WeatherAlert[];
   recommendations: {
     icon: string;
@@ -46,6 +57,25 @@ export interface GeocodedPlace {
 }
 
 const cache = new Map<string, GeocodedPlace | null>();
+const weatherCache = new Map<string, { expires: number; data: WeatherBundle }>();
+const WEATHER_CACHE_MS = 10 * 60 * 1000;
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function retry<T>(work: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      return await work();
+    } catch (error) {
+      lastError = error;
+      if (index < attempts - 1) await wait(350 * (index + 1));
+    }
+  }
+  throw lastError;
+}
 
 function emoji(condition: string) {
   if (/thunder|storm/i.test(condition)) return "⛈️";
@@ -337,7 +367,7 @@ async function fetchLive(
   const forecast: ForecastDay[] =
     Array.from(grouped.entries())
       .filter(([date]) => date > todayMalaysia)
-      .slice(0, 3)
+      .slice(0, 5)
       .map(([date, items]) => {
         const temps =
           items.map(
@@ -351,6 +381,7 @@ async function fetchLive(
           ];
 
         const condition =
+          sample?.weather?.[0]?.description ??
           sample?.weather?.[0]?.main ??
           "Clouds";
 
@@ -395,6 +426,48 @@ async function fetchLive(
         };
       });
 
+  const hourly: ForecastHour[] =
+    (forecastJson.list ?? [])
+      .slice(0, 40)
+      .map((item: any) => {
+        const timestamp =
+          Number(item.dt ?? 0) * 1000;
+        const date =
+          new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Kuala_Lumpur",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).format(new Date(timestamp));
+        const time =
+          new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Asia/Kuala_Lumpur",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(new Date(timestamp));
+        const condition =
+          item.weather?.[0]?.description ??
+          item.weather?.[0]?.main ??
+          "Clouds";
+
+        return {
+          date,
+          time,
+          timestamp,
+          temp:
+            Math.round(
+              Number(item.main?.temp ?? 0)
+            ),
+          condition,
+          precipChance:
+            Math.round(
+              Number(item.pop ?? 0) * 100
+            ),
+          icon: emoji(condition),
+        };
+      });
+
   const temp =
     Math.round(
       Number(
@@ -423,6 +496,7 @@ async function fetchLive(
     );
 
   const condition =
+    currentJson.weather?.[0]?.description ??
     currentJson.weather?.[0]?.main ??
     "Clouds";
   const rawUv =
@@ -461,6 +535,7 @@ async function fetchLive(
     },
 
     forecast,
+    hourly,
     alerts,
     recommendations,
     source: "OpenWeatherMap",
@@ -478,11 +553,23 @@ export async function fetchWeather(
     );
   }
 
-  return fetchLive(
-    locationName,
+  const cacheKey = JSON.stringify({
+    locationName: locationName.trim().toLowerCase(),
     state,
-    coordinates
+    coordinates,
+  });
+  const cached = weatherCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.data;
+
+  const data = await retry(
+    () => fetchLive(locationName, state, coordinates),
+    3
   );
+  weatherCache.set(cacheKey, {
+    expires: Date.now() + WEATHER_CACHE_MS,
+    data,
+  });
+  return data;
 }
 
 // Backward-compatible alias for any older page that still calls fetchWeatherDemo.

@@ -85,13 +85,20 @@ export interface Location {
   budget: "Free"|"Low"|"Medium"|"High";
   activitySpecific?: ActivitySpecific;
   contributors?: Contributor[];
+  status?: "active" | "unavailable" | "deleted" | string;
 }
 
 export interface ActivityLog {
   id: number | string;
   locationId?: number | string;
+  userId?: string;
+  userName?: string;
+  created_by_id?: string;
+  created_by?: string;
   location: string;
   activity: string;
+  is_hidden_gem?: boolean;
+  isHiddenGem?: boolean;
   distance: number;
   duration: string;
   date: string;
@@ -99,6 +106,9 @@ export interface ActivityLog {
   comment?: string;
   photoUrl?: string;
   state: string;
+  status?: "pending" | "approved" | "rejected";
+  rejectionReason?: string;
+  reviewedAt?: string;
 }
 
 export interface BadgeDef {
@@ -119,8 +129,51 @@ export interface BadgeStatus extends BadgeDef {
 
 export interface BookmarkEntry {
   firestoreId?: string;
+  duplicateFirestoreIds?: string[];
   locationId: number | string;
   notes: string;
+  folderIds?: string[];
   folder: string;
+  folders?: string[];
+  sharedFolderId?: string | null;
   savedAt: string;
+}
+
+export interface PersonalBookmarkFolder {
+  id: string;
+  ownerUid: string;
+  name: string;
+  isDefault?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SharedBookmarkLocation {
+  id: number | string;
+  name: string;
+  address?: string;
+  state: string;
+  activity: string;
+  difficulty?: string;
+  emoji?: string;
+  imageUrl?: string;
+  addedByMe?: boolean;
+  canRemove?: boolean;
+}
+
+export interface SharedBookmarkFolder {
+  id: string;
+  personalFolderId?: string | null;
+  name: string;
+  sharingEnabled: boolean;
+  memberCount: number;
+  viewerRole: "owner" | "member" | null;
+  locations: SharedBookmarkLocation[];
+}
+
+export interface SharedBookmarkMember {
+  id: string;
+  display_name: string;
+  role: "owner" | "member";
+  joined_at: string;
 }

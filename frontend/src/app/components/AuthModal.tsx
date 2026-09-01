@@ -1,12 +1,14 @@
 //==================== WilsonChoongWeiShan Part - Account Module - Authentication ====================
 import { useState } from "react";
-import { X, Mail, Lock, User as UserIcon, UserCircle, ChevronLeft } from "lucide-react";
+import { X, Mail, Lock, User as UserIcon, UserCircle, ChevronLeft, Check } from "lucide-react";
 import { ImageWithFallback } from "../components/ui/ImageWithFallback";
 import type { AppUser } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { isValidEmail } from "../lib/helpers";
 import { Pill, AlertBanner, PasswordInput } from "../components/Atoms";
 import { firebaseClient, isStrongPassword, PASSWORD_REQUIREMENT } from "../api/firebaseClient";
+import type { Language } from "../lib/i18n";
+import { t } from "../lib/i18n";
 
 const seekMyLogo = new URL("../../imports/logo.png", import.meta.url).toString();
 const firebaseConfigured = Boolean(
@@ -34,12 +36,13 @@ function firebaseProfileToAppUser(profile: any, fallbackEmail = ""): AppUser {
     states: Number(profile?.states || 0),
     checkins: Number(profile?.checkins || 0),
     role: profile?.role === "admin" ? "admin" : "user",
+    status: profile?.status,
   };
 }
 
 
-export function AuthModal({ onClose, onLogin }:{
-  onClose:()=>void; onLogin:(u:AppUser, isAdmin?:boolean)=>void;
+export function AuthModal({ onClose, onLogin, language = "en" }:{
+  onClose:()=>void; onLogin:(u:AppUser, isAdmin?:boolean)=>void; language?:Language;
 }) {
   type AuthTab = "signin"|"register"|"forgot";
   const [tab,setTab]           = useState<AuthTab>("signin");
@@ -57,11 +60,28 @@ export function AuthModal({ onClose, onLogin }:{
   const [rName,setRName]         = useState("");
   const [rEmail,setREmail]       = useState("");
   const [rPass,setRPass]         = useState("");
+  const [rConfirmPass,setRConfirmPass] = useState("");
+  const [showRegisterPasswordRequirements,setShowRegisterPasswordRequirements] = useState(false);
 
   // Forgot
   const [fpEmail,setFpEmail]   = useState("");
 
   function switchTab(t:AuthTab) { setTab(t); setAlert(null); setCanResendVerification(false); }
+
+  const registerPasswordConditionCount = [
+    /[a-z]/.test(rPass),
+    /[A-Z]/.test(rPass),
+    /\d/.test(rPass),
+    /[^A-Za-z0-9]/.test(rPass),
+  ].filter(Boolean).length;
+  const registerPasswordRequirements = [
+    { label: "At least 8 characters", met: rPass.length >= 8 },
+    { label: "Meet all 4 conditions", met: registerPasswordConditionCount === 4 },
+    { label: "At least one lowercase letter", met: /[a-z]/.test(rPass) },
+    { label: "At least one uppercase letter", met: /[A-Z]/.test(rPass) },
+    { label: "At least one number", met: /\d/.test(rPass) },
+    { label: "At least one special character", met: /[^A-Za-z0-9]/.test(rPass) },
+  ];
 
   // 14.2.7 – 14.2.10: Login
   async function handleSignIn() {
@@ -114,10 +134,11 @@ export function AuthModal({ onClose, onLogin }:{
   async function handleRegister() {
     setAlert(null);
     setCanResendVerification(false);
-    if (!rUsername||!rName||!rEmail||!rPass) { setAlert({type:"error",msg:"All fields are required."}); return; }
+    if (!rUsername||!rName||!rEmail||!rPass||!rConfirmPass) { setAlert({type:"error",msg:"All fields are required."}); return; }
     if (rUsername.length < 3) { setAlert({type:"error",msg:"Username must be at least 3 characters."}); return; }
     if (!isValidEmail(rEmail)) { setAlert({type:"error",msg:"Please enter a valid email address."}); return; }
     if (!isStrongPassword(rPass)) { setAlert({type:"error",msg:PASSWORD_REQUIREMENT}); return; }
+    if (rPass !== rConfirmPass) { setAlert({type:"error",msg:"Passwords do not match."}); return; }
     if (firebaseConfigured) {
       try {
         await firebaseClient.auth.register({ email: rEmail, password: rPass, full_name: rName, username: rUsername });
@@ -125,6 +146,8 @@ export function AuthModal({ onClose, onLogin }:{
         setSiEmail(rEmail);
         setSiPass("");
         setRPass("");
+        setRConfirmPass("");
+        setShowRegisterPasswordRequirements(false);
         setTab("signin");
       } catch (error: any) {
         setAlert({type:"error",msg:error?.message?.replace(/^Firebase:\s*/i, "") || "Unable to create your Firebase account."});
@@ -190,10 +213,10 @@ export function AuthModal({ onClose, onLogin }:{
           {/* Tabs */}
           {tab !== "forgot" && (
             <div className="flex rounded-full overflow-hidden mb-5 p-0.5" style={{backgroundColor:C.muted}}>
-              {(["signin","register"] as const).map(t=>(
-                <button key={t} onClick={()=>switchTab(t)} className="flex-1 py-2 text-sm font-bold transition-all rounded-full"
-                  style={{backgroundColor:tab===t?C.jungle:"transparent",color:tab===t?"#fff":C.textMuted,fontFamily:F.body}}>
-                  {t==="signin"?"Sign In":"Register"}
+              {(["signin","register"] as const).map(authTab=>(
+                <button key={authTab} onClick={()=>switchTab(authTab)} className="flex-1 py-2 text-sm font-bold transition-all rounded-full"
+                  style={{backgroundColor:tab===authTab?C.jungle:"transparent",color:tab===authTab?"#fff":C.textMuted,fontFamily:F.body}}>
+                  {authTab==="signin"?t(language, "signIn"):t(language, "register")}
                 </button>
               ))}
             </div>
@@ -227,20 +250,20 @@ export function AuthModal({ onClose, onLogin }:{
             <div className="space-y-3">
               <div className="relative">
                 <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{color:C.textMuted}}/>
-                <input value={siEmail} onChange={e=>setSiEmail(e.target.value)} placeholder="Email address" type="email"
+                <input value={siEmail} onChange={e=>setSiEmail(e.target.value)} placeholder={t(language, "emailAddress")} type="email"
                   className="w-full pl-9 pr-4 py-3 rounded-xl text-sm outline-none border" style={{borderColor:C.border,fontFamily:F.body,color:C.text}}/>
               </div>
-              <PasswordInput value={siPass} onChange={setSiPass} placeholder="Password"/>
+              <PasswordInput value={siPass} onChange={setSiPass} placeholder={t(language, "password")}/>
               <div className="text-right">
-                <button onClick={()=>switchTab("forgot")} className="text-xs font-bold" style={{color:C.forest,fontFamily:F.body}}>Forgot password?</button>
+                <button onClick={()=>switchTab("forgot")} className="text-xs font-bold" style={{color:C.forest,fontFamily:F.body}}>{t(language, "forgotPassword")}</button>
               </div>
               <button onClick={handleSignIn} className="w-full h-[50px] rounded-full text-sm font-bold text-white active:scale-[0.96] transition-all" style={{backgroundColor:C.jungle,fontFamily:F.body}}>
-                Sign In
+                {t(language, "signIn")}
               </button>
 
               <div className="flex items-center gap-3 py-1">
                 <div className="h-px flex-1" style={{backgroundColor:C.border}} />
-                <span className="text-[11px] font-semibold" style={{color:C.textMuted,fontFamily:F.body}}>OR</span>
+                <span className="text-[11px] font-semibold" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "or")}</span>
                 <div className="h-px flex-1" style={{backgroundColor:C.border}} />
               </div>
 
@@ -257,7 +280,7 @@ export function AuthModal({ onClose, onLogin }:{
                   <path fill="#FBBC05" d="M6.39 13.93A6.02 6.02 0 0 1 6.08 12c0-.67.12-1.32.31-1.93v-2.6H3.04A10 10 0 0 0 2 12c0 1.61.39 3.13 1.04 4.53l3.35-2.6Z"/>
                   <path fill="#EA4335" d="M12 5.94c1.47 0 2.79.5 3.83 1.49l2.87-2.87A9.65 9.65 0 0 0 12 2a10 10 0 0 0-8.96 5.47l3.35 2.6C7.18 7.7 9.39 5.94 12 5.94Z"/>
                 </svg>
-                {googleLoading ? "Connecting to Google..." : "Continue with Google"}
+                {googleLoading ? "Connecting to Google..." : t(language, "continueGoogle")}
               </button>
             </div>
           )}
@@ -277,17 +300,39 @@ export function AuthModal({ onClose, onLogin }:{
               </div>
               <div className="relative">
                 <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{color:C.textMuted}}/>
-                <input value={rEmail} onChange={e=>setREmail(e.target.value)} placeholder="Email address" type="email"
+                <input value={rEmail} onChange={e=>setREmail(e.target.value)} placeholder={t(language, "emailAddress")} type="email"
                   className="w-full pl-9 pr-4 py-3 rounded-xl text-sm outline-none border" style={{borderColor:C.border,fontFamily:F.body,color:C.text}}/>
               </div>
-              <PasswordInput value={rPass} onChange={setRPass} placeholder="Strong password"/>
+              <PasswordInput value={rPass} onFocus={()=>setShowRegisterPasswordRequirements(true)} onChange={setRPass} placeholder="Strong password"/>
+              {showRegisterPasswordRequirements && (
+                <div className="rounded-2xl border p-4" style={{borderColor:C.border}}>
+                  <p className="mb-3 text-xs font-bold" style={{color:C.text,fontFamily:F.body}}>Password Requirements</p>
+                  <div className="space-y-2.5">
+                    {registerPasswordRequirements.map((requirement) => (
+                      <div key={requirement.label} className="flex items-center gap-2.5">
+                        <span
+                          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full"
+                          style={{
+                            backgroundColor: requirement.met ? C.successBg : C.muted,
+                            color: requirement.met ? C.success : C.textMuted,
+                          }}
+                        >
+                          {requirement.met ? <Check size={13}/> : <span className="h-2 w-2 rounded-full" style={{backgroundColor:C.textMuted}}/>}
+                        </span>
+                        <span className="text-xs" style={{color:C.textSub,fontFamily:F.body}}>{requirement.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <PasswordInput value={rConfirmPass} onChange={setRConfirmPass} placeholder="Confirm password"/>
               <button onClick={handleRegister} className="w-full h-[50px] rounded-full text-sm font-bold text-white active:scale-[0.96] transition-all" style={{backgroundColor:C.jungle,fontFamily:F.body}}>
                 Create Account
               </button>
 
               <div className="flex items-center gap-3 py-1">
                 <div className="h-px flex-1" style={{backgroundColor:C.border}} />
-                <span className="text-[11px] font-semibold" style={{color:C.textMuted,fontFamily:F.body}}>OR</span>
+                <span className="text-[11px] font-semibold" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "or")}</span>
                 <div className="h-px flex-1" style={{backgroundColor:C.border}} />
               </div>
 
@@ -304,7 +349,7 @@ export function AuthModal({ onClose, onLogin }:{
                   <path fill="#FBBC05" d="M6.39 13.93A6.02 6.02 0 0 1 6.08 12c0-.67.12-1.32.31-1.93v-2.6H3.04A10 10 0 0 0 2 12c0 1.61.39 3.13 1.04 4.53l3.35-2.6Z"/>
                   <path fill="#EA4335" d="M12 5.94c1.47 0 2.79.5 3.83 1.49l2.87-2.87A9.65 9.65 0 0 0 12 2a10 10 0 0 0-8.96 5.47l3.35 2.6C7.18 7.7 9.39 5.94 12 5.94Z"/>
                 </svg>
-                {googleLoading ? "Connecting to Google..." : "Continue with Google"}
+                {googleLoading ? "Connecting to Google..." : t(language, "continueGoogle")}
               </button>
             </div>
           )}

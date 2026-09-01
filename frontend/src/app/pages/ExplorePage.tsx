@@ -8,11 +8,13 @@ import {
 } from "../lib/constants";
 import { LocationCard } from "../components/LocationCard";
 import { SectionHead, Pill } from "../components/Atoms";
+import type { Language } from "../lib/i18n";
+import { activityLabel, budgetLabel, difficultyLabel, t } from "../lib/i18n";
 
-export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookmarks, onBookmark, locations: locationsProp }:{
+export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookmarks, onBookmark, locations: locationsProp, language = "en" }:{
   setPage:(p:Page)=>void; setSelectedLocation:(l:Location)=>void;
   selectedState:string; bookmarks:(number|string)[]; onBookmark:(id:number|string)=>void;
-  locations: Location[];
+  locations: Location[]; language?:Language;
 }) {
   const sourceLocations = locationsProp;
   const [activity,setActivity]       = useState("All");
@@ -69,7 +71,7 @@ export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookm
       <div className="bg-white border-b px-5 py-5" style={{borderColor:C.border}}>
         <div className="max-w-5xl mx-auto">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-normal" style={{fontFamily:F.display,color:C.jungle}}>Discover Locations</h1>
+            <h1 className="text-3xl font-normal" style={{fontFamily:F.display,color:C.jungle}}>{t(language, "discoverTitle")}</h1>
             {hasActiveFilters && (
               <button onClick={clearAll} className="flex items-center gap-1.5 text-xs font-bold px-3 h-8 rounded-full transition-all active:scale-95"
                 style={{backgroundColor:"#fde8e6",color:C.error,fontFamily:F.body}}>
@@ -81,7 +83,7 @@ export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookm
           {/* Search */}
           <div className="flex items-center gap-2.5 bg-gray-50 rounded-full px-4 mb-4 border" style={{borderColor:C.border,height:44}}>
             <Search size={14} style={{color:C.textMuted}}/>
-            <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search locations, states, activities…"
+            <input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t(language, "searchPlaceholder")}
               className="flex-1 outline-none text-sm bg-transparent" style={{fontFamily:F.body,color:C.text}}/>
             {query && <button onClick={()=>setQuery("")}><X size={13} style={{color:C.textMuted}}/></button>}
           </div>
@@ -92,7 +94,7 @@ export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookm
               <button key={a.id} onClick={()=>setActivity(a.id==="all"?"All":a.label)}
                 className="flex items-center gap-1.5 px-4 h-9 rounded-full text-[12px] font-bold whitespace-nowrap transition-all active:scale-95 flex-shrink-0"
                 style={{backgroundColor:activity===(a.id==="all"?"All":a.label)?C.jungle:C.muted,color:activity===(a.id==="all"?"All":a.label)?"#fff":C.textSub,fontFamily:F.body}}>
-                <span>{a.icon}</span>{a.label}
+                <span>{a.icon}</span>{activityLabel(language, a.label)}
               </button>
             ))}
           </div>
@@ -108,7 +110,7 @@ export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookm
                   borderColor:preset===p.id?C.amber:C.border,
                   fontFamily:F.body
                 }}>
-                <span>{p.icon}</span>{p.label}
+                <span>{p.icon}</span>{activityLabel(language, p.label)}
               </button>
             ))}
           </div>
@@ -117,38 +119,38 @@ export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookm
           <button onClick={()=>setShowFilters(!showFilters)}
             className="flex items-center gap-1.5 text-xs font-bold transition-all"
             style={{color:showFilters?C.jungle:C.textMuted,fontFamily:F.body}}>
-            <Filter size={12}/> More filters <ChevronDown size={12} style={{transform:showFilters?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s"}}/>
+            <Filter size={12}/> {t(language, "moreFilters")} <ChevronDown size={12} style={{transform:showFilters?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s"}}/>
           </button>
 
           {showFilters && (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl" style={{backgroundColor:C.muted}}>
               {/* Difficulty */}
               <div>
-                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>Difficulty</p>
+                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "difficulty")}</p>
                 <div className="flex flex-wrap gap-2">
                   {["All","Easy","Moderate","Hard"].map(d=>(
                     <button key={d} onClick={()=>setDifficulty(d)} className="px-3 h-7 rounded-full text-[11px] font-bold transition-all"
-                      style={{backgroundColor:difficulty===d?C.jungle:"#fff",color:difficulty===d?"#fff":C.textSub,fontFamily:F.body}}>{d}</button>
+                      style={{backgroundColor:difficulty===d?C.jungle:"#fff",color:difficulty===d?"#fff":C.textSub,fontFamily:F.body}}>{difficultyLabel(language, d)}</button>
                   ))}
                 </div>
               </div>
               {/* State */}
               <div>
-                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>State</p>
+                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "state")}</p>
                 <select value={stateFilter} onChange={e=>setStateFilter(e.target.value)}
                   className="rounded-xl px-3 h-8 text-sm outline-none border bg-white w-full"
                   style={{borderColor:C.border,fontFamily:F.body,color:C.text}}>
-                  <option value="All">All States</option>
+                  <option value="All">{t(language, "all")} States</option>
                   {ALL_STATES.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
                 </select>
               </div>
               {/* Budget */}
               <div>
-                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>Budget</p>
+                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "budget")}</p>
                 <div className="flex flex-wrap gap-2">
                   {["All","Free","Low","Medium","High"].map(b=>(
                     <button key={b} onClick={()=>setBudget(b)} className="px-3 h-7 rounded-full text-[11px] font-bold transition-all"
-                      style={{backgroundColor:budget===b?C.amber:"#fff",color:budget===b?C.jungle:C.textSub,fontFamily:F.body}}>{b}</button>
+                      style={{backgroundColor:budget===b?C.amber:"#fff",color:budget===b?C.jungle:C.textSub,fontFamily:F.body}}>{budgetLabel(language, b)}</button>
                   ))}
                 </div>
               </div>
@@ -161,7 +163,7 @@ export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookm
       <div className="max-w-5xl mx-auto px-5 py-8">
         <div className="flex items-center justify-between mb-5">
           <p className="text-sm" style={{color:C.textMuted,fontFamily:F.body}}>
-            {filtered.length} location{filtered.length!==1?"s":""} found
+            {filtered.length} {t(language, "locationsFound")}
           </p>
           {/* Active filter pills summary */}
           <div className="flex flex-wrap gap-1.5">
@@ -183,7 +185,7 @@ export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookm
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map(loc=>(
-              <LocationCard key={loc.id} loc={loc} bookmarked={bookmarks.includes(loc.id)}
+              <LocationCard key={loc.id} loc={loc} language={language} bookmarked={bookmarks.includes(loc.id)}
                 onBookmark={()=>onBookmark(loc.id)} onView={()=>{setSelectedLocation(loc);setPage("location");}}/>
             ))}
           </div>
