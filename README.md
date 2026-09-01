@@ -1,27 +1,22 @@
-# SeekMY Fullstack
+# SeekMY
 
-SeekMY is organized into frontend and backend areas so each part of the system is easy to find.
+SeekMY is a Malaysian outdoor discovery web app built with Vite, React, Firebase, and Supabase Edge Functions.
 
-## Project Structure
-
-- `frontend/` - Vite React application, public assets, browser favicon, UI pages, and client API code.
-- `backend/firebase/` - Firebase Hosting, Firestore, Storage, and project configuration.
-- `backend/supabase/` - Supabase Edge Functions used for activity logs, reviews, leaderboard, weather, and AI guide APIs.
-- `docs/` - Setup notes, module ownership, API/backend documentation, and import guides.
-
-## Frontend
+## Running The Code
 
 ```bash
-cd frontend
 npm install
 npm run dev
 npm run build
 ```
 
-## Backend
+## Project Structure
 
-Firebase rules and hosting config are in `backend/firebase/`.
+- `src/` - React application, pages, UI components, client API code, and assets.
+- `public/` - static web assets, icons, manifest, service worker, and state images.
+- `supabase/` - Edge Functions, database schema, migrations, and storage setup.
+- `firebase.json`, `firestore.rules`, `storage.rules` - Firebase Hosting and security configuration.
+- `imports/` - outdoor location import datasets.
+- `guidelines/` - project guideline notes.
 
-Supabase Edge Functions are in `backend/supabase/functions/`.
-
-See `docs/BACKEND_SETUP.md` for environment variables, deployment commands, and database notes.
+The project uses Firebase for Auth, Firestore, Storage rules, and Hosting. Supabase Edge Functions handle activity logs, reviews, leaderboard, weather, shared bookmarks, and AI backend logic. See `BACKEND_SETUP.md` for setup and deployment instructions.

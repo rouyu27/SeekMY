@@ -1,0 +1,197 @@
+//==================== WilsonChoongWeiShan Part - Activity Filter Module ====================
+import { useState, useMemo, useEffect } from "react";
+import { Filter, X, ChevronDown, Search } from "lucide-react";
+import type { Location, Page } from "../lib/types";
+import { C, F } from "../lib/tokens";
+import {
+  ALL_STATES, ACTIVITY_FILTERS, PRESET_FILTERS,
+} from "../lib/constants";
+import { LocationCard } from "../components/LocationCard";
+import { SectionHead, Pill } from "../components/Atoms";
+import type { Language } from "../lib/i18n";
+import { activityLabel, budgetLabel, difficultyLabel, t } from "../lib/i18n";
+
+export function ExplorePage({ setPage, setSelectedLocation, selectedState, bookmarks, onBookmark, locations: locationsProp, language = "en" }:{
+  setPage:(p:Page)=>void; setSelectedLocation:(l:Location)=>void;
+  selectedState:string; bookmarks:(number|string)[]; onBookmark:(id:number|string)=>void;
+  locations: Location[]; language?:Language;
+}) {
+  const sourceLocations = locationsProp;
+  const [activity,setActivity]       = useState("All");
+  const [difficulty,setDifficulty]   = useState("All");
+  const [stateFilter,setStateFilter] = useState("All");
+  const [preset,setPreset]           = useState("All");
+  const [budget,setBudget]           = useState("All");
+  const [query,setQuery]             = useState("");
+  const [showFilters,setShowFilters] = useState(false);
+
+  // If Discover was opened by clicking a state flag/card,
+  // apply that state automatically.
+  // If Discover was opened normally, selectedState is empty
+  // and all states are shown.
+  useEffect(() => {
+    setStateFilter(selectedState || "All");
+  }, [selectedState]);
+
+  const filtered = useMemo(()=>sourceLocations.filter(l=>{
+    if (activity!=="All" && l.activity!==activity) return false;
+    if (difficulty!=="All" && l.difficulty!==difficulty) return false;
+    if (stateFilter!=="All") {
+      const selectedStateInfo = ALL_STATES.find(s => s.code === stateFilter);
+      const matchesCode = l.stateCode === stateFilter;
+      const matchesName = selectedStateInfo
+        ? l.state?.toLowerCase() === selectedStateInfo.name.toLowerCase()
+        : false;
+
+      if (!matchesCode && !matchesName) return false;
+    }
+    if (preset!=="All" && !(l.tags || []).includes(preset)) return false;
+    if (budget!=="All" && l.budget!==budget) return false;
+    if (query && !l.name.toLowerCase().includes(query.toLowerCase()) && !l.state.toLowerCase().includes(query.toLowerCase()) && !l.activity.toLowerCase().includes(query.toLowerCase())) return false;
+    return true;
+  }),[activity,difficulty,stateFilter,preset,budget,query,locationsProp]);
+
+  const emptyMessage = useMemo(()=>{
+    const onlyActivity  = activity!=="All" && difficulty==="All" && stateFilter==="All" && preset==="All" && budget==="All" && !query;
+    const onlyState     = activity==="All" && difficulty==="All" && stateFilter!=="All" && preset==="All" && budget==="All" && !query;
+    const onlyDifficulty= activity==="All" && difficulty!=="All" && stateFilter==="All" && preset==="All" && budget==="All" && !query;
+    if (onlyActivity)   return "No matching outdoor locations found for the selected activity.";
+    if (onlyState)      return "No matching outdoor locations found in the selected state.";
+    if (onlyDifficulty) return "No locations match the selected difficulty level.";
+    return "No matching outdoor locations found.";
+  },[activity,difficulty,stateFilter,preset,budget,query]);
+
+  const hasActiveFilters = activity!=="All"||difficulty!=="All"||stateFilter!=="All"||preset!=="All"||budget!=="All"||query;
+
+  function clearAll() { setActivity("All"); setDifficulty("All"); setStateFilter("All"); setPreset("All"); setBudget("All"); setQuery(""); }
+
+  return (
+    <div className="pt-14 min-h-screen" style={{backgroundColor:C.cream}}>
+      {/* Header bar */}
+      <div className="bg-white border-b px-5 py-5" style={{borderColor:C.border}}>
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-3xl font-normal" style={{fontFamily:F.display,color:C.jungle}}>{t(language, "discoverTitle")}</h1>
+            {hasActiveFilters && (
+              <button onClick={clearAll} className="flex items-center gap-1.5 text-xs font-bold px-3 h-8 rounded-full transition-all active:scale-95"
+                style={{backgroundColor:"#fde8e6",color:C.error,fontFamily:F.body}}>
+                <X size={11}/> Clear all
+              </button>
+            )}
+          </div>
+
+          {/* Search */}
+          <div className="flex items-center gap-2.5 bg-gray-50 rounded-full px-4 mb-4 border" style={{borderColor:C.border,height:44}}>
+            <Search size={14} style={{color:C.textMuted}}/>
+            <input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t(language, "searchPlaceholder")}
+              className="flex-1 outline-none text-sm bg-transparent" style={{fontFamily:F.body,color:C.text}}/>
+            {query && <button onClick={()=>setQuery("")}><X size={13} style={{color:C.textMuted}}/></button>}
+          </div>
+
+          {/* Activity type horizontal scroll */}
+          <div className="flex gap-2 overflow-x-auto pb-1 mb-4" style={{scrollbarWidth:"none"}}>
+            {ACTIVITY_FILTERS.map(a=>(
+              <button key={a.id} onClick={()=>setActivity(a.id==="all"?"All":a.label)}
+                className="flex items-center gap-1.5 px-4 h-9 rounded-full text-[12px] font-bold whitespace-nowrap transition-all active:scale-95 flex-shrink-0"
+                style={{backgroundColor:activity===(a.id==="all"?"All":a.label)?C.jungle:C.muted,color:activity===(a.id==="all"?"All":a.label)?"#fff":C.textSub,fontFamily:F.body}}>
+                <span>{a.icon}</span>{activityLabel(language, a.label)}
+              </button>
+            ))}
+          </div>
+
+          {/* Preset filters */}
+          <div className="flex gap-2 flex-wrap mb-3">
+            {PRESET_FILTERS.map(p=>(
+              <button key={p.id} onClick={()=>setPreset(preset===p.id?"All":p.id)}
+                className="flex items-center gap-1.5 px-3.5 h-8 rounded-full text-[11px] font-bold transition-all active:scale-95 border"
+                style={{
+                  backgroundColor:preset===p.id?C.amber:"#fff",
+                  color:preset===p.id?C.jungle:C.textSub,
+                  borderColor:preset===p.id?C.amber:C.border,
+                  fontFamily:F.body
+                }}>
+                <span>{p.icon}</span>{activityLabel(language, p.label)}
+              </button>
+            ))}
+          </div>
+
+          {/* Expandable advanced filters */}
+          <button onClick={()=>setShowFilters(!showFilters)}
+            className="flex items-center gap-1.5 text-xs font-bold transition-all"
+            style={{color:showFilters?C.jungle:C.textMuted,fontFamily:F.body}}>
+            <Filter size={12}/> {t(language, "moreFilters")} <ChevronDown size={12} style={{transform:showFilters?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s"}}/>
+          </button>
+
+          {showFilters && (
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-2xl" style={{backgroundColor:C.muted}}>
+              {/* Difficulty */}
+              <div>
+                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "difficulty")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {["All","Easy","Moderate","Hard"].map(d=>(
+                    <button key={d} onClick={()=>setDifficulty(d)} className="px-3 h-7 rounded-full text-[11px] font-bold transition-all"
+                      style={{backgroundColor:difficulty===d?C.jungle:"#fff",color:difficulty===d?"#fff":C.textSub,fontFamily:F.body}}>{difficultyLabel(language, d)}</button>
+                  ))}
+                </div>
+              </div>
+              {/* State */}
+              <div>
+                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "state")}</p>
+                <select value={stateFilter} onChange={e=>setStateFilter(e.target.value)}
+                  className="rounded-xl px-3 h-8 text-sm outline-none border bg-white w-full"
+                  style={{borderColor:C.border,fontFamily:F.body,color:C.text}}>
+                  <option value="All">{t(language, "all")} States</option>
+                  {ALL_STATES.map(s=><option key={s.code} value={s.code}>{s.name}</option>)}
+                </select>
+              </div>
+              {/* Budget */}
+              <div>
+                <p className="text-[11px] font-bold mb-2 uppercase tracking-wide" style={{color:C.textMuted,fontFamily:F.body}}>{t(language, "budget")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {["All","Free","Low","Medium","High"].map(b=>(
+                    <button key={b} onClick={()=>setBudget(b)} className="px-3 h-7 rounded-full text-[11px] font-bold transition-all"
+                      style={{backgroundColor:budget===b?C.amber:"#fff",color:budget===b?C.jungle:C.textSub,fontFamily:F.body}}>{budgetLabel(language, b)}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Results */}
+      <div className="max-w-5xl mx-auto px-5 py-8">
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-sm" style={{color:C.textMuted,fontFamily:F.body}}>
+            {filtered.length} {t(language, "locationsFound")}
+          </p>
+          {/* Active filter pills summary */}
+          <div className="flex flex-wrap gap-1.5">
+            {activity!=="All" && <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold" style={{backgroundColor:C.jungle,color:"#fff",fontFamily:F.body}}>{activity}</span>}
+            {stateFilter!=="All" && <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold" style={{backgroundColor:C.forest,color:"#fff",fontFamily:F.body}}>{ALL_STATES.find(s=>s.code===stateFilter)?.name||stateFilter}</span>}
+            {difficulty!=="All" && <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold" style={{backgroundColor:"#fef3c7",color:"#92400e",fontFamily:F.body}}>{difficulty}</span>}
+            {preset!=="All" && <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold" style={{backgroundColor:C.amber,color:C.jungle,fontFamily:F.body}}>{preset}</span>}
+            {budget!=="All" && <span className="text-[11px] px-2.5 py-0.5 rounded-full font-bold" style={{backgroundColor:C.muted,color:C.textSub,fontFamily:F.body}}>{budget} budget</span>}
+          </div>
+        </div>
+
+        {filtered.length===0 ? (
+          <div className="text-center py-20">
+            <p className="text-5xl mb-4">🏔️</p>
+            <p className="text-base font-bold mb-2" style={{color:C.text,fontFamily:F.body}}>{emptyMessage}</p>
+            <p className="text-sm mb-6" style={{color:C.textMuted,fontFamily:F.body}}>Try adjusting or clearing your filters.</p>
+            <Pill variant="filled" onClick={clearAll}>Clear all filters</Pill>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map(loc=>(
+              <LocationCard key={loc.id} loc={loc} language={language} bookmarked={bookmarks.includes(loc.id)}
+                onBookmark={()=>onBookmark(loc.id)} onView={()=>{setSelectedLocation(loc);setPage("location");}}/>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+//==================== WilsonChoongWeiShan END - Activity Filter Module ====================

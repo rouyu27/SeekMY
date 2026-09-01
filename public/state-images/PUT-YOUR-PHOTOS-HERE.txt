@@ -1,0 +1,29 @@
+PUT YOUR OWN STATE PHOTOS IN THIS FOLDER.
+
+Use these exact file names (JPG):
+
+johor.jpg
+kedah.jpg
+kelantan.jpg
+melaka.jpg
+negeri-sembilan.jpg
+pahang.jpg
+perak.jpg
+perlis.jpg
+selangor.jpg
+terengganu.jpg
+pulau-pinang.jpg
+sabah.jpg
+sarawak.jpg
+kuala-lumpur.jpg
+labuan.jpg
+putrajaya.jpg
+
+Example:
+To change the Selangor card, put your picture here as:
+public/state-images/selangor.jpg
+
+Recommended image shape: landscape (4:3 or 16:9).
+The app uses object-cover, so the image will automatically fill the card.
+
+If a photo is not added, SeekMY automatically shows the original state flag instead.
