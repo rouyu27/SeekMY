@@ -27,7 +27,7 @@ import { InsightsPage } from "./pages/InsightsPage";
 import { HelpPage } from "./pages/HelpPage";
 import { SharedBookmarksPage } from "./pages/SharedBookmarksPage";
 import { firebaseClient } from "./api/firebaseClient";
-import { BADGE_DEFS, badgeAchievementMessage } from "./lib/badges";
+import { BADGE_DEFS, badgeAchievementMessage, normalizeBadgeDefinitions } from "./lib/badges";
 import type { BadgeDef } from "./lib/types";
 import { SplashScreen } from "./components/SplashScreen";
 import { OnboardingTour } from "./components/OnboardingTour";
@@ -163,6 +163,7 @@ export default function App() {
   const [user, setUser]         = useState<AppUser|null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [earnedBadgeIds, setEarnedBadgeIds] = useState<string[]>([]);
+  const [badgeDefinitions, setBadgeDefinitions] = useState<BadgeDef[]>(BADGE_DEFS);
   const [badgeToast, setBadgeToast] = useState<BadgeDef | null>(null);
   const [showSplash, setShowSplash] = useState(true);
   const [unreadAnnouncements, setUnreadAnnouncements] = useState(0);
@@ -273,6 +274,10 @@ export default function App() {
         }
         showToast(error?.message || "Unable to load locations from Firebase.", "err");
       });
+
+    firebaseClient.backend.getBadgeDefinitions()
+      .then((result) => setBadgeDefinitions(normalizeBadgeDefinitions(result.badges)))
+      .catch(() => setBadgeDefinitions(BADGE_DEFS));
 
     firebaseClient.auth.me().then(async (profile: any) => {
       const email = profile?.email || "";
@@ -658,7 +663,8 @@ export default function App() {
           createdAt:new Date().toISOString(),
         }).catch(()=>{})));
         refreshUnreadAnnouncements(user);
-        const earnedBadge = BADGE_DEFS.find((badge) => badge.id === result.newBadges[0].key);
+        const earnedBadge = badgeDefinitions.find((badge) => badge.id === result.newBadges[0].key)
+          || normalizeBadgeDefinitions(result.newBadges).find((badge) => badge.id === result.newBadges[0].key);
         if (earnedBadge) {
           setBadgeToast(earnedBadge);
           setTimeout(() => setBadgeToast(null), 5200);
@@ -928,6 +934,7 @@ export default function App() {
           users={users}
           setUsers={setUsers}
           earnedBadgeIds={earnedBadgeIds}
+          badgeDefinitions={badgeDefinitions}
           onAnnouncementsChanged={setUnreadAnnouncements}
           language={language}
         />

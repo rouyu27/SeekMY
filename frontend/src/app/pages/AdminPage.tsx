@@ -13,6 +13,7 @@ import { OutdoorImportPanel } from "../components/OutdoorImportPanel";
 import { LocationImageUploader } from "./LocationImageUploader";
 import { STARTER_LOCATIONS, mergeLocations } from "../lib/seedLocations";
 import { geocodeMapLocation, reverseGeocodeLocation } from "../lib/mapGeocoding";
+import { BadgeManagementPanel } from "../components/admin/BadgeManagementPanel";
 
 const TEAM_ADMIN_EMAILS = [
   "shanyuew416@gmail.com",
@@ -116,7 +117,7 @@ function openAdminVerificationSearch(form: typeof emptyLocation, kind: "official
 export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locations: parentLocations, onLogout }:{
   users:AppUser[]; setUsers:(u:AppUser[])=>void; locations:Location[]; onLogout:()=>void;
 }) {
-  type AdminTab="dashboard"|"users"|"locations"|"outdoorImport"|"pendingLocs"|"activityLogs"|"reviews"|"contributors"|"announcements";
+  type AdminTab="dashboard"|"users"|"locations"|"outdoorImport"|"pendingLocs"|"activityLogs"|"reviews"|"badges"|"contributors"|"announcements";
   const [tab,setTab]=useState<AdminTab>("dashboard");
   const [search,setSearch]=useState("");
   const [users,setUsers]=useState<AppUser[]>(parentUsers);
@@ -579,6 +580,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     {id:"pendingLocs",icon:"⏳",label:"Pending Locations"},
     {id:"activityLogs",icon:"🥾",label:"Activity Review"},
     {id:"reviews",icon:"⭐",label:"Review Moderation"},
+    {id:"badges",icon:"🏅",label:"Badge Management"},
     {id:"contributors",icon:"🤝",label:"Contributors"},
     {id:"announcements",icon:"🔔",label:"Announcements"},
   ];
@@ -613,8 +615,9 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
           ))}
         </div>
       </div>
-      {tab!=="dashboard"&&<div className="flex items-center gap-2 bg-white rounded-full px-4 mb-6 border" style={{borderColor:C.border,height:44}}><Search size={14} style={{color:C.textMuted}}/><input value={search} onChange={e=>setSearch(e.target.value)} className="flex-1 outline-none text-sm bg-transparent" placeholder={`Search ${tab}…`}/>{search&&<button onClick={()=>setSearch("")}><X size={13}/></button>}</div>}
+      {tab!=="dashboard"&&tab!=="badges"&&<div className="flex items-center gap-2 bg-white rounded-full px-4 mb-6 border" style={{borderColor:C.border,height:44}}><Search size={14} style={{color:C.textMuted}}/><input value={search} onChange={e=>setSearch(e.target.value)} className="flex-1 outline-none text-sm bg-transparent" placeholder={`Search ${tab}…`}/>{search&&<button onClick={()=>setSearch("")}><X size={13}/></button>}</div>}
       {loading?<div className="space-y-3">{[1,2,3].map(i=><div key={i} className="h-24 bg-white rounded-[18px] animate-pulse"/>)}</div>:<>
+        {tab==="badges"&&<BadgeManagementPanel/>}
         {tab==="dashboard"&&<div><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-7"><div><h1 className="text-3xl font-normal" style={{fontFamily:F.display,color:C.jungle}}>Platform Overview</h1><p className="text-sm" style={{color:C.textMuted}}>Loaded directly from Firebase. Select a card to manage its records.</p></div><Pill variant="outline" small onClick={loadData}><Database size={13}/> Refresh</Pill></div><div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">{DASHBOARD_CARDS.map(card=><button type="button" key={card.label} onClick={()=>{setSearch("");setTab(card.target);}} className="bg-white rounded-[18px] p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2" style={{outlineColor:C.forest}} aria-label={`Open ${card.label} management`}><span className="text-2xl">{card.icon}</span><p className="text-2xl font-bold mt-2" style={{fontFamily:F.display,color:C.jungle}}>{card.value}</p><p className="text-xs" style={{color:C.textMuted}}>{card.label}</p><p className="text-[11px] font-bold mt-3" style={{color:C.forest,fontFamily:F.body}}>{card.hint}</p></button>)}</div></div>}
         {tab==="users"&&<div className="space-y-3">
           <h1 className="text-2xl mb-3" style={{fontFamily:F.display,color:C.jungle}}>User Management</h1>

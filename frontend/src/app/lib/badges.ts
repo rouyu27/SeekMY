@@ -35,7 +35,8 @@ const GEM_NAMES = new Set([
 export function evaluateBadges(
   logs: ActivityLog[],
   reviewCount = 0,
-  previouslyEarned: string[] = []
+  previouslyEarned: string[] = [],
+  definitions: BadgeDef[] = BADGE_DEFS
 ): BadgeStatus[] {
   const totalKm = logs.reduce((s, l) => s + (l.distance || 0), 0);
   const states = new Set(logs.map((l) => l.state).filter(Boolean)).size;
@@ -60,7 +61,7 @@ export function evaluateBadges(
     camps,
   };
 
-  return BADGE_DEFS.map((b) => {
+  return definitions.map((b) => {
     const calculatedProgress = Math.min(metrics[b.metric], b.requirement);
     const storedEarned = previouslyEarned.includes(b.id);
     const progress = storedEarned ? b.requirement : calculatedProgress;
@@ -68,6 +69,27 @@ export function evaluateBadges(
     const justEarned = earned && !previouslyEarned.includes(b.id);
     return { ...b, progress, earned, justEarned };
   });
+}
+
+export function normalizeBadgeDefinitions(rows: any[]): BadgeDef[] {
+  const legacyById = new Map(BADGE_DEFS.map((badge) => [badge.id, badge]));
+  const normalized = rows.map((row): BadgeDef | null => {
+    const id = String(row.key || row.badge_key || row.id || "").trim();
+    const legacy = legacyById.get(id);
+    const metric = String(row.metric || legacy?.metric || "activities") as BadgeDef["metric"];
+    const requirement = Number(row.requirement ?? legacy?.requirement);
+    if (!id || !Number.isFinite(requirement) || requirement <= 0) return null;
+    return {
+      id,
+      name: String(row.name || legacy?.name || "Badge"),
+      desc: String(row.desc || row.description || legacy?.desc || "Achievement"),
+      icon: String(row.icon || legacy?.icon || "🏅"),
+      image: String(row.imageUrl || row.image_url || legacy?.image || "/icon-192.png"),
+      metric,
+      requirement,
+    };
+  }).filter((badge): badge is BadgeDef => Boolean(badge));
+  return normalized.length ? normalized : BADGE_DEFS;
 }
 
 export function getSeekMyAppUrl() {
