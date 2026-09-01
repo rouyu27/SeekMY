@@ -12,6 +12,7 @@ import {
   ImageIcon,
   Search,
   WalletCards,
+  X,
 } from "lucide-react";
 import {
   MapContainer,
@@ -37,6 +38,7 @@ import {
 
 const ACTIVITIES =
   "Hiking,Diving,Cycling,Camping,Swimming,Trail Running,Jogging,Rock Climbing,Water Sports".split(",");
+const MAX_LOCATION_PHOTOS = 5;
 
 type BudgetLevel = "Free" | "Low" | "Medium" | "High";
 
@@ -131,9 +133,8 @@ export function SuggestLocationPage({
   const [locationConfirmed, setLocationConfirmed] = useState(false);
   //==================== LimRouYu END - Map Confirmation State ====================
 
-  const [photoName, setPhotoName] = useState("");
-  const [photoData, setPhotoData] = useState("");
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
@@ -180,43 +181,67 @@ export function SuggestLocationPage({
     );
   }
 
-  async function onPhoto(file?: File | null) {
+  async function onPhotos(fileList?: FileList | null) {
     setMsg(null);
-    if (!file) return;
+    if (!fileList?.length) return;
 
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setMsg({
-        type: "err",
-        text: "Please upload a JPG, PNG, or WEBP image.",
-      });
-      setPhotoName("");
-      setPhotoData("");
-      setPhotoFile(null);
+    const remainingSlots = MAX_LOCATION_PHOTOS - photoFiles.length;
+    if (remainingSlots <= 0) {
+      setMsg({ type: "err", text: "Maximum 5 pictures per location." });
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      setMsg({
-        type: "err",
-        text: "Photo must be under 2MB.",
-      });
-      setPhotoName("");
-      setPhotoData("");
-      setPhotoFile(null);
-      return;
+    const validFiles: File[] = [];
+    for (const file of Array.from(fileList).slice(0, remainingSlots)) {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        setMsg({
+          type: "err",
+          text: `${file.name}: please upload a JPG, PNG, or WEBP image.`,
+        });
+        continue;
+      }
+
+      if (file.size > 2 * 1024 * 1024) {
+        setMsg({
+          type: "err",
+          text: `${file.name}: photo must be under 2MB.`,
+        });
+        continue;
+      }
+
+      validFiles.push(file);
     }
+
+    if (!validFiles.length) return;
 
     try {
-      const data = await fileToDataUrl(file);
-      setPhotoData(data);
-      setPhotoFile(file);
-      setPhotoName(file.name);
+      const previews = await Promise.all(validFiles.map(fileToDataUrl));
+      setPhotoFiles([...photoFiles, ...validFiles]);
+      setPhotoPreviews([...photoPreviews, ...previews]);
     } catch {
       setMsg({
         type: "err",
-        text: "Could not read the image. Please try another file.",
+        text: "Could not read one of the images. Please try another file.",
       });
     }
+  }
+
+  function removePhoto(index: number) {
+    setPhotoFiles(photoFiles.filter((_, itemIndex) => itemIndex !== index));
+    setPhotoPreviews(photoPreviews.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function reorderPhoto(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+
+    const nextFiles = [...photoFiles];
+    const nextPreviews = [...photoPreviews];
+    const [movedFile] = nextFiles.splice(fromIndex, 1);
+    const [movedPreview] = nextPreviews.splice(fromIndex, 1);
+    nextFiles.splice(toIndex, 0, movedFile);
+    nextPreviews.splice(toIndex, 0, movedPreview);
+    setPhotoFiles(nextFiles);
+    setPhotoPreviews(nextPreviews);
   }
 
   //==================== LimRouYu Part - Find and Confirm Suggested Place ====================
@@ -308,10 +333,10 @@ export function SuggestLocationPage({
       return;
     }
 
-    if (!photoFile) {
+    if (!photoFiles.length) {
       setMsg({
         type: "err",
-        text: "A photo is required. Please upload a picture of the location.",
+        text: "A photo is required. Please upload at least one picture of the location.",
       });
       return;
     }
@@ -363,8 +388,9 @@ export function SuggestLocationPage({
         return;
       }
 
-      const photoUrl =
-        await firebaseClient.storage.uploadLocationPhoto(photoFile);
+      const photoUrls = await Promise.all(
+        photoFiles.map((file) => firebaseClient.storage.uploadLocationPhoto(file))
+      );
 
       const price = parsedPrice.max;
       const payload: Omit<LocationSubmission, "id"> = {
@@ -384,8 +410,9 @@ export function SuggestLocationPage({
         estimatedPrice: price,
         estimatedPriceRange: parsedPrice.label,
         budget: getBudgetLevel(price),
-        photoUrl,
-        photoName: photoName || "photo.jpg",
+        photoUrl: photoUrls[0],
+        photoUrls,
+        photoName: photoFiles.map((file) => file.name).join(", "),
         status: "pending",
         createdAt: new Date().toISOString(),
       };
@@ -411,9 +438,8 @@ export function SuggestLocationPage({
       setAccessibility("");
       setEstimatedPriceMin("");
       setEstimatedPriceMax("");
-      setPhotoName("");
-      setPhotoData("");
-      setPhotoFile(null);
+      setPhotoFiles([]);
+      setPhotoPreviews([]);
       resetDetectedLocation();
     } catch (error: any) {
       setMsg({
@@ -741,13 +767,13 @@ export function SuggestLocationPage({
           <div
             className="p-4 rounded-xl border-2 border-dashed"
             style={{
-              borderColor: photoData ? C.forest : C.border,
+              borderColor: photoFiles.length ? C.forest : C.border,
             }}
           >
             <label className="flex flex-col items-center gap-2 cursor-pointer text-center">
-              {photoData ? (
+              {photoFiles.length ? (
                 <img
-                  src={photoData}
+                  src={photoPreviews[0]}
                   alt="Preview"
                   className="w-full max-h-48 object-cover rounded-lg"
                 />
@@ -763,9 +789,7 @@ export function SuggestLocationPage({
                 style={{ color: C.forest, fontFamily: F.body }}
               >
                 <FileUp size={16} />
-                {photoData
-                  ? "Change photo *"
-                  : "Upload photo * (required)"}
+                Add Pictures ({MAX_LOCATION_PHOTOS - photoFiles.length} left)
               </span>
 
               <span
@@ -777,19 +801,67 @@ export function SuggestLocationPage({
 
               <input
                 type="file"
+                multiple
                 accept="image/jpeg,image/png,image/webp"
                 className="hidden"
-                onChange={(e) => onPhoto(e.target.files?.[0])}
+                disabled={photoFiles.length >= MAX_LOCATION_PHOTOS}
+                onChange={(e) => {
+                  onPhotos(e.target.files);
+                  e.currentTarget.value = "";
+                }}
               />
             </label>
 
-            {photoName && (
-              <p
-                className="text-xs mt-2 text-center"
-                style={{ color: C.textMuted, fontFamily: F.body }}
-              >
-                {photoName}
-              </p>
+            {photoFiles.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
+                {photoFiles.map((file, index) => (
+                  <div
+                    key={`${file.name}-${index}`}
+                    draggable
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData("text/plain", String(index));
+                      event.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+                      if (Number.isInteger(fromIndex)) reorderPhoto(fromIndex, index);
+                    }}
+                    className="relative overflow-hidden rounded-lg border bg-white cursor-move"
+                    style={{ borderColor: index === 0 ? C.amber : C.border }}
+                  >
+                    <img
+                      src={photoPreviews[index]}
+                      alt={file.name}
+                      className="w-full h-28 object-cover"
+                    />
+                    <div
+                      className="absolute left-1 top-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
+                      style={{ backgroundColor: index === 0 ? C.jungle : "rgba(0,0,0,0.55)" }}
+                    >
+                      {index === 0 ? "Cover" : `#${index + 1}`}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(index)}
+                      className="absolute top-1 right-1 bg-white rounded-full p-1 shadow"
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      <X size={13} />
+                    </button>
+                    <p
+                      className="truncate px-2 py-1 text-[10px]"
+                      style={{ color: C.textMuted, fontFamily: F.body }}
+                    >
+                      {file.name}
+                    </p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

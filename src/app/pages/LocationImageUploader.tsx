@@ -42,6 +42,7 @@ export function LocationImageUploader({ existing, files, setFiles, setExisting, 
     ...existing.map((url) => ({ kind: "existing" as const, url })),
     ...files.map((file, index) => ({ kind: "file" as const, file, preview: previews[index], index })),
   ];
+  const remainingSlots = MAX_IMAGES - existing.length - files.length;
 
   function replaceOrdered(items: typeof orderedItems) {
     setExisting(items.filter((item) => item.kind === "existing").map((item) => item.url));
@@ -53,6 +54,14 @@ export function LocationImageUploader({ existing, files, setFiles, setExisting, 
     if (target < 0 || target >= orderedItems.length) return;
     const next = [...orderedItems];
     [next[index], next[target]] = [next[target], next[index]];
+    replaceOrdered(next);
+  }
+
+  function reorderImage(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return;
+    const next = [...orderedItems];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
     replaceOrdered(next);
   }
 
@@ -86,7 +95,7 @@ export function LocationImageUploader({ existing, files, setFiles, setExisting, 
   return <div>
     <label className="text-xs font-bold block mb-2" style={{ color: C.textSub }}>Location pictures (maximum 5)</label>
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
-      {orderedItems.map((item, index) => <div key={item.kind === "existing" ? item.url : `${item.file.name}-${index}`} className="relative overflow-hidden rounded-xl border bg-white" style={{ borderColor: index === 0 ? C.amber : C.border }}>
+      {orderedItems.map((item, index) => <div key={item.kind === "existing" ? item.url : `${item.file.name}-${index}`} draggable onDragStart={(event) => { event.dataTransfer.setData("text/plain", String(index)); event.dataTransfer.effectAllowed = "move"; }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }} onDrop={(event) => { event.preventDefault(); const fromIndex = Number(event.dataTransfer.getData("text/plain")); if (Number.isInteger(fromIndex)) reorderImage(fromIndex, index); }} className="relative overflow-hidden rounded-xl border bg-white cursor-move" style={{ borderColor: index === 0 ? C.amber : C.border }}>
         <img src={item.kind === "existing" ? item.url : item.preview} alt={item.kind === "existing" ? "Location" : item.file.name} className="w-full h-28 object-cover" />
         <div className="absolute left-1 top-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: index === 0 ? C.jungle : "rgba(0,0,0,0.55)" }}>{index === 0 ? "Cover" : `#${index + 1}`}</div>
         <button type="button" onClick={() => item.kind === "existing" ? onRemoveExisting(item.url) : setFiles(files.filter((_, i) => i !== item.index))} className="absolute top-1 right-1 bg-white rounded-full p-1 shadow" aria-label="Remove picture"><X size={13} /></button>
@@ -97,8 +106,8 @@ export function LocationImageUploader({ existing, files, setFiles, setExisting, 
       </div>)}
       {!existing.length && !files.length && <div className="col-span-full h-28 rounded-xl border-2 border-dashed flex items-center justify-center" style={{ borderColor: C.border }}><ImageIcon size={25} style={{ color: C.textMuted }} /></div>}
     </div>
-    {existing.length + files.length < MAX_IMAGES && <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 cursor-pointer text-sm font-bold" style={{ borderColor: C.border, color: C.jungle }}>
-      <Upload size={16} /> Add pictures
+    {remainingSlots > 0 && <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-xl py-3 cursor-pointer text-sm font-bold" style={{ borderColor: C.border, color: C.jungle }}>
+      <Upload size={16} /> Add Pictures ({remainingSlots} left)
       <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(event) => { selectImages(event.target.files); event.currentTarget.value = ""; }} />
     </label>}
     <p className="text-[10px] mt-1" style={{ color: C.textMuted }}>Images are compressed before upload. Maximum 2 MB per picture. Use the arrows to arrange the cover and gallery order.</p>
