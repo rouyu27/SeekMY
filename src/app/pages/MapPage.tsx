@@ -245,6 +245,11 @@ function visibleFacilities(location: Location) {
   return Array.isArray(location.facilities) ? location.facilities.slice(0, 3) : [];
 }
 
+function isAcceptedActivityLog(log: ActivityLog) {
+  const status = String((log as { status?: string }).status || "").toLowerCase();
+  return status === "approved" || status === "active" || status === "accepted";
+}
+
 function distanceSquared(latA: number, lngA: number, latB: number, lngB: number) {
   const latDelta = latA - latB;
   const lngDelta = (lngA - lngB) * Math.cos(((latA + latB) / 2) * Math.PI / 180);
@@ -462,6 +467,7 @@ export function MapPage({
   const loggedByLocation = useMemo(() => {
     const map = new Map<string, ActivityLog>();
     for (const log of activityLogs) {
+      if (!isAcceptedActivityLog(log)) continue;
       const keys = [
         log.locationId != null ? String(log.locationId) : "",
         `${log.location}|${log.state}`.toLowerCase(),
