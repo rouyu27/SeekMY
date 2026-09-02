@@ -1278,6 +1278,13 @@ const storage = {
   ): Promise<string> {
     return this.uploadFile("profile-photos", file, onProgress);
   },
+
+  async uploadBadgeImage(
+    file: File,
+    onProgress?: (percent: number) => void
+  ): Promise<string> {
+    return this.uploadFile("badge-images", file, onProgress);
+  },
 };
 
 /* =========================================================

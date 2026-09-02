@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Trophy } from "lucide-react";
 import { C, F } from "../lib/tokens";
 import { firebaseClient } from "../api/firebaseClient";
+import { BADGE_DEFS } from "../lib/badges";
 import type { Language } from "../lib/i18n";
 import { t } from "../lib/i18n";
 
 type LeaderboardPeriod = "weekly" | "monthly";
+const badgeImages = new Map(BADGE_DEFS.flatMap((badge) => [[badge.id, badge.image], [badge.name, badge.image]]));
 
 function isoDate(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -75,6 +77,7 @@ export function LeaderboardPage({ currentUserId, language = "en" }: { currentUse
   const [sortBy, setSortBy] = useState<"km" | "checkins" | "states" | "locations">("km");
   const [entries, setEntries] = useState<any[]>([]);
   const [badges, setBadges] = useState<any[]>([]);
+  const [selectedBadge, setSelectedBadge] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const rangeOptions = useMemo(() => {
@@ -186,18 +189,59 @@ export function LeaderboardPage({ currentUserId, language = "en" }: { currentUse
           {badges.length === 0 && <p className="col-span-2 text-sm text-center py-8" style={{ color: C.textMuted, fontFamily: F.body }}>{language === "zh" ? "暂无徽章资料。" : language === "ms" ? "Tiada data lencana lagi." : "No badge data yet."}</p>}
           {badges.map((badge: any) => {
             const translated = badgeCopy(language, badge.name || "Badge", badge.desc || badge.description || "Achievement");
+            const badgeKey = String(badge.key || badge.badge_key || badge.id || "");
+            const image = badge.image || badge.imageUrl || badge.image_url || badgeImages.get(badgeKey) || badgeImages.get(badge.name);
             return (
-              <div key={badge.id} className="bg-white rounded-[18px] p-4 flex gap-3 items-start" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.08), 0 4px 12px rgba(27,67,50,0.05)` }}>
-                <span className="text-2xl">{badge.icon || "🏅"}</span>
+              <button
+                key={badge.id}
+                type="button"
+                onClick={() => setSelectedBadge({ ...badge, ...translated, image })}
+                className="bg-white rounded-[18px] p-4 flex gap-3 items-start text-left transition-transform active:scale-[0.99]"
+                style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.08), 0 4px 12px rgba(27,67,50,0.05)` }}
+                aria-label={`View ${translated.name} badge`}
+              >
+                <span className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-xl">
+                  {image ? (
+                    <img src={image} alt="" className="h-full w-full object-contain" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-xs font-bold" style={{ backgroundColor: C.muted, color: C.forest }}>MY</span>
+                  )}
+                </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold" style={{ fontFamily: F.body, color: C.text }}>{translated.name}</p>
                   <p className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>{translated.desc}</p>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
+      {selectedBadge && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 p-6"
+          onClick={() => setSelectedBadge(null)}
+          aria-label="Close badge preview"
+        >
+          <div className="pointer-events-none flex max-w-sm flex-col items-center">
+            {selectedBadge.image ? (
+              <img
+                src={selectedBadge.image}
+                alt={`${selectedBadge.name} badge`}
+                className="max-h-[70vh] w-full object-contain drop-shadow-2xl"
+              />
+            ) : (
+              <div className="flex h-56 w-56 items-center justify-center rounded-full bg-white text-7xl shadow-2xl">
+                Badge
+              </div>
+            )}
+            <div className="mt-4 rounded-2xl bg-white px-5 py-3 text-center shadow-xl">
+              <p className="text-base font-bold" style={{ color: C.text, fontFamily: F.body }}>{selectedBadge.name}</p>
+              <p className="mt-1 text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>{selectedBadge.desc}</p>
+            </div>
+          </div>
+        </button>
+      )}
     </div>
   );
 }

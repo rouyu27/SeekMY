@@ -13,6 +13,7 @@ import { OutdoorImportPanel } from "../components/OutdoorImportPanel";
 import { LocationImageUploader } from "./LocationImageUploader";
 import { STARTER_LOCATIONS, mergeLocations } from "../lib/seedLocations";
 import { geocodeMapLocation, reverseGeocodeLocation } from "../lib/mapGeocoding";
+import { BADGE_DEFS } from "../lib/badges";
 import { BadgeManagementPanel } from "../components/admin/BadgeManagementPanel";
 
 const TEAM_ADMIN_EMAILS = [
@@ -592,6 +593,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     {icon:"⚑",label:"Flagged",value:flaggedReviews.length,target:"reviews",hint:"Click here to moderate reviews"},
     {icon:"🤝",label:"Contributors",value:pendingContributors.length,target:"contributors",hint:"Click here to review contributors"},
     {icon:"🔔",label:"Announcements",value:announcementLogs.length,target:"announcements",hint:"Click here to send notices"},
+    {icon:"🏅",label:"Badges",value:BADGE_DEFS.length,target:"badges",hint:"Click here to manage badge achievements"},
     {icon:"🌐",label:"Outdoor Import",value:locations.length,target:"outdoorImport",hint:"Click here to import places"},
     {icon:"💎",label:"Hidden Gems",value:gemCount,target:"locations",hint:"Click here to manage featured gems"},
   ];
