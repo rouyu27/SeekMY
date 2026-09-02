@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import {
   Cloud,
   CloudRain,
@@ -46,8 +47,8 @@ type WeatherSnapshot = {
   message?: string;
 };
 
-type MalaysiaStateGeoJson = GeoJSON.FeatureCollection<
-  GeoJSON.MultiPolygon | GeoJSON.Polygon,
+type MalaysiaStateGeoJson = FeatureCollection<
+  MultiPolygon | Polygon,
   { name?: string; state?: string }
 >;
 
@@ -316,6 +317,7 @@ function WeatherCanvasLayer({
 
   useEffect(() => {
     if (!boundary) return;
+    const activeBoundary = boundary;
     const canvas = L.DomUtil.create("canvas", "seekmy-weather-canvas") as HTMLCanvasElement;
     const pane = map.getPanes().overlayPane;
     pane.appendChild(canvas);
@@ -324,7 +326,7 @@ function WeatherCanvasLayer({
 
     function drawPolygonMask(ctx: CanvasRenderingContext2D) {
       ctx.beginPath();
-      for (const feature of boundary.features) {
+      for (const feature of activeBoundary.features) {
         const polygons =
           feature.geometry.type === "Polygon"
             ? [feature.geometry.coordinates as number[][][]]
@@ -937,9 +939,9 @@ export function MapPage({
                 onClick={() => setShowPlacePins((value) => !value)}
                 className="mb-2 h-10 w-full rounded-lg px-4 text-[12px] font-extrabold shadow-sm"
                 style={{
-                  backgroundColor: showPlacePins ? C.forest : C.gold,
+                  backgroundColor: showPlacePins ? C.forest : C.amber,
                   color: showPlacePins ? "#fff" : C.text,
-                  border: `2px solid ${showPlacePins ? C.forest : C.goldDark}`,
+                  border: `2px solid ${showPlacePins ? C.forest : C.amber}`,
                 }}
               >
                 {showPlacePins ? wt(language, "hidePlaces") : wt(language, "showPlaces")}
