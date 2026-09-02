@@ -6,6 +6,43 @@ import { firebaseClient } from "../api/firebaseClient";
 import type { Language } from "../lib/i18n";
 import { t } from "../lib/i18n";
 
+type LeaderboardPeriod = "weekly" | "monthly";
+
+function isoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatRangeDate(date: string) {
+  return new Date(`${date}T12:00:00+08:00`).toLocaleDateString("en-GB");
+}
+
+function weekRange(weeksAgo: number) {
+  const today = new Date();
+  const monday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 12));
+  const day = monday.getUTCDay() || 7;
+  monday.setUTCDate(monday.getUTCDate() - day + 1 - weeksAgo * 7);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return { startDate: isoDate(monday), endDate: isoDate(sunday) };
+}
+
+function monthRange(monthsAgo: number) {
+  const today = new Date();
+  const start = new Date(Date.UTC(today.getFullYear(), today.getMonth() - monthsAgo, 1, 12));
+  const end = new Date(Date.UTC(today.getFullYear(), today.getMonth() - monthsAgo + 1, 0, 12));
+  return { startDate: isoDate(start), endDate: isoDate(end) };
+}
+
+function rangeLabel(period: LeaderboardPeriod, offset: number, startDate: string, endDate: string) {
+  const prefix =
+    offset === 0
+      ? period === "weekly" ? "This week" : "This month"
+      : offset === 1
+        ? period === "weekly" ? "Last week" : "Last month"
+        : period === "weekly" ? `${offset} weeks ago` : `${offset} months ago`;
+  return `${prefix} (${formatRangeDate(startDate)} to ${formatRangeDate(endDate)})`;
+}
+
 function badgeCopy(language: Language, name: string, desc: string) {
   const names: Record<string, Record<Language, string>> = {
     "First Footstep": { en: "First Footstep", ms: "Langkah Pertama", zh: "第一步" },
@@ -33,21 +70,35 @@ function badgeCopy(language: Language, name: string, desc: string) {
 }
 
 export function LeaderboardPage({ currentUserId, language = "en" }: { currentUserId?: string; language?: Language }) {
-  const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
+  const [period, setPeriod] = useState<LeaderboardPeriod>("weekly");
+  const [rangeOffset, setRangeOffset] = useState(0);
   const [sortBy, setSortBy] = useState<"km" | "checkins" | "states" | "locations">("km");
   const [entries, setEntries] = useState<any[]>([]);
   const [badges, setBadges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const rangeOptions = useMemo(() => {
+    const count = period === "weekly" ? 27 : 7;
+    return Array.from({ length: count }, (_, offset) => {
+      const range = period === "weekly" ? weekRange(offset) : monthRange(offset);
+      return { offset, ...range, label: rangeLabel(period, offset, range.startDate, range.endDate) };
+    });
+  }, [period]);
+  const selectedRange = rangeOptions.find((option) => option.offset === rangeOffset) || rangeOptions[0];
 
   useEffect(() => {
+    setRangeOffset(0);
+  }, [period]);
+
+  useEffect(() => {
+    if (!selectedRange) return;
     setLoading(true);
     setError("");
-    firebaseClient.backend.getLeaderboard(period)
+    firebaseClient.backend.getLeaderboard(period, selectedRange.startDate, selectedRange.endDate)
       .then((result) => { setEntries(result.entries); setBadges(result.badges || []); })
       .catch((err: any) => { setEntries([]); setBadges([]); setError(err?.message || "Unable to load leaderboard."); })
       .finally(() => setLoading(false));
-  }, [period]);
+  }, [period, selectedRange]);
 
   const sorted = useMemo(() => entries
     .map((entry) => ({ ...entry, locations: entry.locations || entry.uniqueLocations || entry.locationCount || 0 }))
@@ -74,6 +125,24 @@ export function LeaderboardPage({ currentUserId, language = "en" }: { currentUse
           ))}
         </div>
 
+        <div className="mb-5">
+          <label className="text-xs font-bold block mb-1" style={{ color: C.textSub, fontFamily: F.body }}>
+            View fixed range
+          </label>
+          <select
+            value={rangeOffset}
+            onChange={(event) => setRangeOffset(Number(event.target.value))}
+            className="w-full rounded-xl border bg-white px-4 py-3 text-sm font-bold outline-none"
+            style={{ borderColor: C.border, color: C.text, fontFamily: F.body }}
+          >
+            {rangeOptions.map((option) => (
+              <option key={option.offset} value={option.offset}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex gap-2 mb-5 flex-wrap">
           {[
             { key: "km" as const, label: t(language, "distance") },
@@ -98,7 +167,7 @@ export function LeaderboardPage({ currentUserId, language = "en" }: { currentUse
 
         <div className="bg-white rounded-[18px] overflow-hidden mb-8" style={{ boxShadow: `0 1px 3px rgba(27,67,50,0.10), 0 4px 12px rgba(27,67,50,0.06)` }}>
           {error && <p className="text-sm text-center py-10 px-5 font-semibold" style={{ color: C.error, fontFamily: F.body }}>{error}</p>}
-          {!error && sorted.length === 0 && <p className="text-sm text-center py-10" style={{ color: C.textMuted, fontFamily: F.body }}>{loading ? "Loading leaderboard..." : `No activity logged in this ${period === "weekly" ? "week" : "month"} yet.`}</p>}
+          {!error && sorted.length === 0 && <p className="text-sm text-center py-10" style={{ color: C.textMuted, fontFamily: F.body }}>{loading ? "Loading leaderboard..." : `No approved activity logged in this ${period === "weekly" ? "week" : "month"} yet.`}</p>}
           {sorted.map((entry, index) => (
             <div key={`${entry.name}-${index}`} className="flex items-center gap-4 px-5 py-4" style={{ borderBottom: index < sorted.length - 1 ? `1px solid ${C.border}` : "none", backgroundColor: index === 0 ? "#fffbef" : "transparent" }}>
               <span className="text-xl w-7 text-center">{entry.medal || <span className="text-sm font-bold" style={{ color: C.textMuted }}>{entry.rank}</span>}</span>

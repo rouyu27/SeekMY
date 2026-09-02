@@ -1196,8 +1196,8 @@ const backend = {
   signContributorDocument(uri: string) {
     return this.call<{ url: string }>("signContributorDocument", { uri });
   },
-  getLeaderboard(period: "weekly" | "monthly") {
-    return this.call<{ entries: Array<{ id: string; name: string; km: number; checkins: number; states: number }>; badges: EntityRecord[] }>("getLeaderboard", { period });
+  getLeaderboard(period: "weekly" | "monthly", startDate: string, endDate: string) {
+    return this.call<{ entries: Array<{ id: string; name: string; km: number; checkins: number; states: number }>; badges: EntityRecord[] }>("getLeaderboard", { period, startDate, endDate });
   },
 };
 
