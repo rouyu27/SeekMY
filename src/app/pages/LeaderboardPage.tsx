@@ -78,7 +78,7 @@ export function LeaderboardPage({ currentUserId, language = "en" }: { currentUse
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const rangeOptions = useMemo(() => {
-    const count = period === "weekly" ? 27 : 7;
+    const count = period === "weekly" ? 8 : 7;
     return Array.from({ length: count }, (_, offset) => {
       const range = period === "weekly" ? weekRange(offset) : monthRange(offset);
       return { offset, ...range, label: rangeLabel(period, offset, range.startDate, range.endDate) };
