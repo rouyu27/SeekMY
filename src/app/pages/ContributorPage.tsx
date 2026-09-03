@@ -130,6 +130,8 @@ export function ContributorPage({
   const [locAccess, setLocAccess] = useState("");
   const [locPriceMin, setLocPriceMin] = useState("");
   const [locPriceMax, setLocPriceMax] = useState("");
+  const [locDuration, setLocDuration] = useState("");
+  const [locOpeningHours, setLocOpeningHours] = useState("");
   const [locSafety, setLocSafety] = useState("");
   const [locBestTime, setLocBestTime] = useState("");
   const [locTip, setLocTip] = useState("");
@@ -285,7 +287,7 @@ export function ContributorPage({
 
   function resetLocationForm() {
     setLocName(""); setLocAddress(""); setLocLat(""); setLocLng(""); setLocState("Selangor"); setLocActivity("Hiking"); setLocDiff("Easy");
-    setLocDesc(""); setLocFac(""); setLocAccess(""); setLocPriceMin(""); setLocPriceMax(""); setLocSafety(""); setLocBestTime(""); setLocTip(""); setLocSourceUrl("");
+    setLocDesc(""); setLocFac(""); setLocAccess(""); setLocPriceMin(""); setLocPriceMax(""); setLocDuration(""); setLocOpeningHours(""); setLocSafety(""); setLocBestTime(""); setLocTip(""); setLocSourceUrl("");
     setPhotoName(""); setPhotoFile(null); setEditingSubmissionId(null); setDetectedLocation(null); setFindingLocation(false);
   }
 
@@ -304,6 +306,8 @@ export function ContributorPage({
     const priceParts = splitPriceRange(submission);
     setLocPriceMin(priceParts.min);
     setLocPriceMax(priceParts.max);
+    setLocDuration(submission.duration || "");
+    setLocOpeningHours(submission.openingHours || "");
     setLocSafety(submission.safetyNotes || "");
     setLocBestTime(submission.bestTime || "");
     setLocTip(submission.contributorTip || "");
@@ -373,6 +377,7 @@ export function ContributorPage({
       const payload = {
         contributorId:user!.id,contributorName:myApp?.fullName||user!.displayName,name:locName.trim(),address:locAddress.trim(),state:locState,activity:locActivity,difficulty:locDiff,
         lat,lng,locationConfirmed:true,description:locDesc.trim(),facilities:locFac.trim(),accessibility:locAccess.trim(),estimatedPrice:numericPrice,estimatedPriceRange:priceRange.label,budget,
+        duration:locDuration.trim(),openingHours:locOpeningHours.trim(),
         safetyNotes:locSafety.trim(),bestTime:locBestTime.trim(),contributorTip:locTip.trim(),sourceUrl:locSourceUrl.trim(),
         photoName:photoName||undefined,status:"pending",rejectReason:"",updatedAt:new Date().toISOString(),
         ...(photoUrl ? { photoUrl } : {}),
@@ -700,6 +705,16 @@ export function ContributorPage({
                   </div>
                   <p className="text-[10px] mt-2" style={{ color: C.textMuted, fontFamily: F.body }}>Type numbers only. For a fixed/free price, fill one box or use the same amount.</p>
                 </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Suggested duration</label>
+                    <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Example: 2 hours or 1 day" value={locDuration} onChange={(e) => setLocDuration(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Suggested opening hours</label>
+                    <input className="w-full px-4 py-3 rounded-xl text-sm border outline-none" style={inputStyle} placeholder="Example: Daily, 8:00 AM - 6:00 PM" value={locOpeningHours} onChange={(e) => setLocOpeningHours(e.target.value)} />
+                  </div>
+                </div>
                 <div>
                   <label className="text-xs font-bold block mb-1" style={{ color: C.textSub }}>Description *</label>
                   <textarea className="w-full px-4 py-3 rounded-xl text-sm border outline-none resize-none" style={inputStyle} rows={4} placeholder="Describe the place, activity, route, and visitor experience." value={locDesc} onChange={(e) => setLocDesc(e.target.value)} />
@@ -780,8 +795,10 @@ export function ContributorPage({
                   <p className="text-[11px] mt-1" style={{ color: C.textMuted, fontFamily: F.body }}>
                     {s.state} · {s.activity} · {s.estimatedPriceRange ? `RM ${s.estimatedPriceRange} · ` : typeof s.estimatedPrice === "number" ? `RM ${s.estimatedPrice.toFixed(2)} · ` : ""}{new Date(s.createdAt).toLocaleDateString()}
                   </p>
-                  {(s.safetyNotes || s.bestTime || s.contributorTip) && (
+                  {(s.duration || s.openingHours || s.safetyNotes || s.bestTime || s.contributorTip) && (
                     <div className="mt-3 rounded-xl p-3 space-y-1" style={{ backgroundColor: C.muted }}>
+                      {s.duration && <p className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>Suggested duration: {s.duration}</p>}
+                      {s.openingHours && <p className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>Suggested hours: {s.openingHours}</p>}
                       {s.safetyNotes && <p className="text-[11px]" style={{ color: C.textSub, fontFamily: F.body }}><ShieldCheck size={11} className="inline mr-1" />{s.safetyNotes}</p>}
                       {s.bestTime && <p className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>Best time: {s.bestTime}</p>}
                       {s.contributorTip && <p className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}><Lightbulb size={11} className="inline mr-1" />{s.contributorTip}</p>}

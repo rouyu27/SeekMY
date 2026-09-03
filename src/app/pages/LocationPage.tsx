@@ -542,16 +542,7 @@ export function LocationPage({
     ? loc.contributors
     : resolvedContributors.length
       ? resolvedContributors
-    : loc.suggestedBy
-      ? [{
-          id: `suggested-${loc.id}`,
-          name: loc.suggestedBy,
-          role: "Local contributor",
-          area: loc.activity,
-          verified: true,
-          serviceDescription: "This location was approved from a local contributor submission.",
-        }]
-      : [];
+    : [];
   const estimatedCostLabel = loc.estimatedPriceRange
     ? `RM ${loc.estimatedPriceRange}`
     : typeof loc.estimatedPrice === "number"

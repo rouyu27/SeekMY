@@ -20,7 +20,7 @@ export interface LocationSubmission {
   id: string; contributorId: string; contributorName: string; name: string; address?: string; state: string; activity: string;
   difficulty: string; description: string; facilities: string; accessibility: string;
   lat?: number; lng?: number; locationConfirmed?: boolean; estimatedPrice?: number; estimatedPriceRange?: string; budget?: "Free"|"Low"|"Medium"|"High";
-  safetyNotes?: string; bestTime?: string; contributorTip?: string; sourceUrl?: string;
+  duration?: string; openingHours?: string; safetyNotes?: string; bestTime?: string; contributorTip?: string; sourceUrl?: string;
   photoUrl?: string; photoUrls?: string[]; photoName?: string; status: SubmissionStatus; rejectReason?: string; createdAt: string;
   updatedAt?: string; publishedLocationId?: string|number; created_by_id?: string; created_date?: string;
 }
