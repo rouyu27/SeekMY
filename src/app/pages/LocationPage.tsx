@@ -21,7 +21,7 @@ import {
 } from "../lib/metMalaysia";
 import { firebaseClient } from "../api/firebaseClient";
 import { badgeAchievementMessage } from "../lib/badges";
-import type { StoredReview } from "../lib/communityTypes";
+import type { ContributorApplication, LocationSubmission, StoredReview } from "../lib/communityTypes";
 import { locationMetadataFor } from "../lib/locationMetadata";
 import type { Language } from "../lib/i18n";
 import { activityLabel, difficultyLabel, t } from "../lib/i18n";
@@ -29,6 +29,58 @@ import type { WeatherAlert } from "../lib/weather";
 
 const MAX_REVIEW_PHOTO_BYTES = 1 * 1024 * 1024;
 const MAX_REVIEW_WORDS = 300;
+
+function normalizeLookupText(value: unknown): string {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function pickProfilePhoto(userProfile: Record<string, any> | null): string {
+  return userProfile?.photoUrl || userProfile?.photo_url || "";
+}
+
+function normalizeExternalUrl(value: string | undefined): string {
+  if (!value) return "";
+  return /^https?:\/\//i.test(value) ? value : `https://${value}`;
+}
+
+function publicContributorFromRecords(
+  loc: Location,
+  submission: LocationSubmission | null,
+  contributorProfile: Partial<ContributorApplication> | null,
+  userProfile: Record<string, any> | null
+): Contributor | null {
+  const contributorId = submission?.contributorId || "";
+  const name =
+    contributorProfile?.fullName ||
+    submission?.contributorName ||
+    userProfile?.displayName ||
+    userProfile?.full_name ||
+    userProfile?.name ||
+    loc.suggestedBy ||
+    "";
+  if (!name) return null;
+
+  const publicContact = contributorProfile?.publicContact || "hidden";
+  return {
+    id: contributorId || `suggested-${loc.id}`,
+    name,
+    role: "Local contributor",
+    area: contributorProfile?.contributionArea || contributorProfile?.services || submission?.activity || loc.activity,
+    verified: true,
+    photoUrl: pickProfilePhoto(userProfile),
+    bio: userProfile?.bio || "",
+    serviceDescription:
+      contributorProfile?.serviceDescription ||
+      contributorProfile?.localKnowledgeExperience ||
+      contributorProfile?.experience ||
+      "This location was approved from a local contributor submission.",
+    availability: contributorProfile?.availability || "",
+    languages: contributorProfile?.languages || "",
+    publicContact,
+    phone: publicContact === "phone" ? contributorProfile?.phone || "" : "",
+    websiteUrl: normalizeExternalUrl(contributorProfile?.websiteUrl),
+  };
+}
 
 function countReviewWords(value: string): number {
   return value.match(/\S+/g)?.length ?? 0;
@@ -70,6 +122,7 @@ export function LocationPage({
   const [selectedReviewPhoto, setSelectedReviewPhoto] = useState<{url:string;alt:string}|null>(null);
   const [selectedLocationPhoto, setSelectedLocationPhoto] = useState<{url:string;alt:string}|null>(null);
   const [selectedContributor, setSelectedContributor] = useState<Contributor | null>(null);
+  const [resolvedContributors, setResolvedContributors] = useState<Contributor[]>([]);
   const [activeLocationImage, setActiveLocationImage] = useState(0);
   const [reviews, setReviews] = useState<StoredReview[]>([]);
   const [flagId, setFlagId] = useState<string | null>(null);
@@ -104,6 +157,59 @@ export function LocationPage({
     return()=>{cancelled=true;};
   },[loc?.id]);
   //==================== LimTzeXin END - User Review & Rating Module ====================
+
+  useEffect(() => {
+    let cancelled = false;
+    setResolvedContributors([]);
+    if (!loc || loc.contributors?.length || !loc.suggestedBy) return;
+
+    async function resolveApprovedContributor() {
+      try {
+        const locationId = String(loc!.id);
+        let submission: LocationSubmission | null = null;
+
+        const byPublished = await firebaseClient.entities.LocationSubmission
+          .filter({ publishedLocationId: loc!.id }, "-createdAt", 1)
+          .catch(() => []);
+        submission = (byPublished[0] as LocationSubmission | undefined) || null;
+
+        if (!submission) {
+          const stateSubmissions = await firebaseClient.entities.LocationSubmission
+            .filter({ state: loc!.state }, "-createdAt", 20)
+            .catch(() => []);
+          const targetName = normalizeLookupText(loc!.name);
+          submission = (stateSubmissions as LocationSubmission[]).find((item) => {
+            if (item.status !== "approved") return false;
+            const samePublished = item.publishedLocationId != null && String(item.publishedLocationId) === locationId;
+            const sameName = normalizeLookupText(item.name) === targetName;
+            return samePublished || sameName;
+          }) || null;
+        }
+
+        if (!submission?.contributorId) return;
+
+        const [contributorProfile, userProfile] = await Promise.all([
+          firebaseClient.entities.Contributor.get(submission.contributorId).catch(() => null),
+          firebaseClient.entities.User.get(submission.contributorId).catch(() => null),
+        ]);
+        const publicContributor = publicContributorFromRecords(
+          loc!,
+          submission,
+          contributorProfile as Partial<ContributorApplication> | null,
+          userProfile as Record<string, any> | null
+        );
+
+        if (!cancelled && publicContributor) {
+          setResolvedContributors([publicContributor]);
+        }
+      } catch {
+        if (!cancelled) setResolvedContributors([]);
+      }
+    }
+
+    resolveApprovedContributor();
+    return () => { cancelled = true; };
+  }, [loc?.id, loc?.name, loc?.state, loc?.suggestedBy, loc?.contributors?.length]);
   //==================== WongYueShan Part - Weather Module ====================
   const [weather, setWeather] = useState<WeatherBundle | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -434,6 +540,8 @@ export function LocationPage({
   const activeImage = locationImages[Math.min(activeLocationImage, Math.max(locationImages.length - 1, 0))];
   const visibleContributors: Contributor[] = loc.contributors?.length
     ? loc.contributors
+    : resolvedContributors.length
+      ? resolvedContributors
     : loc.suggestedBy
       ? [{
           id: `suggested-${loc.id}`,

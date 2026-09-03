@@ -495,6 +495,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     const details=[s.description,s.safetyNotes?`Safety notes: ${s.safetyNotes}`:"",s.contributorTip?`Local contributor tip: ${s.contributorTip}`:""].filter(Boolean).join("\n\n");
     const contributorProfile=contributors.find(c=>String(c.userId)===String(s.contributorId)||String(c.id)===String(s.contributorId));
     const contributorUser=users.find(member=>String(member.id)===String(s.contributorId));
+    const contributorPhotoUrl=(contributorUser as any)?.photoUrl||(contributorUser as any)?.photo_url||"";
     const publicContact=contributorProfile?.publicContact||"hidden";
     return {
       name:s.name,address:s.address||`${s.name}, ${s.state}, Malaysia`,lat:s.lat,lng:s.lng,locationConfirmed:Boolean(s.locationConfirmed),state:s.state,stateCode:STATE_CODE[s.state]||"SLG",activity:s.activity,difficulty:["Easy","Moderate","Hard"].includes(s.difficulty)?s.difficulty:"Easy",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:s.sourceUrl||"",rating:0,reviews:0,badge:"Community",color:C.forest,emoji:"📍",description:details,facilities:s.facilities?s.facilities.split(",").map(x=>x.trim()).filter(Boolean):[],bestMonths:s.bestTime||"Year-round",accessibility:s.accessibility||"See description",tags:[s.activity,"Community suggested","Contributor verified"],estimatedPrice:price,estimatedPriceRange:s.estimatedPriceRange||String(price),budget:s.budget||(price<=0?"Free":price<=20?"Low":price<=50?"Medium":"High"),image_url:images[0]||"",image_urls:images,suggestedBy:s.contributorName,sourceUrl:s.sourceUrl||"",status:"active",
@@ -504,7 +505,7 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
         role:"Local contributor",
         area:contributorProfile?.contributionArea||contributorProfile?.services||s.activity,
         verified:true,
-        photoUrl:contributorUser?.photoUrl||"",
+        photoUrl:contributorPhotoUrl,
         bio:contributorUser?.bio||"",
         serviceDescription:contributorProfile?.serviceDescription||contributorProfile?.localKnowledgeExperience||contributorProfile?.experience||"",
         availability:contributorProfile?.availability||"",
