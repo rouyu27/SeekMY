@@ -66,7 +66,7 @@ service cloud.firestore {
         && request.resource.data.contributorId == resource.data.contributorId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'contributorName','name','address','state','activity','difficulty','description',
-          'lat','lng','locationConfirmed','facilities','accessibility','estimatedPrice','estimatedPriceRange','budget','safetyNotes','bestTime',
+          'lat','lng','locationConfirmed','facilities','accessibility','estimatedPrice','estimatedPriceRange','budget','duration','openingHours','safetyNotes','bestTime',
           'contributorTip','sourceUrl','photoName','photoUrl','status','rejectReason','updatedAt','updated_date'
         ]));
       allow delete: if isAdmin();

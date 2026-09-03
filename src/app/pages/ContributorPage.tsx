@@ -365,8 +365,11 @@ export function ContributorPage({
     setLoading(true);
     let step = "submit";
     try {
-      const existingLocations = await firebaseClient.entities.Location.filter({ state: locState }).catch(()=>[]);
-      const duplicate = [...existingLocations, ...subs].find((item:any)=>isDuplicateLocationCandidate({id:editingSubmissionId||undefined,name:locName.trim(),state:locState,lat,lng},item));
+      const [existingLocations, latestOwnSubmissions] = await Promise.all([
+        firebaseClient.entities.Location.filter({ state: locState }).catch(()=>[]),
+        firebaseClient.entities.LocationSubmission.filter({ created_by_id: user!.id }).catch(()=>subs),
+      ]);
+      const duplicate = [...existingLocations, ...latestOwnSubmissions].find((item:any)=>isDuplicateLocationCandidate({id:editingSubmissionId||undefined,name:locName.trim(),state:locState,lat,lng},item));
       if (duplicate) {
         setMsg({type:"err",text:`This looks like a duplicate of "${duplicate.name}". Please check the existing location or edit your previous submission instead.`});
         return;
