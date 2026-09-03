@@ -64,6 +64,32 @@ function displayPrice(location: any) {
   return typeof location.estimatedPrice === "number" ? `RM ${location.estimatedPrice.toFixed(2)}` : "";
 }
 
+function normalizeLocationText(value: unknown) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function coordinatesClose(aLat: number, aLng: number, bLat: unknown, bLng: unknown) {
+  const lat = Number(bLat);
+  const lng = Number(bLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const kmPerDegree = 111;
+  const latKm = Math.abs(aLat - lat) * kmPerDegree;
+  const lngKm = Math.abs(aLng - lng) * kmPerDegree * Math.cos((aLat * Math.PI) / 180);
+  return Math.sqrt(latKm * latKm + lngKm * lngKm) <= 0.15;
+}
+
+function isDuplicateLocationCandidate(candidate: { id?: unknown; name: string; state: string; lat: number; lng: number }, existing: { id?: unknown; name?: unknown; state?: unknown; lat?: unknown; lng?: unknown; latitude?: unknown; longitude?: unknown; status?: unknown }) {
+  if (candidate.id !== undefined && String(candidate.id) === String(existing.id)) return false;
+  if (!isAvailableLocation(existing as Location)) return false;
+  const sameState = String(existing.state || "") === candidate.state;
+  if (!sameState) return false;
+  const candidateName = normalizeLocationText(candidate.name);
+  const existingName = normalizeLocationText(existing.name);
+  const sameName = Boolean(candidateName && existingName && (candidateName === existingName || candidateName.includes(existingName) || existingName.includes(candidateName)));
+  const sameCoordinates = coordinatesClose(candidate.lat, candidate.lng, existing.lat ?? existing.latitude, existing.lng ?? existing.longitude);
+  return sameName || sameCoordinates;
+}
+
 function isAvailableLocation(location: Location) {
   const status = String((location as any).status || "active").toLowerCase();
   return status !== "unavailable" && status !== "deleted" && status !== "disabled";
@@ -308,6 +334,8 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     if(!Number.isFinite(lat)||lat < -90||lat > 90||!Number.isFinite(lng)||lng < -180||lng > 180){showToast("Valid latitude and longitude are required.");return;}
     const priceRange=parsePriceRange(form.estimatedPriceMin, form.estimatedPriceMax);
     if(!priceRange){showToast("Enter a valid estimated cost. Max RM must be the same or higher than Min RM.");return;}
+    const duplicateLocation=locations.find(location=>isDuplicateLocationCandidate({id:editingLocation?.id,name:form.name.trim(),state:form.state,lat,lng},location));
+    if(duplicateLocation){showToast(`This looks like a duplicate of "${duplicateLocation.name}". Check the existing location before saving.`);return;}
     setSaving(true);
     try{
       const uploadedImages:string[]=[];

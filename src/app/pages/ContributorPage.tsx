@@ -53,6 +53,32 @@ function splitPriceRange(submission: LocationSubmission) {
   return { min: min || "", max: max || "" };
 }
 
+function normalizeLocationText(value: unknown) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function coordinatesClose(aLat: number, aLng: number, bLat: unknown, bLng: unknown) {
+  const lat = Number(bLat);
+  const lng = Number(bLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const kmPerDegree = 111;
+  const latKm = Math.abs(aLat - lat) * kmPerDegree;
+  const lngKm = Math.abs(aLng - lng) * kmPerDegree * Math.cos((aLat * Math.PI) / 180);
+  return Math.sqrt(latKm * latKm + lngKm * lngKm) <= 0.15;
+}
+
+function isDuplicateLocationCandidate(candidate: { id?: unknown; name: string; state: string; lat: number; lng: number }, existing: { id?: unknown; name?: unknown; state?: unknown; lat?: unknown; lng?: unknown; latitude?: unknown; longitude?: unknown; status?: unknown }) {
+  if (candidate.id !== undefined && String(candidate.id) === String(existing.id)) return false;
+  const status = String(existing.status || "active").toLowerCase();
+  if (status === "unavailable" || status === "deleted" || status === "disabled" || status === "rejected") return false;
+  if (String(existing.state || "") !== candidate.state) return false;
+  const candidateName = normalizeLocationText(candidate.name);
+  const existingName = normalizeLocationText(existing.name);
+  const sameName = Boolean(candidateName && existingName && (candidateName === existingName || candidateName.includes(existingName) || existingName.includes(candidateName)));
+  const sameCoordinates = coordinatesClose(candidate.lat, candidate.lng, existing.lat ?? existing.latitude, existing.lng ?? existing.longitude);
+  return sameName || sameCoordinates;
+}
+
 export function ContributorPage({
   user,
   setPage,
@@ -332,10 +358,15 @@ export function ContributorPage({
     if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) { setMsg({type:"err",text:"Please find and apply the map location before submitting."}); return; }
     if (!priceRange) { setMsg({type:"err",text:"Please enter a valid estimated cost. Max RM must be the same or higher than Min RM."}); return; }
     if (locSafety.trim().length < 10) { setMsg({type:"err",text:"Please add at least one useful safety note for visitors."}); return; }
-    if (subs.some(s=>s.id!==editingSubmissionId&&s.name.toLowerCase()===locName.trim().toLowerCase() && s.state===locState)) { setMsg({type:"err",text:"This location already exists in your submissions."}); return; }
     setLoading(true);
     let step = "submit";
     try {
+      const existingLocations = await firebaseClient.entities.Location.filter({ state: locState }).catch(()=>[]);
+      const duplicate = [...existingLocations, ...subs].find((item:any)=>isDuplicateLocationCandidate({id:editingSubmissionId||undefined,name:locName.trim(),state:locState,lat,lng},item));
+      if (duplicate) {
+        setMsg({type:"err",text:`This looks like a duplicate of "${duplicate.name}". Please check the existing location or edit your previous submission instead.`});
+        return;
+      }
       const photoUrl = photoFile ? await firebaseClient.storage.uploadLocationPhoto(photoFile).catch((error:any) => {
         throw new Error(error?.message ? `Photo upload failed: ${error.message}` : "Photo upload failed.");
       }) : undefined;

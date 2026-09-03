@@ -80,6 +80,31 @@ function parsePriceRange(minValue: string, maxValue: string): { min: number; max
   };
 }
 
+function normalizeLocationText(value: unknown) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function coordinatesClose(aLat: number, aLng: number, bLat: unknown, bLng: unknown) {
+  const lat = Number(bLat);
+  const lng = Number(bLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+  const kmPerDegree = 111;
+  const latKm = Math.abs(aLat - lat) * kmPerDegree;
+  const lngKm = Math.abs(aLng - lng) * kmPerDegree * Math.cos((aLat * Math.PI) / 180);
+  return Math.sqrt(latKm * latKm + lngKm * lngKm) <= 0.15;
+}
+
+function isDuplicateLocationCandidate(candidate: { name: string; state: string; lat: number; lng: number }, existing: { name?: unknown; state?: unknown; lat?: unknown; lng?: unknown; latitude?: unknown; longitude?: unknown; status?: unknown }) {
+  const status = String(existing.status || "active").toLowerCase();
+  if (status === "unavailable" || status === "deleted" || status === "disabled" || status === "rejected") return false;
+  if (String(existing.state || "") !== candidate.state) return false;
+  const candidateName = normalizeLocationText(candidate.name);
+  const existingName = normalizeLocationText(existing.name);
+  const sameName = Boolean(candidateName && existingName && (candidateName === existingName || candidateName.includes(existingName) || existingName.includes(candidateName)));
+  const sameCoordinates = coordinatesClose(candidate.lat, candidate.lng, existing.lat ?? existing.latitude, existing.lng ?? existing.longitude);
+  return sameName || sameCoordinates;
+}
+
 function withTimeout<T>(
   work: Promise<T>,
   milliseconds: number,
@@ -373,17 +398,19 @@ export function SuggestLocationPage({
         }),
       ]);
 
-      const duplicate = [...existingLocations, ...mySubmissions].some(
-        (x: any) =>
-          String(x.name || "").toLowerCase() ===
-            name.trim().toLowerCase() &&
-          String(x.state || "") === state
+      const duplicate = [...existingLocations, ...mySubmissions].find((x: any) =>
+        isDuplicateLocationCandidate({
+          name: name.trim(),
+          state,
+          lat: detectedLocation.lat,
+          lng: detectedLocation.lng,
+        }, x)
       );
 
       if (duplicate) {
         setMsg({
           type: "err",
-          text: "This location already exists in SeekMY or in your suggestion queue.",
+          text: `This looks like a duplicate of "${duplicate.name}". Please check the existing location or your suggestion queue before submitting.`,
         });
         return;
       }
