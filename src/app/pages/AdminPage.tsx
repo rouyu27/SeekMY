@@ -461,7 +461,32 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
       showToast(status==="approved"?"Contributor approved.":"Contributor rejected with feedback.");
     }catch(e:any){showToast(e?.message||"Unable to update contributor.");}
   }
-  function submissionToLocation(s:LocationSubmission){const price=Number(s.estimatedPrice||0);const images=Array.isArray(s.photoUrls)&&s.photoUrls.length?s.photoUrls:(s.photoUrl?[s.photoUrl]:[]);const details=[s.description,s.safetyNotes?`Safety notes: ${s.safetyNotes}`:"",s.contributorTip?`Local contributor tip: ${s.contributorTip}`:""].filter(Boolean).join("\n\n");return {name:s.name,address:s.address||`${s.name}, ${s.state}, Malaysia`,lat:s.lat,lng:s.lng,locationConfirmed:Boolean(s.locationConfirmed),state:s.state,stateCode:STATE_CODE[s.state]||"SLG",activity:s.activity,difficulty:["Easy","Moderate","Hard"].includes(s.difficulty)?s.difficulty:"Easy",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:s.sourceUrl||"",rating:0,reviews:0,badge:"Community",color:C.forest,emoji:"📍",description:details,facilities:s.facilities?s.facilities.split(",").map(x=>x.trim()).filter(Boolean):[],bestMonths:s.bestTime||"Year-round",accessibility:s.accessibility||"See description",tags:[s.activity,"Community suggested","Contributor verified"],estimatedPrice:price,estimatedPriceRange:s.estimatedPriceRange||String(price),budget:s.budget||(price<=0?"Free":price<=20?"Low":price<=50?"Medium":"High"),image_url:images[0]||"",image_urls:images,suggestedBy:s.contributorName,sourceUrl:s.sourceUrl||"",status:"active"};}
+  function submissionToLocation(s:LocationSubmission){
+    const price=Number(s.estimatedPrice||0);
+    const images=Array.isArray(s.photoUrls)&&s.photoUrls.length?s.photoUrls:(s.photoUrl?[s.photoUrl]:[]);
+    const details=[s.description,s.safetyNotes?`Safety notes: ${s.safetyNotes}`:"",s.contributorTip?`Local contributor tip: ${s.contributorTip}`:""].filter(Boolean).join("\n\n");
+    const contributorProfile=contributors.find(c=>String(c.userId)===String(s.contributorId)||String(c.id)===String(s.contributorId));
+    const contributorUser=users.find(member=>String(member.id)===String(s.contributorId));
+    const publicContact=contributorProfile?.publicContact||"hidden";
+    return {
+      name:s.name,address:s.address||`${s.name}, ${s.state}, Malaysia`,lat:s.lat,lng:s.lng,locationConfirmed:Boolean(s.locationConfirmed),state:s.state,stateCode:STATE_CODE[s.state]||"SLG",activity:s.activity,difficulty:["Easy","Moderate","Hard"].includes(s.difficulty)?s.difficulty:"Easy",distance:"N/A",duration:"N/A",openingHours:"Hours not verified yet",officialUrl:s.sourceUrl||"",rating:0,reviews:0,badge:"Community",color:C.forest,emoji:"📍",description:details,facilities:s.facilities?s.facilities.split(",").map(x=>x.trim()).filter(Boolean):[],bestMonths:s.bestTime||"Year-round",accessibility:s.accessibility||"See description",tags:[s.activity,"Community suggested","Contributor verified"],estimatedPrice:price,estimatedPriceRange:s.estimatedPriceRange||String(price),budget:s.budget||(price<=0?"Free":price<=20?"Low":price<=50?"Medium":"High"),image_url:images[0]||"",image_urls:images,suggestedBy:s.contributorName,sourceUrl:s.sourceUrl||"",status:"active",
+      contributors:[{
+        id:s.contributorId,
+        name:contributorProfile?.fullName||s.contributorName||contributorUser?.displayName||"Local contributor",
+        role:"Local contributor",
+        area:contributorProfile?.contributionArea||contributorProfile?.services||s.activity,
+        verified:true,
+        photoUrl:contributorUser?.photoUrl||"",
+        bio:contributorUser?.bio||"",
+        serviceDescription:contributorProfile?.serviceDescription||contributorProfile?.localKnowledgeExperience||contributorProfile?.experience||"",
+        availability:contributorProfile?.availability||"",
+        languages:contributorProfile?.languages||"",
+        publicContact,
+        phone:publicContact==="phone" ? contributorProfile?.phone||"" : "",
+        websiteUrl:contributorProfile?.websiteUrl||"",
+      }]
+    };
+  }
   async function approveSubmission(s:LocationSubmission){setSaving(true);try{const published:any=await firebaseClient.entities.Location.create(submissionToLocation(s));const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"approved",publishedLocationId:published.id,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location approved",message:`Good news. Your suggestion "${s.name}" was approved and is now live on Discover. Thank you for helping the SeekMY community find better outdoor places.`,type:"approved",relatedPage:"suggestions",submissionId:s.id,read:false,dismissed:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));setLocations(ls=>[published as Location,...ls]);(window as any).__seekmyRefreshLocations?.(published);showToast("Location approved and published to Firebase.");}catch(e:any){showToast(e?.message||"Unable to approve location.");}finally{setSaving(false);}}
   async function rejectSubmission(s:LocationSubmission){const reason=prompt("Give a friendly rejection reason for the contributor:",s.rejectReason||"Please add more complete location details or clearer safety information.")?.trim();if(!reason){showToast("A rejection reason is required.");return;}try{const updated:any=await firebaseClient.entities.LocationSubmission.update(s.id,{status:"rejected",rejectReason:reason,updatedAt:new Date().toISOString()});await firebaseClient.entities.Announcement.create({userId:s.contributorId,title:"Location needs changes",message:`Thanks for submitting "${s.name}". We cannot publish it yet.\n\nReason: ${reason}\n\nYou can edit the suggestion in My Contributions and resubmit it for review.`,type:"rejected",relatedPage:"suggestions",submissionId:s.id,read:false,dismissed:false,createdAt:new Date().toISOString()});setSubmissions(xs=>xs.map(x=>x.id===s.id?updated:x));showToast("Location rejected and user notified through Firebase.");}catch(e:any){showToast(e?.message||"Unable to reject location.");}}
   function chooseNoticePhoto(file?: File) {

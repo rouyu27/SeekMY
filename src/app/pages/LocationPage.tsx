@@ -8,7 +8,7 @@ import {
   Navigation, Sun, Droplets, Wind, AlertTriangle, Check, Activity, Flag,
   Users, ExternalLink, Pencil, Trash2, X, Car, Utensils, Hospital, Bus, Store, Fuel, Toilet, CalendarClock, Upload,
 } from "lucide-react";
-import type { Location, ActivityLog } from "../lib/types";
+import type { Location, ActivityLog, Contributor } from "../lib/types";
 import { C, F } from "../lib/tokens";
 import { diffStyle } from "../lib/helpers";
 import { Pill } from "../components/Atoms";
@@ -69,6 +69,7 @@ export function LocationPage({
   const [reviewPhotoPreview, setReviewPhotoPreview] = useState("");
   const [selectedReviewPhoto, setSelectedReviewPhoto] = useState<{url:string;alt:string}|null>(null);
   const [selectedLocationPhoto, setSelectedLocationPhoto] = useState<{url:string;alt:string}|null>(null);
+  const [selectedContributor, setSelectedContributor] = useState<Contributor | null>(null);
   const [activeLocationImage, setActiveLocationImage] = useState(0);
   const [reviews, setReviews] = useState<StoredReview[]>([]);
   const [flagId, setFlagId] = useState<string | null>(null);
@@ -431,6 +432,18 @@ export function LocationPage({
   };
   const locationImages = (Array.isArray(loc.image_urls) && loc.image_urls.length ? loc.image_urls : (loc.image_url ? [loc.image_url] : [])).filter(Boolean);
   const activeImage = locationImages[Math.min(activeLocationImage, Math.max(locationImages.length - 1, 0))];
+  const visibleContributors: Contributor[] = loc.contributors?.length
+    ? loc.contributors
+    : loc.suggestedBy
+      ? [{
+          id: `suggested-${loc.id}`,
+          name: loc.suggestedBy,
+          role: "Local contributor",
+          area: loc.activity,
+          verified: true,
+          serviceDescription: "This location was approved from a local contributor submission.",
+        }]
+      : [];
   const estimatedCostLabel = loc.estimatedPriceRange
     ? `RM ${loc.estimatedPriceRange}`
     : typeof loc.estimatedPrice === "number"
@@ -706,23 +719,37 @@ export function LocationPage({
               <h2 className="font-bold mb-3 text-base flex items-center gap-2" style={{ fontFamily: F.body, color: C.text }}>
                 <Users size={16} style={{ color: C.forest }} /> {locCopy.verifiedContributors}
               </h2>
-              {loc.contributors && loc.contributors.length > 0 ? (
+              {visibleContributors.length > 0 ? (
                 <div className="space-y-3">
-                  {loc.contributors.map((c) => (
-                    <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: C.muted }}>
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white" style={{ backgroundColor: C.forest }}>
-                        {c.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-bold" style={{ color: C.text, fontFamily: F.body }}>{c.name}</p>
-                        <p className="text-[11px]" style={{ color: C.textMuted, fontFamily: F.body }}>{c.role} · {c.area}</p>
-                      </div>
-                      {c.verified && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: C.successBg, color: C.success, fontFamily: F.body }}>
-                          {locCopy.verified}
-                        </span>
+                  {visibleContributors.map((c) => (
+                    <button
+                      type="button"
+                      key={c.id}
+                      onClick={() => setSelectedContributor(c)}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2"
+                      style={{ backgroundColor: C.muted, outlineColor: C.forest }}
+                      aria-label={`View local contributor details for ${c.name}`}
+                    >
+                      {c.photoUrl ? (
+                        <img src={c.photoUrl} alt={c.name} className="h-12 w-12 rounded-full object-cover border-2 border-white" />
+                      ) : (
+                        <div className="h-12 w-12 rounded-full flex items-center justify-center text-sm font-bold text-white" style={{ backgroundColor: C.forest }}>
+                          {c.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                        </div>
                       )}
-                    </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold truncate" style={{ color: C.text, fontFamily: F.body }}>{c.name}</p>
+                          {c.verified && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: C.successBg, color: C.success, fontFamily: F.body }}>
+                              {locCopy.verified}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] line-clamp-1" style={{ color: C.textMuted, fontFamily: F.body }}>{c.role} · {c.area}</p>
+                      </div>
+                      <ChevronRight size={16} style={{ color: C.textMuted }} />
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -1280,6 +1307,83 @@ export function LocationPage({
         </div>
       )}
       {/* ==================== LimTzeXin END - User Review & Rating Module: Flag Review ==================== */}
+      {selectedContributor && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4" onClick={() => setSelectedContributor(null)}>
+          <div
+            className="w-full max-w-md rounded-[18px] bg-white p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                {selectedContributor.photoUrl ? (
+                  <img src={selectedContributor.photoUrl} alt={selectedContributor.name} className="h-16 w-16 rounded-full object-cover border-2 border-white shadow-sm" />
+                ) : (
+                  <div className="h-16 w-16 rounded-full flex items-center justify-center text-lg font-bold text-white" style={{ backgroundColor: C.forest }}>
+                    {selectedContributor.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-lg font-bold" style={{ color: C.text, fontFamily: F.body }}>{selectedContributor.name}</p>
+                  <p className="text-xs" style={{ color: C.textMuted, fontFamily: F.body }}>{selectedContributor.role} · {selectedContributor.area}</p>
+                  {selectedContributor.verified && (
+                    <span className="mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold" style={{ backgroundColor: C.successBg, color: C.success, fontFamily: F.body }}>
+                      {locCopy.verified}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedContributor(null)}
+                className="flex h-9 w-9 items-center justify-center rounded-full"
+                style={{ backgroundColor: C.muted, color: C.textMuted }}
+                aria-label="Close contributor details"
+              >
+                <X size={17}/>
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {(selectedContributor.serviceDescription || selectedContributor.bio) && (
+                <div>
+                  <p className="text-[11px] font-bold uppercase" style={{ color: C.textMuted, fontFamily: F.body }}>About contributor</p>
+                  <p className="mt-1 text-sm leading-relaxed" style={{ color: C.textSub, fontFamily: F.body }}>
+                    {selectedContributor.serviceDescription || selectedContributor.bio}
+                  </p>
+                </div>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {selectedContributor.availability && (
+                  <div className="rounded-xl p-3" style={{ backgroundColor: C.muted }}>
+                    <p className="text-[11px] font-bold uppercase" style={{ color: C.textMuted, fontFamily: F.body }}>Availability</p>
+                    <p className="mt-1 text-sm" style={{ color: C.text, fontFamily: F.body }}>{selectedContributor.availability}</p>
+                  </div>
+                )}
+                {selectedContributor.languages && (
+                  <div className="rounded-xl p-3" style={{ backgroundColor: C.muted }}>
+                    <p className="text-[11px] font-bold uppercase" style={{ color: C.textMuted, fontFamily: F.body }}>Languages</p>
+                    <p className="mt-1 text-sm" style={{ color: C.text, fontFamily: F.body }}>{selectedContributor.languages}</p>
+                  </div>
+                )}
+              </div>
+              {(selectedContributor.phone || selectedContributor.websiteUrl) && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {selectedContributor.phone && (
+                    <a href={`tel:${selectedContributor.phone}`} className="inline-flex h-10 items-center rounded-full px-4 text-sm font-bold" style={{ backgroundColor: C.muted, color: C.forest, fontFamily: F.body }}>
+                      Call contributor
+                    </a>
+                  )}
+                  {selectedContributor.websiteUrl && (
+                    <a href={selectedContributor.websiteUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center gap-1 rounded-full px-4 text-sm font-bold" style={{ backgroundColor: C.jungle, color: "#fff", fontFamily: F.body }}>
+                      Visit profile <ExternalLink size={12}/>
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {selectedReviewPhoto && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedReviewPhoto(null)}>
           <button

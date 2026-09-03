@@ -32,6 +32,14 @@ export interface Contributor {
   role: string;
   area: string;
   verified: boolean;
+  photoUrl?: string;
+  bio?: string;
+  serviceDescription?: string;
+  availability?: string;
+  languages?: string;
+  publicContact?: string;
+  phone?: string;
+  websiteUrl?: string;
 }
 
 export interface Location {
@@ -85,6 +93,7 @@ export interface Location {
   budget: "Free"|"Low"|"Medium"|"High";
   activitySpecific?: ActivitySpecific;
   contributors?: Contributor[];
+  suggestedBy?: string;
   status?: "active" | "unavailable" | "deleted" | string;
 }
 
