@@ -335,7 +335,10 @@ export function AdminPage({ users: parentUsers, setUsers: setParentUsers, locati
     const priceRange=parsePriceRange(form.estimatedPriceMin, form.estimatedPriceMax);
     if(!priceRange){showToast("Enter a valid estimated cost. Max RM must be the same or higher than Min RM.");return;}
     const duplicateLocation=locations.find(location=>isDuplicateLocationCandidate({id:editingLocation?.id,name:form.name.trim(),state:form.state,lat,lng},location));
-    if(duplicateLocation){showToast(`This looks like a duplicate of "${duplicateLocation.name}". Check the existing location before saving.`);return;}
+    if(duplicateLocation){
+      const shouldContinue=window.confirm(`Possible duplicate detected: "${duplicateLocation.name}".\n\nReview the existing location first. Continue saving only if this is a different attraction.`);
+      if(!shouldContinue){showToast("Duplicate warning cancelled. No location was saved.");return;}
+    }
     setSaving(true);
     try{
       const uploadedImages:string[]=[];
